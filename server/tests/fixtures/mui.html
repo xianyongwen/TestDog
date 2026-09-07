@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>material-ui select/autocomplete 测试</title>
+  <style>
+    body { font-family: system-ui, sans-serif; padding: 24px; max-width: 640px; }
+    .block { margin: 24px 0; }
+    .block > label { display: block; margin-bottom: 12px; font-weight: 600; }
+    .val { margin-top: 8px; color: #555; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <h3>Material-UI (React) select / autocomplete 测试页</h3>
+  <div id="root"></div>
+
+  <!-- @mui/material 仅 v5 提供 UMD 构建（v6+ 已移除），@mui/x-date-pickers 无浏览器构建，
+       故本页不含 MUI 版 DatePicker/TimePicker -->
+  <script src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mui/material@5.16.7/umd/material-ui.production.min.js"></script>
+  <script>
+    const { createRoot } = ReactDOM;
+    const { TextField, FormControl, InputLabel, Select, MenuItem, NativeSelect, Autocomplete } = MaterialUI;
+
+    const CITY_OPTIONS = [
+      { label: '北京', value: 'beijing' },
+      { label: '上海', value: 'shanghai' },
+      { label: '广州', value: 'guangzhou' },
+      { label: '深圳', value: 'shenzhen' },
+    ];
+
+    function App() {
+      const [name, setName] = React.useState('');
+      const [count, setCount] = React.useState('');
+      const [city, setCity] = React.useState('');
+      const [nativeCity, setNativeCity] = React.useState('');
+      const [autoCity, setAutoCity] = React.useState(null);
+
+      return React.createElement(
+        'div',
+        null,
+        React.createElement(
+          'div',
+          { className: 'block' },
+          React.createElement('label', null, 'TextField 文本输入框'),
+          React.createElement(TextField, {
+            id: 'nameField',
+            label: '姓名',
+            placeholder: '请输入姓名',
+            value: name,
+            onChange: (e) => setName(e.target.value),
+          }),
+          React.createElement('div', { className: 'val' }, `当前值：${name || '(空)'}`)
+        ),
+        React.createElement(
+          'div',
+          { className: 'block' },
+          React.createElement('label', null, 'TextField 数字输入框（type=number）'),
+          React.createElement(TextField, {
+            id: 'countField',
+            label: '数量',
+            type: 'number',
+            value: count,
+            onChange: (e) => setCount(e.target.value),
+          }),
+          React.createElement('div', { className: 'val' }, `当前值：${count || '(空)'}`)
+        ),
+        React.createElement(
+          'div',
+          { className: 'block' },
+          React.createElement('label', null, 'MUI Select 下拉（自定义渲染弹层，非原生 select）'),
+          React.createElement(
+            FormControl,
+            { style: { minWidth: 220 } },
+            React.createElement(InputLabel, { id: 'city-label' }, '城市'),
+            React.createElement(
+              Select,
+              {
+                labelId: 'city-label',
+                id: 'citySelect',
+                value: city,
+                label: '城市',
+                onChange: (e) => setCity(e.target.value),
+              },
+              CITY_OPTIONS.map((o) => React.createElement(MenuItem, { key: o.value, value: o.value }, o.label))
+            )
+          ),
+          React.createElement('div', { className: 'val' }, `当前值：${city || '(空)'}`)
+        ),
+        React.createElement(
+          'div',
+          { className: 'block' },
+          React.createElement('label', null, 'MUI NativeSelect 原生 select（MUI 样式包裹）'),
+          React.createElement(
+            FormControl,
+            { style: { minWidth: 220 } },
+            React.createElement(InputLabel, { htmlFor: 'nativeCitySelect' }, '城市（原生）'),
+            React.createElement(
+              NativeSelect,
+              {
+                id: 'nativeCitySelect',
+                value: nativeCity,
+                onChange: (e) => setNativeCity(e.target.value),
+              },
+              React.createElement('option', { value: '' }, '请选择'),
+              CITY_OPTIONS.map((o) => React.createElement('option', { key: o.value, value: o.value }, o.label))
+            )
+          ),
+          React.createElement('div', { className: 'val' }, `当前值：${nativeCity || '(空)'}`)
+        ),
+        React.createElement(
+          'div',
+          { className: 'block' },
+          React.createElement('label', null, 'MUI Autocomplete 自动补全（输入筛选 + 弹层选项）'),
+          React.createElement(Autocomplete, {
+            id: 'cityAutocomplete',
+            options: CITY_OPTIONS.map((o) => o.label),
+            value: autoCity,
+            onChange: (e, v) => setAutoCity(v),
+            style: { width: 260 },
+            renderInput: (params) => React.createElement(TextField, Object.assign({}, params, { label: '城市（自动补全）', placeholder: '输入以筛选' })),
+          }),
+          React.createElement('div', { className: 'val' }, `当前值：${autoCity || '(空)'}`)
+        )
+      );
+    }
+
+    createRoot(document.getElementById('root')).render(React.createElement(App));
+  </script>
+</body>
+</html>

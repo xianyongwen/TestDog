@@ -1,0 +1,479 @@
+import type OpenAI from 'openai';
+import type { getConfig, ReasoningEffort } from '../../config';
+import { applyReviseOps, absorbProbeClick, revokeStepRange, type EmitOutcome, type ReviseOp, type TestStep } from '../../shared/testScript';
+import { legacyToUnifiedSystemVars } from '../../shared/envVars';
+import { runToolLoop, usageDelta } from '../toolLoop';
+import { buildGenTools, type GenToolContext } from '../generationToolHost';
+import { NetworkCapture } from '../networkCaptureService';
+import { enabledActionVocabulary } from '../pluginStore';
+import { getUsage } from '../tokenUsage';
+import { askUser, revokeHandlers } from './jobControl';
+import { pub, pubToolWithUsage, updateToolAssistant } from './logBridge';
+import { createManualCapture } from './manualCapture';
+import { normalizeStepSystemVars, safeJsonParse, stripFences } from './util';
+import type { AssistDecision, PlanStep } from './types';
+
+const MAX_ASSIST_PER_STEP = 3;
+/** 断言同签名累计失败达该次数 → 挂起 gen:assist：断言是「判断」不是「动作」，同目标重试不会改变页面结果。 */
+const ASSERT_FAIL_ASSIST_AT = 2;
+/** 观察类工具（与 toolLoop STUCK_MUTATING 互补，新增动作工具默认可重置）：
+ *  成功不代表流程推进（页面状态未变），不重置变更类连续失败计数——
+ *  否则「断言失败 → snapshot/readText 观察 → 再断言」会不断清零，阈值永远达不到。 */
+const GEN_OBSERVATION_TOOLS = new Set(['snapshot', 'page_tree', 'wait', 'readText', 'see', 'api']);
+
+/** 生成循环的 system prompt：工具使用规范 + 大纲软约束 + 占位符规则（大纲在 user 侧注入）。 */
+const GEN_LOOP_SYSTEM_PROMPT = `你是 Web 测试脚本生成 Agent：通过调用工具在真实浏览器里完成测试目标，每一步成功操作都会自动记录为脚本步骤。
+
+操作规范：
+1. 动手前先调用 snapshot 获取可交互元素编号表；页面发生变化（导航/弹层/新增内容）后必须重新 snapshot。仅需确认页面状态/查看视觉线索（toast/弹层/渲染问题）时，优先用 see（截图直达、更省）；图上看不清或找不到目标再回到 snapshot。
+2. 元素引用：工具的 selector 参数填 snapshot 编号表里的元素编号（如 "12"）；编号只在最新一次 snapshot 后有效。编号表里找不到目标、或需要页面层级结构时，才调用 page_tree 获取完整语义树（体积大，不要反复调用）；树内编号不能用作 selector。
+3. 每个动作工具的 instruction 必填：写一句自然语言描述（如「点击登录按钮」），它会被保存进脚本用于回放自愈。
+4. 组件库假控件（antd/element 的下拉、日期面板等）不是原生控件：不要对下拉触发器用 fill/select 原生方式；若可用工具中有 component_action（组件语义动作，如选择下拉选项、设置日期），优先使用它。
+5. 可输入控件（日期输入框等）直接用 fill 填值（如日期 2026-05-04），不要逐格点击。
+6. wait 工具用于等待弹层动画/加载结束（多帧稳定判定），不要盲目连续点击。
+7. 遇到错误不要重复同一操作：先 snapshot 查看当前状态，换路径或调整参数；连续失败会请求人工协助。已成功执行的步骤都会自动记录为脚本步骤，不要重做——重复登录/重复提交只会产生冗余步骤、还可能破坏当前页面状态。
+8. 级联/联动下拉：若选择某字段后另一个字段的值被页面清空/回设，说明两者是联动字段、所选组合不被页面接受——先选父字段（如部门），再打开子字段下拉、从当前可选列表里选择匹配的子项（如该部门下的账号）；若选完子项父字段仍被打回，换子字段当前可选列表里的其他选项，或调用 ask_human 说明联动现象请用户确认目标组合；不要交替反复重设两个互相打回的字段。
+9. 感到困惑时不要反复试错，立即调用 ask_human 主动向用户求助（挂起生成、等待人工决策）。以下情况视为困惑：换过不同方式仍无法达成目标、页面状态与预期不符且看不出原因、编号表和结构树里都找不到目标元素、或下一步只能是重复之前已做过的操作。args.question 简述困惑点与已尝试的做法，用户会据此给出补充说明、AI 修正、手动完成或跳过。系统也会在多次视觉观察仍无进展时自动挂起请求人工协助——与其反复截图盲找，不如尽早求助。
+10. 提交类操作（点击 确定/提交/保存/发布）后若弹窗未关闭、页面无变化或结果异常：调用 api 工具查看最近的接口请求/响应（状态码与响应体），以接口为真值与页面实际表现交叉核对，再决定下一步，不要盲目重复点击。分流只看一条标准——失败原因是否被页面明确告知、且可归因于输入：
+  · 可归因（页面有明确错误提示/红字校验，且接口同样报错、指向可修正的输入问题）→ 按参数问题换值重试（revise 配合见规则 13）。
+  · 不可归因，或页面表现与接口真值互相矛盾——疑似被测页面 Bug：调用 ask_human 求助（question 写明「疑似被测页面 Bug」，附上查证到的接口真实响应与页面实际表现），不要盲目重试，也不要为迁就 Bug 修改测试目标。矛盾形态不限于以下例子：
+    - 接口报错但 UI 装作成功：弹窗/表单照常关闭，无任何错误提示（UI 吞掉失败）；
+    - 接口成功但页面未呈现结果：列表无新条目、数据未变化；
+    - 页面报错但接口实际成功：出现错误提示或状态回滚，而接口响应正常、数据已生效；
+    - 无声失败：成功/失败提示皆无，接口也无对应请求（点击未触发任何调用）或响应无法判断成败。
+11. 完成测试意图后，至少添加一条 assert 断言（末步必须是断言），然后调用 finish。
+12. 环境变量以 {{key}} 占位符引用（fill 的 value 里直接写 {{key}}），不要写死真实值。
+13. 修正后重做提交时，若旧提交/填写操作已落库为脚本步骤，配合调用 revise 清理，回放脚本应是最短成功路径。两类场景：① 提交失败原因是参数问题（如手机号重复、名称已存在、值不合法）需换值重试——先 revise 改 value、删除冗余的旧值提交/重填链，再执行修正动作；② 点击提交后弹窗未关、被必填校验拦截（提交未生效）——补填缺失字段重新提交，成功后调用 revise 删除先前落空的旧提交步。不要留下「注定失败的提交 + 重填」的冗余链路。所有成功执行的操作都会如实落库（含有意重复，如循环造数的多次填写同一输入框）——落库步骤与浏览器实际执行一一对应，不要重复执行已成功且已落库的操作；失败重试产生的冗余链请用 revise 清理，finish 时系统还会做一次全局脚本审查兜底。`;
+
+/** 断言失败签名：type + expected + selector 定位同一「判断」；instruction 文本不参与（避免措辞变化绕过累计）。 */
+function assertFailSig(args: Record<string, unknown>): string {
+  return `${String(args.type ?? '')}|${String(args.expected ?? '')}|${String(args.selector ?? '')}`;
+}
+
+/** assist 决策 → 回灌给模型的 tool result 文本（redescribe/ai-fix/skip/revoke 四出口；
+ *  manual 不在此处理——runGenerationLoop.assistFollowup 拦截后走手动捕获流程）。decision 为 null 表示超时未响应。 */
+function assistResultText(decision: AssistDecision | null, errorText: string): string | null {
+  if (!decision) return `人工协助超时未响应：${errorText}`;
+  switch (decision.decision) {
+    case 'redescribe':
+      return `【用户补充说明】${decision.instruction}\n请据此重新完成目标（可先 snapshot 确认当前状态）。`;
+    case 'ai-fix':
+      return '【用户引导】用户选择了 AI 修正：请重新 snapshot 查看当前页面，换一种方式完成刚才失败的目标。';
+    case 'skip':
+      return '【用户引导】用户明确要求跳过该目标。请继续完成测试意图的其余部分（保持末步断言）。';
+    case 'revoke':
+      return `【用户引导】用户已撤销第 ${decision.from}~${decision.to} 步，这些步骤已从回放脚本中删除。请先 snapshot 确认当前页面状态（被撤销步骤在浏览器里的实际效果可能仍在），${decision.nl ? `按用户补充说明调整做法：${decision.nl}。` : ''}重新完成这部分流程——执行正确路径并正常落库，不要重复已被撤销的错误操作。`;
+    default:
+      return null;
+  }
+}
+
+/** finish 全局脚本审查的执行体（LLM 语义去重兜底）：引擎忠实落库后唯一一次全局视野的语义清理。
+ *  「重复是有意操作还是失败重试」需要整条链的语义（错误提交→重填→成功提交）才能判断，物理信号
+ *  （同定位器/同值）无法区分——TodoMVC「填+回车×5」与「填错重填」物理上同构，引擎流式去重会把
+ *  有意重复误删/错并。审查失败/超时静默跳过：审查是兜底而非门禁，不阻塞 finish；usage 由
+ *  gateway client 底层入账（差分口径同预拆分）。 */
+async function runScriptReview(o: {
+  jobId: string;
+  client: OpenAI;
+  model: string;
+  reasoningEffort: ReasoningEffort;
+  steps: TestStep[];
+  revise: (ops: ReviseOp[]) => Promise<string>;
+}): Promise<void> {
+  const { jobId, client } = o;
+  if (o.steps.length < 4) return; // goto+动作+断言的最小脚本无冗余空间
+  const detail = o.steps
+    .map((s, i) => {
+      const label = s.kind === 'assert' ? '断言' : (s.action ?? s.kind);
+      const loc = s.locator ? ` locator=${s.locator.strategy}:${s.locator.value}${s.locator.name ? `[${s.locator.name}]` : ''}` : '';
+      const param =
+        s.kind === 'navigate'
+          ? ` url=${s.url}`
+          : s.value != null
+            ? ` value=${s.value}`
+            : s.key != null
+              ? ` key=${s.key}`
+              : s.assertion?.expected != null
+                ? ` expected=${s.assertion.expected}`
+                : '';
+      return `${i + 1}. [${label}]${loc}${param} ${s.instruction}`;
+    })
+    .join('\n');
+  try {
+    const before = { ...getUsage(jobId) };
+    const req: Record<string, unknown> = {
+      model: o.model,
+      messages: [
+        {
+          role: 'system',
+          content:
+            '你是回放测试脚本的审查员。已落步骤与浏览器实际执行一一对应。请找出「失败重试/被后续操作替代」的冗余步骤并清理，使脚本成为最短成功回放路径：\n' +
+            '- 删除：注定失败或已落空的操作链（落空的提交、旧值填写、同 URL 的重复导航等）；\n' +
+            '- 保留：有意的重复操作（循环造数、逐行填写、反复切换等，即使元素与值完全相同）；\n' +
+            '- 断言一般保留；唯一可删例外：两条断言互为冗余（同一定位、期望值一方是另一方的前缀/子集，如泛化 text=客户_ 与精确 text=客户_1788703830578 并存，不论谁前谁后），只删其中一条、保留另一条；无论删否，应用全部 ops 后脚本末步必须是断言——若末步断言不属于冗余对，任何删除都不得触及它；\n' +
+            '- 不确定时保留，宁多勿错删；可用 update 修正 value；ops 按顺序应用，delete 会使之后的原序号前移——连续删除一段请合并为一个范围 op（from~to），先删后改时 update 的 step 序号按删除后的新编号给出。\n' +
+            '输出 JSON：{"ops": [{"op":"delete","from":n,"to":m} 或 {"op":"update","step":n,"value":"新值"}]}，ops 为空数组表示无需修订。只输出 JSON。',
+        },
+        { role: 'user', content: `【已落步骤】\n${detail}` },
+      ],
+      response_format: { type: 'json_object' },
+    };
+    if (o.reasoningEffort) req.reasoning_effort = o.reasoningEffort;
+    else {
+      req.thinking = { type: 'disabled' };
+      req.temperature = 0;
+    }
+    const res = await client.chat.completions.create(req as never);
+    const text = res.choices?.[0]?.message?.content ?? '';
+    const usage = usageDelta(before, getUsage(jobId));
+    const parsed = safeJsonParse(stripFences(text)) as { ops?: ReviseOp[] } | undefined;
+    const ops = Array.isArray(parsed?.ops) ? (parsed!.ops as ReviseOp[]) : [];
+    // 审查原始输出（text+解析出的 ops）随 args 落库：预检拦截后不回灌重试，「模型到底给了什么」
+    // 只此一处留痕，事后排查不合规原因全靠它（如 cmtpz11km000i 案例只能靠重建输入反推）。
+    const reviewArgs = { reviewOutput: text, ops };
+    if (ops.length) {
+      // 应用前预检（applyReviseOps 为纯函数）：产出非法（越界/末步不再是断言）则整体跳过，
+      // 不让审查把合法脚本改成非法脚本——revise 一经应用即已广播，无法回退。
+      const probe = applyReviseOps(o.steps, ops);
+      if (typeof probe === 'string') {
+        // ops 本身非法（越界/缺字段等）：错误文案自解释，直接透出
+        pubToolWithUsage(jobId, 0, '脚本审查', `审查 ${o.steps.length} 步`, `审查产出不合规（${probe}），已跳过清理`, usage, reviewArgs);
+        return;
+      }
+      if (!probe.steps.length || probe.steps[probe.steps.length - 1].kind !== 'assert') {
+        pubToolWithUsage(jobId, 0, '脚本审查', `审查 ${o.steps.length} 步`, '审查产出不合规（应用后末步不再是断言），已跳过清理', usage, reviewArgs);
+        return;
+      }
+      const n = o.steps.length;
+      const summary = await o.revise(ops);
+      pubToolWithUsage(jobId, 0, '脚本审查', `审查 ${n} 步`, summary, usage, reviewArgs);
+    } else {
+      pubToolWithUsage(jobId, 0, '脚本审查', `审查 ${o.steps.length} 步`, '审查通过：无冗余步骤需要清理', usage, reviewArgs);
+    }
+  } catch (e) {
+    // 审查异常不阻塞 finish：模型也可在 finish 前自用 revise 清理。但要留痕——静默失败会让
+    // 「审查兜底失效」无从排查（如 DeepSeek 对 json_object 要求提示词含 json 一词，缺失即 400）。
+    console.warn(`[gen:${jobId}] 脚本审查失败，跳过清理：`, e);
+  }
+}
+
+/** 生成循环：大纲软约束 + runToolLoop（LLM 在回路自主选择工具，动作成功即语义化落库）。 */
+export async function runGenerationLoop(o: {
+  jobId: string;
+  page: any;
+  stagehand: any;
+  pwPage: any;
+  client: OpenAI;
+  cfg: ReturnType<typeof getConfig>;
+  modelVision: boolean;
+  envMap: Record<string, string>;
+  envVarHint: string;
+  sub: (t: string | undefined | null) => string | undefined;
+  emit: (s: TestStep) => Promise<void>;
+  steps: TestStep[];
+  /** 本轮目标描述（原测试目标/追加目标，含附件文本）。 */
+  goalText: string;
+  /** 续跑时已完成的前缀步骤（完整脚本 = baseSteps + 本轮 steps）：撤销范围可跨它，gen:revise 同步偏移动态取其长度。 */
+  baseSteps?: TestStep[];
+  /** 用户确认的大纲（软约束：参考路线，可据实际偏离）。 */
+  outline: PlanStep[];
+  /** 大纲断言序号基数：续跑（resumeLoop）时 outline 为完整原大纲、baseSteps 已含此前断言，需按其数量对齐第 k 个落库断言 ↔ 大纲第 k 个断言；常规续跑的大纲只覆盖剩余流程，不传（0）。 */
+  outlineAssertBase?: number;
+  projectId?: string | null;
+  logId: string | null;
+  isCancelled: () => boolean;
+  signal?: AbortSignal;
+  /** 续跑：外部传入已持久化的 messages（继续生成读回），不再重建 system/user。 */
+  resumeMessages?: OpenAI.ChatCompletionMessageParam[];
+}): Promise<{ ok: boolean; finishMessage?: string; messages: OpenAI.ChatCompletionMessageParam[] }> {
+  const { jobId, pwPage, page, client, cfg } = o;
+
+  // 插件编排（preset 唯一入口）：成员脚本已注入会话；此处取动作词表构建统一语义动作工具（与预拆分 prompt 词表同源）
+  const pluginActions = await enabledActionVocabulary(o.projectId ?? null);
+
+  // 生成期网络捕获（api 工具的数据源）：runGenerationLoop 在 startUrl 导航之后调用，首屏导航的响应不捕获
+  // （可接受：提交报错场景不在此）；每轮 loop（生成/续跑/重规划）各自新建，循环结束即 dispose
+  const network = new NetworkCapture();
+  network.attach(pwPage);
+
+  // 撤销处理器（人工「撤销步骤」决策的落点）：assistStep 收到 revoke 时删范围并广播 gen:revoke，
+  // 模型随后经 assistResultText 收到引导文本，基于当前页面重做被撤销的流程。循环结束即注销。
+  revokeHandlers.set(jobId, (from, to) => revokeStepRange(o.baseSteps ? [o.baseSteps, o.steps] : [o.steps], from, to));
+
+  // 大纲等待步确定性落库：确认计划中断言前的 wait 步（拆分规范「在断言前可加适当延时」）必须进入回放脚本，
+  // 而智能体循环的 wait 工具只做运行时稳定等待（多帧判定，不落库）。对齐规则：第 k 个落库断言 ↔ 大纲第 k 个
+  // 断言，落库前补插两者之间的大纲 wait 步（大纲为软约束，模型可能增删断言，超出大纲断言数的不再补插）。
+  let assertSeq = o.outlineAssertBase ?? 0;
+  const emitWithOutlineWaits = async (step: TestStep): Promise<void> => {
+    if (step.kind === 'assert') {
+      const outlineAsserts = o.outline.map((s, i) => (s.kind === 'assert' ? i : -1)).filter((i) => i >= 0);
+      if (assertSeq < outlineAsserts.length) {
+        const lo = assertSeq > 0 ? outlineAsserts[assertSeq - 1] + 1 : 0;
+        const hi = outlineAsserts[assertSeq];
+        for (const w of o.outline.slice(lo, hi).filter((s) => s.kind === 'action' && s.action === 'wait')) {
+          const ms = Math.max(0, Number(w.value) || 1000);
+          await o.emit({ kind: 'wait', action: 'wait', value: String(ms), instruction: w.instruction, description: w.instruction });
+        }
+      }
+      assertSeq++;
+    }
+    await o.emit(step);
+  };
+
+  // 侦察性 click 吸收（absorbProbeClick）：组件语义动作成功落库即证明自身自足（自动开合弹层），
+  // 此刻移除尾部紧邻的同 locator click 步（模型先点开下拉侦察选项），避免回放脚本冗余。
+  // 移除后广播 gen:revise 让前端整表收缩；本步随后的 gen:step 因数组缩短自然占据被删位置。
+  const emitAbsorbingProbe = async (step: TestStep): Promise<void> => {
+    const removedAt = absorbProbeClick(o.steps, step);
+    if (removedAt != null) {
+      pub({ type: 'gen:revise', jobId, base: o.baseSteps?.length ?? 0, steps: o.steps, ops: [{ op: 'delete', from: removedAt, to: removedAt }] });
+    }
+    await emitWithOutlineWaits(step);
+  };
+
+  // 落库 emit：忠实记录浏览器实际执行的每个操作（含有意重复，如循环造数对同一输入框的多次填写），
+  // 不做流式同字段去重——「重复是有意操作还是失败重试」只有语义判断可信，物理信号（同定位器/同值）
+  // 无法区分（TodoMVC「填+回车×5」与「填错重填」物理上同构）。去重职责交给 LLM：
+  // 模型自用 revise 清理失败重试链，finish 时全局脚本审查（runScriptReview）兜底。
+  // 落库与执行一一对应也让「执行成功/记录正确」不脱节，调试有据可查。
+  const emitStep = async (step: TestStep): Promise<EmitOutcome> => {
+    normalizeStepSystemVars(step); // 原地归一化：落库口径与前端检测一致（都是 {{...}}）
+    await emitAbsorbingProbe(step);
+    return { index: o.steps.length };
+  };
+
+  // 步骤修订（revise 工具的落点）：纯脚本操作，不触碰浏览器。原地替换 o.steps（引用不变——
+  // emitWithOutlineWaits/finishValidate/最终 script 组装均持有同一数组），pub gen:revise 让前端整表同步。
+  const revise = async (ops: ReviseOp[]): Promise<string> => {
+    // update 补丁携带的 value/instruction/expected 也归一化旧写法（模型可能在修订时写 ${systemTime}）
+    for (const op of ops) {
+      if (op?.op !== 'update') continue;
+      if (op.value != null) op.value = legacyToUnifiedSystemVars(String(op.value))!;
+      if (op.instruction != null) op.instruction = legacyToUnifiedSystemVars(String(op.instruction))!;
+      if (op.expected != null) op.expected = legacyToUnifiedSystemVars(String(op.expected))!;
+    }
+    const applied = applyReviseOps(o.steps, ops);
+    if (typeof applied === 'string') throw new Error(applied);
+    o.steps.splice(0, o.steps.length, ...applied.steps);
+    pub({ type: 'gen:revise', jobId, base: o.baseSteps?.length ?? 0, steps: o.steps, ops });
+    const lines = applied.steps
+      .slice(0, 60)
+      .map((s, i) => `${i + 1}. [${s.kind === 'assert' ? '断言' : (s.action ?? s.kind)}] ${String(s.instruction ?? '').slice(0, 60)}`);
+    return `已修订脚本步骤（更新 ${applied.updated} 步、删除 ${applied.deleted} 步）。当前已落步骤：\n${lines.join('\n')}`;
+  };
+
+  const ctx: GenToolContext = {
+    jobId,
+    page,
+    stagehand: o.stagehand,
+    pwPage,
+    client,
+    model: cfg.openaiModel,
+    xpathMap: {},
+    sub: o.sub,
+    envMap: o.envMap,
+    emit: emitStep,
+    onTool: (index, label, detail, result) => pubToolWithUsage(jobId, index, label, detail, result, { inputTokens: 0, outputTokens: 0, totalTokens: 0, cachedTokens: 0 }),
+    note: () => {},
+    stepCount: () => o.steps.length,
+    revise,
+    usageKey: jobId,
+    modelVision: o.modelVision,
+    pluginActions,
+    network,
+  };
+
+  // ---- 人在回路「手动操作」：捕获用户首个真实操作 → 落库 → 回灌引导文本 ----
+  const manualCapture = createManualCapture({ jobId, pwPage, emit: emitStep, isCancelled: o.isCancelled });
+
+  /** 决策回灌统一出口：manual 走手动捕获（等待用户操作、落库、反馈），其余走 assistResultText。 */
+  const assistFollowup = async (decision: AssistDecision | null, context: string): Promise<string | null> => {
+    if (decision?.decision === 'manual') return manualCapture(context);
+    return assistResultText(decision, context);
+  };
+
+  // finish 全局脚本审查：执行体见 runScriptReview。一次生成只审一次：
+  // finish 被拒后续跑不重复审（无新步骤则无新冗余）。
+  let scriptReviewed = false;
+  const reviewScriptSteps = async (): Promise<void> => {
+    if (scriptReviewed) return;
+    scriptReviewed = true; // 一次生成只审一次：finish 被拒后续跑不重复审（无新步骤则无新冗余）
+    await runScriptReview({ jobId, client, model: cfg.openaiModel, reasoningEffort: cfg.reasoningEffort, steps: o.steps, revise });
+  };
+
+  // finish 校验：脚本末步必须是断言，随后做全局脚本审查（LLM 语义去重兜底）
+  const finishValidate = async (): Promise<string | null> => {
+    const last = o.steps[o.steps.length - 1];
+    if (!last || last.kind !== 'assert') {
+      return '脚本必须以断言步骤结尾（验证测试结果）。请先调用 assert 工具添加断言，再调用 finish。';
+    }
+    await reviewScriptSteps();
+    return null;
+  };
+
+  // 主动求助（ask_human 工具）：模型困惑时挂起 gen:assist 等人决策（与 onStuck 同通道），决策结果作为工具结果回灌
+  const askHuman = async (question: string): Promise<string> => {
+    const context = `Agent 主动求助：${question.slice(0, 200)}`;
+    const decision = await askUser(jobId, {
+      stepIndex: o.steps.length,
+      kind: 'tool',
+      instruction: context,
+      canManual: true,
+    });
+    if (o.isCancelled()) return '（生成已取消）';
+    return (
+      (await assistFollowup(decision, context)) ??
+      '用户未给出有效决策，请自行决定下一步（换路径、跳过该项或如实 finish）。'
+    );
+  };
+
+  const tools = buildGenTools(ctx, finishValidate, askHuman);
+
+  const outlineText = o.outline.length
+    ? o.outline.map((s, i) => `${i + 1}. [${s.kind === 'assert' ? '断言' : (s.action ?? '操作')}] ${s.instruction}`).join('\n')
+    : '（用户未确认具体大纲，请自行规划步骤）';
+  const pluginHint = pluginActions.length
+    ? `\n\n【可用组件语义动作】\n${pluginActions.map((v) => `- ${v.name}：${v.doc ?? ''}`).join('\n')}`
+    : '';
+
+  const messages: OpenAI.ChatCompletionMessageParam[] = o.resumeMessages ?? [
+    { role: 'system', content: `${GEN_LOOP_SYSTEM_PROMPT}${pluginHint}${o.envVarHint ? `\n\n${o.envVarHint}` : ''}` },
+    {
+      role: 'user',
+      content: `【测试目标】\n${o.goalText}\n\n【参考大纲（软约束：按实际情况执行，允许合理偏离；不要照抄大纲文本当作操作）】\n${outlineText}`,
+    },
+  ];
+
+  // 连续失败计数：变更类工具连续异常达阈值即挂起 gen:assist 请求人工决策；
+  // 重置只认「推进型成功」——观察类工具（GEN_OBSERVATION_TOOLS）成功不清零，
+  // 否则「断言失败 → snapshot/readText → 再断言」的循环会不断清零，阈值永远达不到。
+  let failStreak = 0;
+  const onSuccess = (name: string): void => {
+    if (!GEN_OBSERVATION_TOOLS.has(name)) failStreak = 0;
+  };
+
+  // 断言是「判断」不是「动作」：同签名（type+expected+selector）重试不会改变页面结果，
+  // 累计失败 ASSERT_FAIL_ASSIST_AT 次即挂起等人。内建 askUser（不依赖调用方回调）：
+  // 生成/续跑/常规继续三条路径同样生效（与 onStuck 同理）。
+  const assertFailTotal = new Map<string, number>();
+  const onAssertFail = async (args: Record<string, unknown>, error: string): Promise<string | null> => {
+    const sig = assertFailSig(args);
+    const total = (assertFailTotal.get(sig) ?? 0) + 1;
+    assertFailTotal.set(sig, total);
+    if (total < ASSERT_FAIL_ASSIST_AT) return null; // 未达阈值：错误照常回灌，模型自行调整
+    assertFailTotal.set(sig, 0); // 介入后清零：给用户决策后的重试新预算
+    const decision = await askUser(jobId, {
+      stepIndex: o.steps.length,
+      kind: 'assert',
+      instruction: `断言同目标已失败 ${ASSERT_FAIL_ASSIST_AT} 次：${String(args.instruction ?? sig).slice(0, 200)}`,
+      canManual: false,
+    });
+    if (o.isCancelled()) return null;
+    return assistResultText(decision, String(error).slice(0, 200));
+  };
+
+  const onFailure = async (name: string, args: Record<string, unknown>, error: string): Promise<string | null> => {
+    if (name === 'assert') return onAssertFail(args, error); // 判断类走同签名累计通道，不占变更类连续失败计数
+    failStreak++;
+    if (failStreak < MAX_ASSIST_PER_STEP) return null; // 未达阈值：错误照常回灌，模型自行调整
+    failStreak = 0;
+    // 连续失败达阈值：挂起等人（gen:assist）。超时/取消返回 null → 错误照常回灌。
+    // 注意：不能在此处向 messages 注入 user 消息——此刻对应 tool 消息尚未回灌，
+    // 中间插 user 会违反协议（孤儿 tool_calls → 网关 400）；tool result 本身就是安全通道。
+    const context = `工具「${name}」连续失败：${String(error).slice(0, 200)}`;
+    const decision = await askUser(jobId, {
+      stepIndex: o.steps.length,
+      kind: 'tool',
+      instruction: context,
+      canManual: true,
+    });
+    if (o.isCancelled()) return null;
+    return assistFollowup(decision, context);
+  };
+
+  // 空转保护升级：窗口内同签名变更类操作反复出现（runToolLoop 检测）→ 挂起等人决策。
+  // 内建于循环内：生成/续跑/常规继续三条路径都能获得空转人工介入。
+  // kind='observe' 为观察空转：see 自上次进展以来连续多次仍找不到目标（如菜单入口）。
+  // kind='linkage' 为联动死锁：select 在两个元素间交替翻转（选择其一另一个被页面回设），detail 携带两元素可读描述。
+  const onStuck = async (
+    name: string,
+    args: Record<string, unknown>,
+    count: number,
+    kind?: 'repeat' | 'observe' | 'linkage',
+    detail?: string,
+  ): Promise<string | null> => {
+    const context =
+      kind === 'observe'
+        ? `连续 ${count} 次视觉观察无进展`
+        : kind === 'linkage'
+          ? `疑似联动字段的组合已交替重试 ${count} 轮`
+          : `相同操作已重复 ${count} 次无进展`;
+    const decision = await askUser(jobId, {
+      stepIndex: o.steps.length,
+      kind: 'tool',
+      instruction:
+        kind === 'observe'
+          ? `观察空转保护：已连续 ${count} 次视觉观察（see）仍无进展，疑似找不到目标入口`
+          : kind === 'linkage'
+            ? `联动死锁保护：${detail ?? '两个下拉字段'}已交替成功选择 ${count} 轮，选择其一后另一个被页面回设，疑似联动字段（当前组合不被页面接受）`
+            : `空转保护：工具「${name}」相同操作已重复 ${count} 次无进展`,
+      canManual: true,
+    });
+    if (o.isCancelled()) return null;
+    return assistFollowup(decision, context);
+  };
+
+  // 观察空转的进展探针：仅「goto 导航」或「落库新脚本步骤」算进展、重置 see 连击——
+  // 变更类工具假成功（点击返回成功但页面无变化、未落库新步骤）不算，避免「连击被假进展反复清零」。
+  let lastStepCount = ctx.stepCount();
+  const isProgress = (name: string): boolean => {
+    const cur = ctx.stepCount();
+    if (cur > lastStepCount) {
+      lastStepCount = cur;
+      return true;
+    }
+    return name === 'goto';
+  };
+
+  const loop = await runToolLoop({
+    client,
+    model: cfg.openaiModel,
+    reasoningEffort: cfg.reasoningEffort,
+    tools,
+    messages,
+    maxSteps: Math.max(20, cfg.maxSteps ?? 200),
+    usageKey: jobId,
+    signal: o.signal,
+    // toolLoop 的 finish 是特殊分支（不执行 finish 工具的 execute），校验必须经此传入：
+    // 末步断言校验 + finish 时全局脚本审查（reviewScriptSteps）都挂在这里
+    validateFinish: finishValidate,
+    onFailure,
+    onSuccess,
+    onStuck,
+    isProgress,
+    onStep: ({ index, name, args, result, usageDelta: ud }) => {
+      const label = ({ snapshot: '快照', page_tree: '结构树', goto: '导航', click: '点击', fill: '填写', press: '按键', check: '勾选', select: '选择', wait: '等待', readText: '读取文本', assert: '断言', act: 'AI 兜底', see: '视觉观察', api: '网络请求', component_action: '组件动作', ask_human: '人工求助', finish: '完成' } as any)[name] ?? name;
+      let detail = '';
+      try {
+        detail = JSON.stringify(args ?? {}).slice(0, 160);
+      } catch {
+        detail = '';
+      }
+      // see 的完整 question 落 args 列（detail 有 160 字截断）；模型回答由 onAssistantContent 滞后回填 assistant 列
+      pubToolWithUsage(jobId, index, label, detail, result, ud, name === 'see' ? args : undefined);
+    },
+    // see 截图的「模型作答」在下一轮 completion 到达（toolLoop 回调），回填对应 GenerationStep.assistant
+    onAssistantContent: (stepIndex, content) => updateToolAssistant(jobId, stepIndex, content),
+  }).finally(() => {
+    revokeHandlers.delete(jobId);
+    network.dispose();
+  });
+
+  if (o.isCancelled()) return { ok: false, messages };
+  if (!loop.finished) {
+    if (!o.isCancelled()) pub({ type: 'gen:error', jobId, message: `生成循环未正常收敛（${loop.steps} 个工具步骤）：${loop.finishMessage ?? '未调用 finish'}`, usage: getUsage(jobId) });
+    return { ok: false, finishMessage: loop.finishMessage, messages };
+  }
+  return { ok: true, finishMessage: loop.finishMessage, messages };
+}

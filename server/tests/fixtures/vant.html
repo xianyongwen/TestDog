@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>vant select/树选/日期 测试</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vant@4.10.2/lib/index.css" />
+  <style>
+    body { font-family: system-ui, sans-serif; padding: 24px; max-width: 640px; margin: 0 auto; }
+    .block { margin: 24px 0; }
+    .block > label { display: block; margin-bottom: 8px; font-weight: 600; }
+    .val { margin-top: 8px; color: #555; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <h3>vant (Vue3 移动端) select / 树选 / 日期 测试页</h3>
+  <!-- 注意：in-DOM 模板中自定义元素不能自闭合（浏览器忽略 />，后继节点会被吞成 slot），必须显式闭合 -->
+  <div id="app">
+    <div class="block">
+      <label>van-field 文本输入框</label>
+      <van-cell-group inset>
+        <van-field id="nameField" v-model="name" label="姓名" placeholder="请输入姓名" clearable></van-field>
+      </van-cell-group>
+      <div class="val">当前值：{{ name || '(空)' }}</div>
+    </div>
+
+    <div class="block">
+      <label>van-dropdown-menu 下拉菜单（overlay 选项，非原生 select）</label>
+      <van-dropdown-menu id="cityDropdown">
+        <van-dropdown-item v-model="city" :options="cityOptions" title="城市"></van-dropdown-item>
+      </van-dropdown-menu>
+      <div class="val">当前值：{{ city || '(空)' }}</div>
+    </div>
+
+    <div class="block">
+      <label>van-picker 滚轮选择器（弹层，选中后需点确认提交）</label>
+      <van-cell-group inset>
+        <van-field id="cityPickerField" readonly clickable :model-value="pickedCity" label="城市" placeholder="请选择城市" @click="showCityPicker = true"></van-field>
+      </van-cell-group>
+      <van-popup v-model:show="showCityPicker" round position="bottom">
+        <van-picker title="选择城市" :columns="cityColumns" @cancel="showCityPicker = false" @confirm="onCityConfirm"></van-picker>
+      </van-popup>
+      <div class="val">当前值：{{ pickedCity || '(空)' }}</div>
+    </div>
+
+    <div class="block">
+      <label>van-tree-select 树形选择（左侧分类 + 右侧子项，单选）</label>
+      <!-- vant4 的 v-model 绑定的是 main-active-index（左栏索引），选中项须用 v-model:active-id -->
+      <van-tree-select id="deptTreeSelect" v-model:active-id="activeId" :items="deptItems"></van-tree-select>
+      <div class="val">当前值：{{ deptText || '(空)' }}</div>
+    </div>
+
+    <div class="block">
+      <label>van-date-picker 日期滚轮选择器（弹层，年/月/日三列，需确认）</label>
+      <van-cell-group inset>
+        <van-field id="datePickerField" readonly clickable :model-value="pickedDate" label="日期" placeholder="请选择日期" @click="showDatePicker = true"></van-field>
+      </van-cell-group>
+      <van-popup v-model:show="showDatePicker" round position="bottom">
+        <van-date-picker title="选择日期" :min-date="minDate" :max-date="maxDate" @cancel="showDatePicker = false" @confirm="onDateConfirm"></van-date-picker>
+      </van-popup>
+      <div class="val">当前值：{{ pickedDate || '(空)' }}</div>
+    </div>
+
+    <div class="block">
+      <label>van-calendar 日历选择器（弹层日历面板，选格即确认）</label>
+      <van-cell-group inset>
+        <van-field id="calendarField" readonly clickable :model-value="calDate" label="日历" placeholder="请选择日期" @click="showCalendar = true"></van-field>
+      </van-cell-group>
+      <!-- vant4 Calendar 的显隐是 v-model:show（非 v-model，那是 vant2 写法） -->
+      <van-calendar v-model:show="showCalendar" title="选择日期" :min-date="calMinDate" :max-date="calMaxDate" @confirm="onCalConfirm"></van-calendar>
+      <div class="val">当前值：{{ calDate || '(空)' }}</div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/vue@3.5.0/dist/vue.global.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/vant@4.10.2/lib/vant.min.js"></script>
+  <script>
+    const { createApp, ref, computed } = Vue;
+    createApp({
+      setup() {
+        const name = ref('');
+
+        const city = ref('');
+        const cityOptions = [
+          { text: '北京', value: 'beijing' },
+          { text: '上海', value: 'shanghai' },
+          { text: '广州', value: 'guangzhou' },
+          { text: '深圳', value: 'shenzhen' },
+        ];
+
+        const showCityPicker = ref(false);
+        const pickedCity = ref('');
+        const cityColumns = cityOptions;
+        // 滚轮选择器选完不自动收起，确认事件才提交
+        const onCityConfirm = ({ selectedOptions }) => {
+          pickedCity.value = selectedOptions[0]?.text || '';
+          showCityPicker.value = false;
+        };
+
+        const activeId = ref('');
+        const deptItems = [
+          {
+            text: '研发部',
+            children: [
+              { id: 'fe', text: '前端组' },
+              { id: 'be', text: '后端组' },
+              { id: 'qa', text: '测试组' },
+            ],
+          },
+          {
+            text: '市场部',
+            children: [
+              { id: 'brand', text: '品牌组' },
+              { id: 'growth', text: '增长组' },
+            ],
+          },
+        ];
+        const deptText = computed(() => {
+          for (const g of deptItems) {
+            const hit = (g.children || []).find((c) => c.id === activeId.value);
+            if (hit) return hit.text;
+          }
+          return '';
+        });
+
+        const showDatePicker = ref(false);
+        const pickedDate = ref('');
+        const minDate = new Date(2020, 0, 1);
+        const maxDate = new Date(2030, 11, 31);
+        const onDateConfirm = ({ selectedValues }) => {
+          const [y, m, d] = selectedValues;
+          pickedDate.value = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+          showDatePicker.value = false;
+        };
+
+        const showCalendar = ref(false);
+        const calDate = ref('');
+        const calMinDate = new Date(2024, 0, 1);
+        const calMaxDate = new Date(2027, 11, 31);
+        const onCalConfirm = (date) => {
+          calDate.value = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+          showCalendar.value = false;
+        };
+
+        return {
+          name,
+          city, cityOptions,
+          showCityPicker, pickedCity, cityColumns, onCityConfirm,
+          activeId, deptItems, deptText,
+          showDatePicker, pickedDate, minDate, maxDate, onDateConfirm,
+          showCalendar, calDate, calMinDate, calMaxDate, onCalConfirm,
+        };
+      },
+    }).use(vant).mount('#app');
+  </script>
+</body>
+</html>

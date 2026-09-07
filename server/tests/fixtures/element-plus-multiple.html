@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>element-plus 多选 select 测试</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/element-plus@2.8.0/dist/index.css" />
+  <style>
+    body { font-family: system-ui, sans-serif; padding: 24px; }
+    .block { margin: 20px 0; }
+    .block > label { display: block; margin-bottom: 6px; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <h3>element-plus (Vue3) 多选 el-select 测试页</h3>
+  <div id="app">
+    <div class="block">
+      <label>el-select 多选（multiple，选中后弹层不自动收起）</label>
+      <el-select v-model="tags" placeholder="请选择标签" multiple>
+        <el-option label="标签一" value="t1"></el-option>
+        <el-option label="标签二" value="t2"></el-option>
+        <el-option label="标签三" value="t3"></el-option>
+      </el-select>
+      <div>当前值：{{ tags }}</div>
+    </div>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/vue@3.5.0/dist/vue.global.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/element-plus@2.8.0/dist/index.full.min.js"></script>
+  <script>
+    const { createApp, ref } = Vue;
+    createApp({
+      setup() {
+        return { tags: ref([]) };
+      },
+    }).use(ElementPlus).mount('#app');
+  </script>
+</body>
+</html>

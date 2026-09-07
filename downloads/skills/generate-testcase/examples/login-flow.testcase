@@ -1,0 +1,70 @@
+{
+  "format": "testcase",
+  "version": 1,
+  "title": "登录成功跳转仪表盘",
+  "description": "用环境变量配置的账号登录，断言登录接口返回 200、URL 跳转 /dashboard、仪表盘标题可见。\n需在项目设置定义变量：baseUrl、username、password。",
+  "naturalLanguage": "打开登录页，用账号登录，断言出现仪表盘",
+  "steps": [
+    {
+      "instruction": "打开登录页",
+      "description": "打开被测应用的登录页，地址取自环境变量 {{baseUrl}}",
+      "kind": "navigate",
+      "action": "goto",
+      "url": "{{baseUrl}}/login"
+    },
+    {
+      "instruction": "在用户名输入框填写用户名",
+      "description": "填写登录账号，值取自环境变量 {{username}}",
+      "kind": "action",
+      "action": "fill",
+      "locator": { "strategy": "label", "value": "用户名" },
+      "value": "{{username}}"
+    },
+    {
+      "instruction": "在密码输入框填写密码",
+      "description": "填写登录密码，值取自环境变量 {{password}}",
+      "kind": "action",
+      "action": "fill",
+      "locator": { "strategy": "label", "value": "密码" },
+      "value": "{{password}}"
+    },
+    {
+      "instruction": "点击登录按钮",
+      "description": "提交登录表单，触发 /api/login 请求及后续页面跳转",
+      "kind": "action",
+      "action": "click",
+      "locator": { "strategy": "role", "value": "button", "role": "button", "name": "登录" }
+    },
+    {
+      "instruction": "断言登录接口返回状态码 200",
+      "description": "校验登录接口返回成功状态码（response 断言自动轮询等响应约 1s）",
+      "kind": "assert",
+      "action": "assert",
+      "locator": { "strategy": "response", "value": "/api/login" },
+      "assertion": { "type": "response_status", "expected": "200" }
+    },
+    {
+      "instruction": "等待 500 毫秒",
+      "description": "等待登录成功后的页面跳转完成（url 断言不自动等待，需显式留时间）",
+      "kind": "wait",
+      "action": "wait",
+      "value": "500"
+    },
+    {
+      "instruction": "断言页面 URL 跳转到 /dashboard",
+      "description": "校验已跳转到仪表盘路由",
+      "kind": "assert",
+      "action": "assert",
+      "assertion": { "type": "url", "expected": "/dashboard" }
+    },
+    {
+      "instruction": "断言仪表盘标题可见",
+      "description": "校验仪表盘标题已渲染可见（visible 断言自动等元素最多 10s）",
+      "kind": "assert",
+      "action": "assert",
+      "locator": { "strategy": "role", "value": "heading", "role": "heading", "name": "仪表盘" },
+      "assertion": { "type": "visible" }
+    }
+  ],
+  "rawCode": ""
+}

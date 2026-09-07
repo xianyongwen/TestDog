@@ -1,0 +1,220 @@
+// Tailwind v4 的 @import 入口在 src/tailwind.css（CSS 文件才能被 @tailwindcss/vite 插件正确处理），
+// 其中已声明 @layer theme, base, antd, components, utilities 顺序。
+// 语义色/字号 token 在 src/tailwind.css 的 --tk-*（light/dark 两表），
+// antd 侧在 src/theme.ts PALETTES 维护字面量镜像，两表改值时需对照更新。
+
+/* 覆盖 preflight，保持 antd 风格的全局字体与行高 */
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+    margin: 0;
+  }
+
+  /* #root 是 antd Layout 的容器，需要让它内部 flex 高度正确传递。
+     preflight 默认 min-height: auto 会撑开 Sider、Content 等 flex 子项，
+     导致 Sider 高度超过视口（折叠按钮跑到屏幕底部）、顶部出现多余空隙。 */
+  #root {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  body {
+    font-family: 'SF Pro Text', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+      'Helvetica Neue', 'Noto Sans', sans-serif;
+    font-size: var(--tk-font-body);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  // 让 antd Layout 的 flex 子项能正确撑满高度（Sider 不会溢出到底部）
+  .ant-layout,
+  .ant-layout-sider,
+  .ant-layout-content,
+  .ant-layout-header,
+  .ant-layout-footer {
+    min-height: 0;
+  }
+
+  // preflight 重置了 ul/ol 的 list-style，antd Menu 内部 ul 需要恢复
+  .ant-menu-root,
+  .ant-menu-sub {
+    list-style: none;
+  }
+}
+
+/* 组件样式：表格自适应高度、Finder 斑马纹 */
+@layer components {
+  // 表格自适应高度：父容器需有确定高度（如 flex 剩余空间），
+  // 表头固定、表体滚动，无需手写 scroll.y: calc(100vh - xx)。
+  // antd Table 渲染结构：<div .ant-table-wrapper><div class="ant-table ..." className>...
+  // className 注入在内层 .ant-table 上，wrapper 才是真正的布局根，
+  // 所以同时给 wrapper 也设为撑满父级，.ant-table（className）维持内层 flex 列布局。
+  .auto-height-table,
+  // antd Table 渲染根是 .ant-table-wrapper，className 注入在内层。
+  // wrapper 必须先撑满父级 flex 剩余高度，.ant-table 内的撑满链才生效。
+  // 用 :has 反向匹配含 auto-height-table 的 wrapper。
+  .ant-table-wrapper:has(.auto-height-table) {
+    flex: 1 1 auto;
+    height: 100%;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .auto-height-table {
+    // antd Table 外层固定包一层 Spin：
+    // wrapper > .ant-spin-nested-loading > .ant-spin-container > .ant-table
+    // 这两个 Spin 容器默认是 block、高度随内容增长，会把 flex 高度链打断，
+    // 必须让它们也把高度传递下去，否则表体永远不会被约束、出不来滚动条。
+    .ant-spin-nested-loading,
+    .ant-spin-container,
+    .ant-table,
+    .ant-table-container {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .ant-table-header {
+      flex-shrink: 0;
+    }
+
+    .ant-table-body {
+      flex: 1;
+      min-height: 0;
+      overflow: auto;
+    }
+
+    // 分页条固定在底部
+    .ant-pagination {
+      flex-shrink: 0;
+    }
+  }
+
+  // Tab 内容撑满剩余高度（配合内部 .auto-height-table：表头固定、表体滚动，如插件管理页）
+  .tabs-fill {
+    flex: 1;
+    min-height: 0;
+
+    .ant-tabs-content,
+    .ant-tabs-tabpane {
+      height: 100%;
+    }
+  }
+
+  // 斑马纹：奇数行微蓝底（dark 由 --tk-bg-zebra 自动适配），排除选中行避免盖住 antd 选中高亮。
+  // 注意：本层（components）优先级高于 antd 层，会把 antd 的行悬停底色盖住，
+  // 所以斑马行 hover 需要在这里显式补一条，用同一个 --tk-bg-hover token。
+  // 用奇数行（首行白底），避免表头（--tk-bg-subtle）与首行同色粘连。
+  .ant-table-tbody
+    > tr:nth-child(odd):not(.ant-table-row-selected):not(.ant-table-measure-row)
+    > td {
+    background: var(--tk-bg-zebra);
+  }
+
+  .ant-table-tbody
+    > tr:nth-child(odd):not(.ant-table-row-selected):not(.ant-table-measure-row):hover
+    > td {
+    background: var(--tk-bg-hover);
+  }
+
+  // 表格卡片（设计稿 .table）：16px 圆角 + 全周边框 + 磨砂半透明底 + 双层柔和投影。
+  // .ant-table 自身底色清透明让卡片磨砂底透出；表头/斑马行各有不透明底兜底，
+  // fixed 列仍是实色 container，与半透明底的合成色差明暗两态都 <4/255，不可见
+  .ant-table-wrapper {
+    overflow: hidden;
+    border: 1px solid var(--tk-border-card);
+    border-radius: 16px;
+    background: var(--tk-bg-card);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    box-shadow: var(--tk-shadow-card);
+
+    .ant-table {
+      background: transparent;
+    }
+  }
+
+  // 嵌套表格（展开行等）退回普通样式，避免卡中卡
+  .ant-table .ant-table-wrapper {
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    box-shadow: none;
+  }
+
+  // type="primary" ghost 按钮的文字/边框取 Button 作用域的 colorPrimary，
+  // 但主题为 macOS 中性按钮风格把它覆盖成了灰填充（theme.ts Button tokens），
+  // ghost 又是透明背景，结果文字/边框与页面背景几乎同色，明暗两套主题下都不可见。
+  // 这里显式恢复为强调色（--tk-accent 明暗自适应），hover 轻微弱化。
+  .ant-btn-primary.ant-btn-background-ghost:not(:disabled) {
+    color: var(--tk-accent);
+    border-color: var(--tk-accent);
+  }
+
+  .ant-btn-primary.ant-btn-background-ghost:not(:disabled):hover {
+    color: color-mix(in srgb, var(--tk-accent) 80%, transparent);
+    border-color: color-mix(in srgb, var(--tk-accent) 80%, transparent);
+  }
+
+  // 设计稿按钮描边：antd 5.21+ 实心变体（type="primary" → variant-solid）边框恒为透明、
+  // 不读边框 token，而主题把全站按钮统一成中性填充，缺这圈边框会与设计稿不符。
+  // 给 solid/outlined/dashed 变体补描边（text/link/ghost 等无底色变体与禁用态除外），
+  // 值随主题走 --tk-border-btn（设计稿明暗两稿 button 的 border 原值）
+  .ant-btn:not(:disabled):not(.ant-btn-variant-text):not(.ant-btn-variant-link):not(.ant-btn-background-ghost) {
+    border-color: var(--tk-border-btn);
+  }
+
+  // 侧栏面板（浮动圆角卡片）：光晕渐变材质 + 全周发丝边框 + 两个装饰性渐变光斑，
+  // 对应设计稿 TestDog 渐变侧栏（背景/边框 dark 由 --tk-* 两表自动适配；
+  // ::before/::after 光斑在设计稿明暗两稿中取值相同，直接写死）
+  .ant-layout-sider {
+    position: relative;
+    overflow: hidden; // 光斑定位在卡片边缘外，裁进圆角内
+    border: 1px solid var(--tk-border-sidebar);
+    background: var(--tk-bg-sidebar);
+
+    &::before,
+    &::after {
+      content: '';
+      position: absolute;
+      border-radius: 50%;
+      pointer-events: none;
+    }
+
+    // 右上光斑（设计稿 .sidebar::before）
+    &::before {
+      width: 190px;
+      height: 190px;
+      right: -105px;
+      top: -90px;
+      background: linear-gradient(135deg, rgba(91, 157, 255, 0.28), rgba(151, 118, 255, 0.08));
+      filter: blur(1px);
+    }
+
+    // 左下光斑（设计稿 .sidebar::after）
+    &::after {
+      width: 210px;
+      height: 210px;
+      left: -125px;
+      bottom: -95px;
+      background: linear-gradient(135deg, rgba(104, 170, 255, 0.22), rgba(139, 111, 255, 0.08));
+    }
+  }
+
+  // 导航选中项：蓝→紫渐变胶囊 + 描边/投影（设计稿 nav-item.active）。
+  // antd Menu 的 itemSelectedBg 只支持单色，渐变胶囊在这里用 token 覆盖
+  //（components 层优先级高于 antd 层）；折叠态弹出菜单渲染在 portal 里，
+  // 不在 .ant-layout-sider 内，走 theme.ts 的 itemSelectedBg 兜底色。
+  .ant-layout-sider .ant-menu-item-selected {
+    background: var(--tk-bg-nav-active);
+    box-shadow: var(--tk-nav-active-shadow);
+  }
+
+}

@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>原生控件 selectOption 测试</title>
+  <style>
+    body { font-family: system-ui, sans-serif; padding: 24px; }
+    fieldset { margin: 16px 0; padding: 12px 16px; }
+    legend { font-weight: 600; }
+    label { display: inline-block; margin-right: 16px; }
+    .row { margin: 8px 0; }
+    .result { margin-top: 12px; padding: 8px; background: #f6f8fa; border-radius: 6px; font-size: 13px; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <h3>原生控件 selectOption 测试页</h3>
+
+  <fieldset>
+    <legend>原生 select</legend>
+    <div class="row">
+      <label>城市 <select id="city">
+        <option value="">请选择</option>
+        <option value="beijing">北京</option>
+        <option value="shanghai">上海</option>
+        <option value="guangzhou">广州</option>
+        <option value="shenzhen">深圳</option>
+      </select></label>
+    </div>
+    <div class="result" id="cityResult"></div>
+  </fieldset>
+
+  <fieldset>
+    <legend>原生日期输入 (input[type=date])</legend>
+    <div class="row">
+      <label>日期 <input type="date" id="date" /></label>
+    </div>
+    <div class="result" id="dateResult"></div>
+  </fieldset>
+
+  <fieldset>
+    <legend>原生日期范围（两个 date input 模拟）</legend>
+    <div class="row">
+      <label>开始 <input type="date" id="rangeStart" /></label>
+      <label>结束 <input type="date" id="rangeEnd" /></label>
+    </div>
+    <div class="result" id="rangeResult"></div>
+  </fieldset>
+
+  <script>
+    const show = (id, txt) => { document.getElementById(id).textContent = txt; };
+    document.getElementById('city').addEventListener('change', (e) => {
+      show('cityResult', 'value=' + e.target.value + ' | 选中文本=' + e.target.options[e.target.selectedIndex]?.text);
+    });
+    document.getElementById('date').addEventListener('change', (e) => {
+      show('dateResult', 'value=' + e.target.value);
+    });
+    document.getElementById('rangeStart').addEventListener('change', (e) => {
+      show('rangeResult', 'start=' + document.getElementById('rangeStart').value + ' | end=' + document.getElementById('rangeEnd').value);
+    });
+    document.getElementById('rangeEnd').addEventListener('change', (e) => {
+      show('rangeResult', 'start=' + document.getElementById('rangeStart').value + ' | end=' + document.getElementById('rangeEnd').value);
+    });
+  </script>
+</body>
+</html>

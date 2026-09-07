@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>示例自研组件：可搜索下拉 demo-select</title>
+<style>
+  body { font-family: system-ui, "PingFang SC", sans-serif; margin: 40px; background: #f7f8fa; color: #222; }
+  h1 { font-size: 20px; }
+  p { color: #555; font-size: 14px; max-width: 640px; }
+  .form-row { display: flex; align-items: center; gap: 12px; margin: 24px 0; }
+  label { width: 60px; text-align: right; color: #555; }
+  /* 自研可搜索下拉 demo-select */
+  .demo-select { display: inline-flex; align-items: center; width: 240px; height: 34px; padding: 0 10px; border: 1px solid #d0d3d9; border-radius: 4px; background: #fff; cursor: pointer; }
+  .demo-select.is-selected { border-color: #5a67f2; box-shadow: 0 0 0 2px rgba(90,103,242,.15); }
+  .demo-select input { flex: 1; min-width: 0; border: none; outline: none; font-size: 14px; background: transparent; }
+  .demo-select__arrow { color: #999; margin-left: 6px; }
+  /* 弹层 portal 到 body 下，实例常驻，is-open 控制显隐 */
+  .demo-select-popup { display: none; position: fixed; z-index: 1000; min-width: 240px; max-height: 240px; overflow: auto; background: #fff; border: 1px solid #d0d3d9; border-radius: 4px; box-shadow: 0 6px 16px rgba(0,0,0,.12); }
+  .demo-select-popup.is-open { display: block; }
+  .demo-select-option { padding: 7px 12px; font-size: 14px; cursor: pointer; }
+</style>
+</head>
+<body>
+  <h1>示例自研组件：可搜索下拉 demo-select</h1>
+  <p>本页面是插件模板的离线验收 fixture：一个零依赖的自研可搜索下拉，用于跑通「开发 → harness 验收 → 上传」全流程。</p>
+
+  <div class="form-row">
+    <label for="demo-city-input">城市</label>
+    <div class="demo-select">
+      <input id="demo-city-input" placeholder="请选择" />
+      <span class="demo-select__arrow">▾</span>
+    </div>
+  </div>
+
+  <!-- 弹层 portal 到 body 下（实例常驻，is-open 控制显隐） -->
+  <div class="demo-select-popup" style="left: 0; top: 0;">
+    <div class="demo-select-option" data-value="beijing">北京</div>
+    <div class="demo-select-option" data-value="shanghai">上海</div>
+    <div class="demo-select-option" data-value="guangzhou">广州</div>
+    <div class="demo-select-option" data-value="shenzhen">深圳</div>
+    <div class="demo-select-option" data-value="hangzhou">杭州</div>
+  </div>
+
+  <p class="hint">交互说明：点击触发器或输入过滤；Enter 选中当前高亮（首个可见）选项；点击选项直接选中；选中后输入框回显并加 is-selected 类。</p>
+
+  <script>
+  (function () {
+    var OPTIONS = [
+      { value: 'beijing', label: '北京' },
+      { value: 'shanghai', label: '上海' },
+      { value: 'guangzhou', label: '广州' },
+      { value: 'shenzhen', label: '深圳' },
+      { value: 'hangzhou', label: '杭州' },
+    ];
+    var root = document.querySelector('.demo-select');
+    var input = document.getElementById('demo-city-input');
+    var popup = document.querySelector('.demo-select-popup');
+    var highlighted = 0;
+    var lastChosen = null; // 最近选中文本：用于忽略选中回显触发的 input 事件（如 IME 提交），避免弹层被重新打开
+
+    function position() {
+      var r = root.getBoundingClientRect();
+      popup.style.left = r.left + 'px';
+      popup.style.top = (r.bottom + 4) + 'px';
+    }
+    function visibleOptions() { return Array.prototype.filter.call(popup.children, function (el) { return el.style.display !== 'none'; }); }
+    function render(list) {
+      Array.prototype.forEach.call(popup.children, function (el) { el.style.display = 'none'; });
+      list.forEach(function (o, i) { var el = popup.querySelector('[data-value="' + o.value + '"]'); if (el) { el.style.display = ''; if (i === 0) el.classList.add('is-highlighted'); } });
+    }
+    function clearHighlight() { Array.prototype.forEach.call(popup.children, function (el) { el.classList.remove('is-highlighted'); }); }
+    function choose(o) { lastChosen = o.label; input.value = o.label; root.classList.add('is-selected'); close(); }
+    function open() { render(OPTIONS); clearHighlight(); highlighted = 0; popup.children[0] && popup.children[0].classList.add('is-highlighted'); popup.classList.add('is-open'); position(); }
+    function close() { popup.classList.remove('is-open'); }
+
+    root.addEventListener('click', function (e) {
+      if (popup.classList.contains('is-open') && e.target !== input) { close(); } else { open(); }
+    });
+    input.addEventListener('focus', function () { if (!popup.classList.contains('is-open')) open(); });
+    input.addEventListener('input', function () {
+      if (lastChosen !== null && input.value === lastChosen) return; // 选中回显/IME 提交：不重开弹层
+      open();
+      var kw = input.value.trim();
+      var list = kw ? OPTIONS.filter(function (o) { return o.label.indexOf(kw) >= 0; }) : OPTIONS;
+      render(list);
+      clearHighlight();
+      highlighted = 0;
+      var first = visibleOptions()[0];
+      if (first) first.classList.add('is-highlighted');
+    });
+    input.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') {
+        if (e.isComposing || !popup.classList.contains('is-open')) return; // IME 确认拼音或弹层未开时，不当作选择
+        e.preventDefault();
+        var el = popup.querySelector('.demo-select-option.is-highlighted');
+        if (!el || el.style.display === 'none') el = visibleOptions()[0];
+        if (el) {
+          var v = el.getAttribute('data-value');
+          choose(OPTIONS.filter(function (o) { return o.value === v; })[0]);
+        }
+        return;
+      }
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        var items = visibleOptions();
+        if (!items.length) return;
+        clearHighlight();
+        highlighted = e.key === 'ArrowDown' ? Math.min(highlighted + 1, items.length - 1) : Math.max(highlighted - 1, 0);
+        items[highlighted].classList.add('is-highlighted');
+      }
+    });
+    document.addEventListener('click', function (e) {
+      if (!root.contains(e.target) && !popup.contains(e.target)) close();
+    });
+    // 选项点击（事件委托：筛选导致的 display 切换不影响监听；合成 click() 同样可触发）
+    popup.addEventListener('click', function (e) {
+      var el = e.target.closest('.demo-select-option');
+      if (!el || el.style.display === 'none') return;
+      var v = el.getAttribute('data-value');
+      choose(OPTIONS.filter(function (o) { return o.value === v; })[0]);
+    });
+  })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,29 @@
+[package]
+name = "app"
+version = "0.1.0"
+description = "A Tauri App"
+authors = ["you"]
+license = ""
+repository = ""
+edition = "2021"
+rust-version = "1.77.2"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+name = "app_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.6.3", features = [] }
+
+[dependencies]
+serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+log = "0.4"
+tauri = { version = "2.11.3", features = [] }
+tauri-plugin-log = "2"
+# 安全去掉 Windows verbatim 前缀 `\\?\`：Tauri 的 resource_dir() 在 Windows 上返回
+# `\\?\D:\...` 形式，原样传给 node 作为脚本路径会触发 EISDIR: lstat 'D:'（node 的
+# realpathSync 无法处理 verbatim 路径），导致后端子进程启动即崩溃、前端首屏 fetch 失败。
+dunce = "1"

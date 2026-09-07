@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>antd selectOption 测试</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/antd@5.25.0/dist/reset.css" />
+  <style>
+    body { font-family: system-ui, sans-serif; padding: 24px; }
+    .block { margin: 20px 0; }
+    .block > label { display: block; margin-bottom: 6px; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <h3>antd (React) selectOption 测试页</h3>
+  <div id="root"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dayjs@1.11.13/dayjs.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/antd@5.25.0/dist/antd.min.js"></script>
+  <script>
+    const { createRoot } = ReactDOM;
+    const { Select, DatePicker, ConfigProvider, Space, TreeSelect } = antd;
+    const { RangePicker } = DatePicker;
+
+    function App() {
+      return React.createElement(
+        ConfigProvider,
+        null,
+        React.createElement(
+          'div',
+          null,
+          React.createElement(
+            'div',
+            { className: 'block' },
+            React.createElement('label', null, 'antd Select 下拉（自定义渲染，非原生 select）'),
+            React.createElement(Select, {
+              id: 'citySelect',
+              placeholder: '请选择城市',
+              style: { width: 200 },
+              options: [
+                { label: '北京', value: 'beijing' },
+                { label: '上海', value: 'shanghai' },
+                { label: '广州', value: 'guangzhou' },
+                { label: '深圳', value: 'shenzhen' },
+              ],
+              showSearch: true,
+            })
+          ),
+          React.createElement(
+            'div',
+            { className: 'block' },
+            React.createElement('label', null, 'antd Select 单选（第二字段，弹层残留归属用例）'),
+            React.createElement(Select, {
+              id: 'sizeSelect',
+              placeholder: '请选择规模',
+              style: { width: 200 },
+              options: [
+                { label: '小型', value: 's' },
+                { label: '中型', value: 'm' },
+                { label: '大型', value: 'l' },
+              ],
+            })
+          ),
+          React.createElement(
+            'div',
+            { className: 'block' },
+            React.createElement('label', null, 'antd Select 多选（multiple，选中后弹层不自动收起）'),
+            React.createElement(Select, {
+              id: 'multiTagSelect',
+              mode: 'multiple',
+              placeholder: '请选择标签',
+              style: { width: 300 },
+              options: [
+                { label: '标签一', value: 't1' },
+                { label: '标签二', value: 't2' },
+                { label: '标签三', value: 't3' },
+              ],
+            })
+          ),
+          React.createElement(
+            'div',
+            { className: 'block' },
+            React.createElement('label', null, 'antd TreeSelect 树形选择器（树形弹层，非平铺 option）'),
+            React.createElement(TreeSelect, {
+              id: 'deptTreeSelect',
+              placeholder: '请选择部门',
+              style: { width: 200 },
+              treeDefaultExpandAll: true,
+              showSearch: true,
+              treeNodeFilterProp: 'title',
+              treeData: [
+                {
+                  title: '总公司', value: 'hq',
+                  children: [
+                    {
+                      title: '研发部', value: 'dev',
+                      children: [
+                        { title: '前端组', value: 'fe' },
+                        { title: '后端组', value: 'be' },
+                      ],
+                    },
+                    { title: '市场部', value: 'mkt' },
+                  ],
+                },
+              ],
+            })
+          ),
+          React.createElement(
+            'div',
+            { className: 'block' },
+            React.createElement('label', null, 'antd DatePicker 日期选择器'),
+            React.createElement(DatePicker, { id: 'datePicker', style: { width: 200 } })
+          ),
+          React.createElement(
+            'div',
+            { className: 'block' },
+            React.createElement('label', null, 'antd DatePicker 日期时间选择器（showTime，需确认按钮提交）'),
+            React.createElement(DatePicker, { id: 'dateTimePicker', showTime: true, style: { width: 240 } })
+          ),
+          React.createElement(
+            'div',
+            { className: 'block' },
+            React.createElement('label', null, 'antd DatePicker 日期范围选择器'),
+            React.createElement(RangePicker, { id: 'rangePicker', style: { width: 260 } })
+          )
+        )
+      );
+    }
+
+    createRoot(document.getElementById('root')).render(React.createElement(App));
+  </script>
+</body>
+</html>

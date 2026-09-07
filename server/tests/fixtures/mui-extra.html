@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>material-ui slider/switch/checkbox 测试</title>
+  <style>
+    body { font-family: system-ui, sans-serif; padding: 24px; max-width: 640px; }
+    .block { margin: 28px 0; }
+    .block > label { display: block; margin-bottom: 12px; font-weight: 600; }
+    .val { margin-top: 8px; color: #555; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <h3>Material-UI (React) Slider / Switch / Checkbox / Radio 测试页</h3>
+  <div id="root"></div>
+
+  <!-- @mui/material 仅 v5 提供 UMD 构建（v6+ 已移除），@mui/x-date-pickers 无浏览器构建，
+       故本页不含 MUI 版 DatePicker/TimePicker -->
+  <script src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mui/material@5.16.7/umd/material-ui.production.min.js"></script>
+  <script>
+    const { createRoot } = ReactDOM;
+    const { Slider, Switch, Checkbox, Radio, RadioGroup, FormControlLabel, FormLabel, FormGroup } = MaterialUI;
+
+    function App() {
+      const [vol, setVol] = React.useState(30);
+      const [range, setRange] = React.useState([20, 70]);
+      const [enabled, setEnabled] = React.useState(false);
+      const [fruits, setFruits] = React.useState([]);
+      const [gender, setGender] = React.useState('');
+
+      const toggleFruit = (name) => {
+        setFruits((prev) => (prev.includes(name) ? prev.filter((f) => f !== name) : [...prev, name]));
+      };
+
+      const FRUITS = [
+        { name: 'apple', label: '苹果' },
+        { name: 'banana', label: '香蕉' },
+        { name: 'orange', label: '橙子' },
+      ];
+      const GENDERS = [
+        { value: 'male', label: '男' },
+        { value: 'female', label: '女' },
+        { value: 'secret', label: '保密' },
+      ];
+
+      return React.createElement(
+        'div',
+        null,
+        React.createElement(
+          'div',
+          { className: 'block' },
+          React.createElement('label', null, 'MUI Slider 单值滑块（点击滑轨或拖动手柄设值，带刻度 marks）'),
+          React.createElement(Slider, {
+            id: 'volSlider',
+            min: 0,
+            max: 100,
+            step: 1,
+            value: vol,
+            marks: [
+              { value: 0, label: '0' },
+              { value: 50, label: '50' },
+              { value: 100, label: '100' },
+            ],
+            onChange: (e, v) => setVol(v),
+          }),
+          React.createElement('div', { className: 'val' }, `当前音量：${vol}`)
+        ),
+        React.createElement(
+          'div',
+          { className: 'block' },
+          React.createElement('label', null, 'MUI Slider 范围滑块（双滑块）'),
+          React.createElement(Slider, {
+            id: 'rangeSlider',
+            min: 0,
+            max: 100,
+            step: 1,
+            value: range,
+            onChange: (e, v) => setRange(v),
+          }),
+          React.createElement('div', { className: 'val' }, `当前区间：${range[0]} - ${range[1]}`)
+        ),
+        React.createElement(
+          'div',
+          { className: 'block' },
+          React.createElement('label', null, 'MUI Switch 开关'),
+          React.createElement(FormControlLabel, {
+            control: React.createElement(Switch, {
+              id: 'notifySwitch',
+              checked: enabled,
+              onChange: (e) => setEnabled(e.target.checked),
+            }),
+            label: '启用通知',
+          }),
+          React.createElement('div', { className: 'val' }, `通知开关：${enabled ? '开' : '关'}`)
+        ),
+        React.createElement(
+          'div',
+          { className: 'block' },
+          React.createElement('label', null, 'MUI Checkbox 复选组'),
+          React.createElement(FormGroup, { id: 'fruitChecks', row: true },
+            FRUITS.map((f) =>
+              React.createElement(FormControlLabel, {
+                key: f.name,
+                control: React.createElement(Checkbox, {
+                  checked: fruits.includes(f.name),
+                  onChange: () => toggleFruit(f.name),
+                }),
+                label: f.label,
+              })
+            )
+          ),
+          React.createElement('div', { className: 'val' }, `已选：${fruits.map((n) => FRUITS.find((f) => f.name === n)?.label).join('、') || '(空)'}`)
+        ),
+        React.createElement(
+          'div',
+          { className: 'block' },
+          React.createElement('label', null, 'MUI RadioGroup 单选组'),
+          React.createElement(
+            RadioGroup,
+            { id: 'genderRadios', row: true, value: gender, onChange: (e) => setGender(e.target.value) },
+            GENDERS.map((g) =>
+              React.createElement(FormControlLabel, {
+                key: g.value,
+                control: React.createElement(Radio, { value: g.value }),
+                label: g.label,
+              })
+            )
+          ),
+          React.createElement('div', { className: 'val' }, `当前选择：${GENDERS.find((g) => g.value === gender)?.label || '(空)'}`)
+        )
+      );
+    }
+
+    createRoot(document.getElementById('root')).render(React.createElement(App));
+  </script>
+</body>
+</html>

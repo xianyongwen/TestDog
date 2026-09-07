@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>vant slider/timePicker/cascader 测试</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vant@4.10.2/lib/index.css" />
+  <style>
+    body { font-family: system-ui, sans-serif; padding: 24px; max-width: 640px; margin: 0 auto; }
+    .block { margin: 28px 0; }
+    .block > label { display: block; margin-bottom: 10px; font-weight: 600; }
+    .val { margin-top: 8px; color: #555; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <h3>vant (Vue3 移动端) Slider / TimePicker / Cascader 测试页</h3>
+  <!-- 注意：in-DOM 模板中自定义元素不能自闭合（浏览器忽略 />，后继节点会被吞成 slot），必须显式闭合 -->
+  <div id="app">
+    <div class="block">
+      <label>van-slider 单值滑块（点击滑轨或拖动手柄设值）</label>
+      <van-slider id="volSlider" v-model="vol" :min="0" :max="100" :step="1"></van-slider>
+      <div class="val">当前音量：{{ vol }}</div>
+    </div>
+
+    <div class="block">
+      <label>van-slider 范围滑块（range，双滑块）</label>
+      <van-slider id="rangeSlider" v-model="volRange" range :min="0" :max="100" :step="1"></van-slider>
+      <div class="val">当前区间：{{ volRange[0] }} - {{ volRange[1] }}</div>
+    </div>
+
+    <div class="block">
+      <label>van-time-picker 时间滚轮选择器（弹层，时/分/秒三列，需确认）</label>
+      <van-cell-group inset>
+        <van-field id="timePickerField" readonly clickable :model-value="pickedTime" label="时间" placeholder="请选择时间" @click="showTimePicker = true"></van-field>
+      </van-cell-group>
+      <van-popup v-model:show="showTimePicker" round position="bottom">
+        <!-- vant4 time-picker 默认仅时/分两列，这里显式三列对齐 antd TimePicker fixture -->
+        <van-time-picker title="选择时间" :columns-type="['hour', 'minute', 'second']" @cancel="showTimePicker = false" @confirm="onTimeConfirm"></van-time-picker>
+      </van-popup>
+      <div class="val">当前时间：{{ pickedTime || '(空)' }}</div>
+    </div>
+
+    <div class="block">
+      <label>van-cascader 级联选择器（弹层逐级下钻，选到叶子自动完成）</label>
+      <van-cell-group inset>
+        <van-field id="cascaderField" readonly clickable :model-value="regionText" label="地区" placeholder="请选择地区" @click="showCascader = true"></van-field>
+      </van-cell-group>
+      <van-popup v-model:show="showCascader" round position="bottom">
+        <van-cascader title="请选择地区" :options="regionOptions" @close="showCascader = false" @finish="onRegionFinish"></van-cascader>
+      </van-popup>
+      <div class="val">当前地区：{{ regionText || '(空)' }}</div>
+    </div>
+
+    <div class="block">
+      <label>van-stepper 步进器（+/- 按钮与可直接输入）</label>
+      <van-stepper id="countStepper" v-model="count" :min="0" :max="99"></van-stepper>
+      <div class="val">当前数量：{{ count }}</div>
+    </div>
+
+    <div class="block">
+      <label>van-switch 开关</label>
+      <van-switch id="notifySwitch" v-model="enabled" size="24px"></van-switch>
+      <div class="val">通知开关：{{ enabled ? '开' : '关' }}</div>
+    </div>
+
+    <div class="block">
+      <label>van-rate 评分</label>
+      <van-rate id="scoreRate" v-model="score"></van-rate>
+      <div class="val">当前评分：{{ score }}</div>
+    </div>
+
+    <div class="block">
+      <label>van-checkbox-group 复选组</label>
+      <van-checkbox-group id="fruitChecks" v-model="fruits" direction="horizontal">
+        <van-checkbox name="apple">苹果</van-checkbox>
+        <van-checkbox name="banana">香蕉</van-checkbox>
+        <van-checkbox name="orange">橙子</van-checkbox>
+      </van-checkbox-group>
+      <div class="val">已选：{{ fruitLabel || '(空)' }}</div>
+    </div>
+
+    <div class="block">
+      <label>van-radio-group 单选组</label>
+      <van-radio-group id="genderRadios" v-model="gender" direction="horizontal">
+        <van-radio name="male">男</van-radio>
+        <van-radio name="female">女</van-radio>
+        <van-radio name="secret">保密</van-radio>
+      </van-radio-group>
+      <div class="val">当前选择：{{ genderLabel }}</div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/vue@3.5.0/dist/vue.global.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/vant@4.10.2/lib/vant.min.js"></script>
+  <script>
+    const { createApp, ref, computed } = Vue;
+    createApp({
+      setup() {
+        const vol = ref(30);
+        const volRange = ref([20, 70]);
+
+        const showTimePicker = ref(false);
+        const pickedTime = ref('');
+        // 滚轮选择器选完不自动收起，确认事件才提交
+        const onTimeConfirm = ({ selectedValues }) => {
+          const [h, m, s] = selectedValues;
+          pickedTime.value = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+          showTimePicker.value = false;
+        };
+
+        const showCascader = ref(false);
+        const regionText = ref('');
+        const regionOptions = [
+          { text: '浙江', value: 'zhejiang', children: [
+            { text: '杭州', value: 'hangzhou', children: [
+              { text: '西湖区', value: 'xihu' },
+              { text: '滨江区', value: 'binjiang' },
+            ] },
+            { text: '温州', value: 'wenzhou', children: [
+              { text: '鹿城区', value: 'lucheng' },
+            ] },
+          ] },
+          { text: '江苏', value: 'jiangsu', children: [
+            { text: '南京', value: 'nanjing', children: [
+              { text: '玄武区', value: 'xuanwu' },
+            ] },
+          ] },
+        ];
+        // 叶子选中触发 finish，手动收起弹层
+        const onRegionFinish = ({ selectedOptions }) => {
+          regionText.value = selectedOptions.map((o) => o.text).join(' / ');
+          showCascader.value = false;
+        };
+
+        const count = ref(1);
+        const enabled = ref(false);
+        const score = ref(3);
+        const fruits = ref([]);
+        const FRUIT_LABELS = { apple: '苹果', banana: '香蕉', orange: '橙子' };
+        const fruitLabel = computed(() => fruits.value.map((v) => FRUIT_LABELS[v] || v).join('、'));
+        const gender = ref('');
+        const genderLabel = computed(() => ({ male: '男', female: '女', secret: '保密' }[gender.value] || '(空)'));
+
+        return {
+          vol, volRange,
+          showTimePicker, pickedTime, onTimeConfirm,
+          showCascader, regionText, regionOptions, onRegionFinish,
+          count, enabled, score, fruits, fruitLabel, gender, genderLabel,
+        };
+      },
+    }).use(vant).mount('#app');
+  </script>
+</body>
+</html>

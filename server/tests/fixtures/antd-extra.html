@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>antd slider/timePicker/cascader 测试</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/antd@5.25.0/dist/reset.css" />
+  <style>
+    body { font-family: system-ui, sans-serif; padding: 24px; max-width: 720px; }
+    .block { margin: 28px 0; }
+    .block > label { display: block; margin-bottom: 10px; font-weight: 600; }
+    .val { margin-top: 8px; color: #555; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <h3>antd (React) Slider / TimePicker / Cascader 测试页</h3>
+  <div id="root"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dayjs@1.11.13/dayjs.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/antd@5.25.0/dist/antd.min.js"></script>
+  <script>
+    const { createRoot } = ReactDOM;
+    const { Slider, TimePicker, Cascader, ConfigProvider } = antd;
+
+    const REGION_OPTIONS = [
+      {
+        label: '浙江',
+        value: 'zhejiang',
+        children: [
+          { label: '杭州', value: 'hangzhou', children: [
+            { label: '西湖区', value: 'xihu' },
+            { label: '滨江区', value: 'binjiang' },
+          ] },
+          { label: '温州', value: 'wenzhou', children: [
+            { label: '鹿城区', value: 'lucheng' },
+          ] },
+        ],
+      },
+      {
+        label: '江苏',
+        value: 'jiangsu',
+        children: [
+          { label: '南京', value: 'nanjing', children: [
+            { label: '玄武区', value: 'xuanwu' },
+          ] },
+          { label: '苏州', value: 'suzhou', children: [
+            { label: '姑苏区', value: 'gusu' },
+          ] },
+        ],
+      },
+    ];
+
+    const TAG_OPTIONS = [
+      { label: '前端', value: 'fe', children: [
+        { label: 'React', value: 'react' },
+        { label: 'Vue', value: 'vue' },
+      ] },
+      { label: '后端', value: 'be', children: [
+        { label: 'Node', value: 'node' },
+        { label: 'Java', value: 'java' },
+      ] },
+    ];
+
+    function App() {
+      const [vol, setVol] = React.useState(30);
+      const [range, setRange] = React.useState([20, 70]);
+      const [time, setTime] = React.useState(null);
+      const [region, setRegion] = React.useState(null);
+      const [tags, setTags] = React.useState([]);
+
+      return React.createElement(
+        ConfigProvider,
+        null,
+        React.createElement(
+          'div',
+          null,
+          React.createElement(
+            'div',
+            { className: 'block' },
+            React.createElement('label', null, 'antd Slider 单值滑块（带刻度 marks）'),
+            React.createElement(Slider, {
+              id: 'volSlider',
+              min: 0,
+              max: 100,
+              step: 1,
+              defaultValue: 30,
+              marks: { 0: '0', 50: '50', 100: '100' },
+              onChange: setVol,
+            }),
+            React.createElement('div', { className: 'val' }, `当前音量：${vol}`)
+          ),
+          React.createElement(
+            'div',
+            { className: 'block' },
+            React.createElement('label', null, 'antd Slider 范围滑块（range，双滑块）'),
+            React.createElement(Slider, {
+              id: 'rangeSlider',
+              range: true,
+              min: 0,
+              max: 100,
+              step: 1,
+              defaultValue: [20, 70],
+              onChange: setRange,
+            }),
+            React.createElement('div', { className: 'val' }, `当前区间：${range[0]} - ${range[1]}`)
+          ),
+          React.createElement(
+            'div',
+            { className: 'block' },
+            React.createElement('label', null, 'antd TimePicker 时间选择器（时分秒）'),
+            React.createElement(TimePicker, {
+              id: 'timePicker',
+              style: { width: 200 },
+              placeholder: '请选择时间',
+              onChange: setTime,
+            }),
+            React.createElement('div', { className: 'val' }, `当前时间：${time ? time.format('HH:mm:ss') : '(空)'}`)
+          ),
+          React.createElement(
+            'div',
+            { className: 'block' },
+            React.createElement('label', null, 'antd Cascader 级联选择器（单选，选到叶子自动收起）'),
+            React.createElement(Cascader, {
+              id: 'regionCascader',
+              options: REGION_OPTIONS,
+              placeholder: '请选择地区',
+              style: { width: 260 },
+              onChange: setRegion,
+            }),
+            React.createElement('div', { className: 'val' }, `当前地区：${region ? region.join(' / ') : '(空)'}`)
+          ),
+          React.createElement(
+            'div',
+            { className: 'block' },
+            React.createElement('label', null, 'antd Cascader 级联选择器（multiple 多选，勾选后面板保持打开）'),
+            React.createElement(Cascader, {
+              id: 'tagCascader',
+              options: TAG_OPTIONS,
+              multiple: true,
+              placeholder: '请选择技术栈',
+              style: { width: 300 },
+              onChange: setTags,
+            }),
+            React.createElement('div', { className: 'val' }, `已选：${tags.map((v) => v.join('/')).join('、') || '(空)'}`)
+          )
+        )
+      );
+    }
+
+    createRoot(document.getElementById('root')).render(React.createElement(App));
+  </script>
+</body>
+</html>

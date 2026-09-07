@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>element-plus selectOption 测试</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/element-plus@2.8.0/dist/index.css" />
+  <style>
+    body { font-family: system-ui, sans-serif; padding: 24px; }
+    .block { margin: 20px 0; }
+    .block > label { display: block; margin-bottom: 6px; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <h3>element-plus (Vue3) selectOption 测试页</h3>
+
+  <div id="app">
+    <div class="block">
+      <label>el-select 下拉（自定义渲染，非原生 select）</label>
+      <el-select v-model="city" placeholder="请选择城市" clearable>
+        <el-option label="北京" value="beijing"></el-option>
+        <el-option label="上海" value="shanghai"></el-option>
+        <el-option label="广州" value="guangzhou"></el-option>
+        <el-option label="深圳" value="shenzhen"></el-option>
+      </el-select>
+      <div>当前值：{{ city }}</div>
+    </div>
+
+    <div class="block">
+      <label>el-tree-select 树形选择器（原生 TreeSelect，弹层为树形节点）</label>
+      <el-tree-select
+        v-model="dept"
+        :data="deptTree"
+        node-key="value"
+        default-expand-all
+        placeholder="请选择部门"
+        clearable>
+      </el-tree-select>
+      <div>当前值：{{ dept }}</div>
+    </div>
+
+    <div class="block">
+      <label>el-date-picker 日期选择器</label>
+      <el-date-picker v-model="date" type="date" placeholder="选择日期" format="YYYY-MM-DD"></el-date-picker>
+      <div>当前值：{{ date }}</div>
+    </div>
+
+    <div class="block">
+      <label>el-date-picker 日期时间选择器（datetime，需确定按钮提交）</label>
+      <el-date-picker v-model="dateTime" type="datetime" placeholder="选择日期时间" format="YYYY-MM-DD HH:mm:ss"></el-date-picker>
+      <div>当前值：{{ dateTime }}</div>
+    </div>
+
+    <div class="block">
+      <label>el-date-picker 日期范围选择器</label>
+      <el-date-picker v-model="range" type="daterange" start-placeholder="开始日期" end-placeholder="结束日期" format="YYYY-MM-DD"></el-date-picker>
+      <div>当前值：{{ range }}</div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/vue@3.5.0/dist/vue.global.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/element-plus@2.8.0/dist/index.full.min.js"></script>
+  <script>
+    const { createApp, ref } = Vue;
+    createApp({
+      setup() {
+        return {
+          city: ref(''),
+          date: ref(''),
+          dateTime: ref(''),
+          range: ref([]),
+          dept: ref(''),
+          deptTree: ref([
+            {
+              label: '总公司', value: 'hq',
+              children: [
+                {
+                  label: '研发部', value: 'dev',
+                  children: [
+                    { label: '前端组', value: 'fe' },
+                    { label: '后端组', value: 'be' },
+                  ],
+                },
+                { label: '市场部', value: 'mkt' },
+              ],
+            },
+          ]),
+        };
+      },
+    }).use(ElementPlus).mount('#app');
+  </script>
+</body>
+</html>

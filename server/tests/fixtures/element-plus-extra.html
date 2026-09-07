@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>element-plus slider/timePicker/cascader 测试</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/element-plus@2.8.0/dist/index.css" />
+  <style>
+    body { font-family: system-ui, sans-serif; padding: 24px; max-width: 720px; }
+    .block { margin: 28px 0; }
+    .block > label { display: block; margin-bottom: 10px; font-weight: 600; }
+    .val { margin-top: 8px; color: #555; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <h3>element-plus (Vue3) Slider / TimePicker / Cascader 测试页</h3>
+
+  <div id="app">
+    <div class="block">
+      <label>el-slider 单值滑块（带刻度 marks）</label>
+      <el-slider id="volSlider" v-model="vol" :min="0" :max="100" :step="1" :marks="volMarks"></el-slider>
+      <div class="val">当前音量：{{ vol }}</div>
+    </div>
+
+    <div class="block">
+      <label>el-slider 范围滑块（range，双滑块）</label>
+      <el-slider id="rangeSlider" v-model="volRange" range :min="0" :max="100" :step="1"></el-slider>
+      <div class="val">当前区间：{{ volRange[0] }} - {{ volRange[1] }}</div>
+    </div>
+
+    <div class="block">
+      <label>el-time-picker 时间选择器（时分秒）</label>
+      <el-time-picker id="workTimePicker" v-model="workTime" placeholder="请选择时间" format="HH:mm:ss"></el-time-picker>
+      <div class="val">当前时间：{{ workTime || '(空)' }}</div>
+    </div>
+
+    <div class="block">
+      <label>el-cascader 级联选择器（单选，选到叶子自动收起）</label>
+      <el-cascader id="regionCascader" v-model="region" :options="regionOptions" placeholder="请选择地区"></el-cascader>
+      <div class="val">当前地区：{{ region || '(空)' }}</div>
+    </div>
+
+    <div class="block">
+      <label>el-cascader 级联选择器（multiple 多选，勾选后面板保持打开）</label>
+      <el-cascader id="tagCascader" v-model="tags" :options="tagOptions" :props="{ multiple: true }" placeholder="请选择技术栈"></el-cascader>
+      <div class="val">已选：{{ tags.join('、') || '(空)' }}</div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/vue@3.5.0/dist/vue.global.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/element-plus@2.8.0/dist/index.full.min.js"></script>
+  <script>
+    const { createApp } = Vue;
+    createApp({
+      data() {
+        return {
+          vol: 30,
+          volMarks: { 0: '0', 50: '50', 100: '100' },
+          volRange: [20, 70],
+          workTime: null,
+          region: null,
+          tags: [],
+          tagOptions: [
+            { label: '前端', value: 'fe', children: [
+              { label: 'React', value: 'react' },
+              { label: 'Vue', value: 'vue' },
+            ] },
+            { label: '后端', value: 'be', children: [
+              { label: 'Node', value: 'node' },
+              { label: 'Java', value: 'java' },
+            ] },
+          ],
+        };
+      },
+      computed: {
+        regionOptions() {
+          return [
+            {
+              label: '浙江',
+              value: 'zhejiang',
+              children: [
+                { label: '杭州', value: 'hangzhou', children: [
+                  { label: '西湖区', value: 'xihu' },
+                  { label: '滨江区', value: 'binjiang' },
+                ] },
+                { label: '温州', value: 'wenzhou', children: [
+                  { label: '鹿城区', value: 'lucheng' },
+                ] },
+              ],
+            },
+            {
+              label: '江苏',
+              value: 'jiangsu',
+              children: [
+                { label: '南京', value: 'nanjing', children: [
+                  { label: '玄武区', value: 'xuanwu' },
+                ] },
+                { label: '苏州', value: 'suzhou', children: [
+                  { label: '姑苏区', value: 'gusu' },
+                ] },
+              ],
+            },
+          ];
+        },
+      },
+    }).use(ElementPlus).mount('#app');
+  </script>
+</body>
+</html>

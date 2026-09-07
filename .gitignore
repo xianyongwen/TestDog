@@ -1,0 +1,39 @@
+node_modules/
+dist/
+server/dist/
+server/generated/
+tsconfig.tsbuildinfo
+
+# 环境与密钥
+.env
+server/.env
+server/.local-config.json
+
+# 数据库
+*.db
+*.db-journal
+prisma/migrations/dev.db*
+
+# 日志
+*.log
+server/screenshots
+
+# 附件
+server/attachments
+
+# 系统
+.DS_Store
+
+# Tauri
+src-tauri/target/
+src-tauri/binaries/
+src-tauri/resources/node
+src-tauri/resources/node.exe
+.sidecar-cache
+.sidecar-staging
+.build-tmp
+
+# Playwright
+playwright-report/
+test-results/
+

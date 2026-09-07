@@ -1,0 +1,77 @@
+{
+  "format": "testcase",
+  "version": 1,
+  "title": "提交待办并校验创建接口与列表回显",
+  "description": "新建一个待办事项：填标题、选优先级、勾公开、提交，断言创建接口 JSON 的 code=0、列表接口响应体包含新标题。\n需在项目设置定义变量：baseUrl、todoTitle。",
+  "naturalLanguage": "打开待办新建页，填写标题并选择优先级、勾选公开后提交，断言接口返回成功且列表包含新待办",
+  "steps": [
+    {
+      "instruction": "打开待办列表页",
+      "description": "进入待办列表页，地址取自环境变量 {{baseUrl}}",
+      "kind": "navigate",
+      "action": "goto",
+      "url": "{{baseUrl}}/todos"
+    },
+    {
+      "instruction": "点击新建待办按钮",
+      "description": "打开新建待办表单",
+      "kind": "action",
+      "action": "click",
+      "locator": { "strategy": "role", "value": "button", "role": "button", "name": "新建待办" }
+    },
+    {
+      "instruction": "填写待办标题",
+      "description": "填写待办标题，值取自环境变量 {{todoTitle}}",
+      "kind": "action",
+      "action": "fill",
+      "locator": { "strategy": "label", "value": "标题" },
+      "value": "{{todoTitle}}"
+    },
+    {
+      "instruction": "选择优先级为 high",
+      "description": "在下拉框中选择优先级为 high",
+      "kind": "action",
+      "action": "select",
+      "locator": { "strategy": "label", "value": "优先级" },
+      "value": "high"
+    },
+    {
+      "instruction": "勾选公开复选框",
+      "description": "勾选「公开」复选框",
+      "kind": "action",
+      "action": "check",
+      "locator": { "strategy": "role", "value": "checkbox", "role": "checkbox", "name": "公开" }
+    },
+    {
+      "instruction": "点击提交按钮",
+      "description": "提交表单，触发创建接口 POST /api/todos",
+      "kind": "action",
+      "action": "click",
+      "locator": { "strategy": "role", "value": "button", "role": "button", "name": "提交" }
+    },
+    {
+      "instruction": "断言创建接口返回的 code 字段为 0",
+      "description": "校验创建接口返回 JSON 的 code 字段为 0（成功），response_json 断言自动轮询等响应约 1s",
+      "kind": "assert",
+      "action": "assert",
+      "locator": { "strategy": "response", "value": "/api/todos" },
+      "assertion": { "type": "response_json", "expected": "0", "jsonPath": "code" }
+    },
+    {
+      "instruction": "等待 300 毫秒",
+      "description": "等待列表接口刷新回填新数据后再断言响应体",
+      "kind": "wait",
+      "action": "wait",
+      "value": "300"
+    },
+    {
+      "instruction": "断言列表接口响应体包含新待办标题",
+      "description": "校验列表接口响应体包含新建待办的标题 {{todoTitle}}",
+      "kind": "assert",
+      "action": "assert",
+      "locator": { "strategy": "response", "value": "/api/todos/list" },
+      "assertion": { "type": "response_body", "expected": "{{todoTitle}}" }
+    }
+  ],
+  "rawCode": ""
+}

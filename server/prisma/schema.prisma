@@ -1,0 +1,210 @@
+// Prisma 7 schema（SQLite）。URL 在 prisma.config.ts 提供，此处不再含 url。
+// SQLite 无原生枚举 -> 状态/类型用 String + 应用层常量；数组用 Json。
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Project {
+  id        String     @id @default(cuid())
+  name      String
+  baseUrl   String?
+  /// 项目选用的组件插件预设（组合即开关）；删除预设时置空，回落全部插件按 builtin→upload 注入。
+  presetId  String?
+  preset    PluginPreset? @relation(fields: [presetId], references: [id], onDelete: SetNull)
+  /// 项目级浏览器窗口尺寸 {width, height}（运行/生成脚本启动浏览器时生效）；null = 默认 1920×1080。
+  viewport  Json?
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  testCases TestCase[]
+  envVars   EnvVar[]
+  loginConfigs LoginConfig[]
+}
+
+/// 项目级环境变量：脚本中 {{key}} 占位符在运行时替换为其 value。
+model EnvVar {
+  id        String   @id @default(cuid())
+  projectId String
+  key       String
+  value     String
+  createdAt DateTime @default(now())
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  @@unique([projectId, key])
+  @@index([projectId])
+}
+
+/// 项目级登录配置：录制登录后的浏览器状态（Cookie + localStorage），运行脚本时按选定配置以已登录状态启动浏览器。
+model LoginConfig {
+  id           String   @id @default(cuid())
+  projectId    String
+  name         String
+  storageState Json
+  isDefault    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  @@index([projectId])
+}
+
+model TestCase {
+  id              String      @id @default(cuid())
+  projectId       String
+  title           String
+  description     String?
+  naturalLanguage String?
+  status          String      @default("DRAFT")
+  sortOrder       Int         @default(0)
+  /// 批量运行默认使用的脚本版本（用例列表「批量版本」列选择后保存；未设置时取最新）。
+  defaultScriptId String?
+  defaultScript   TestScript? @relation("DefaultScript", fields: [defaultScriptId], references: [id], onDelete: SetNull)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  project         Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  scripts         TestScript[]
+  runs            TestRun[]
+  generationLogs  GenerationLog[]
+  @@index([projectId])
+}
+
+model TestScript {
+  id         String      @id @default(cuid())
+  testCaseId String
+  version    Int         @default(1)
+  steps      Json
+  rawCode    String?
+  createdAt  DateTime    @default(now())
+  testCase   TestCase    @relation(fields: [testCaseId], references: [id], onDelete: Cascade)
+  /// 被各用例选为批量默认版本的引用（反向）。
+  defaultFor TestCase[]  @relation("DefaultScript")
+  runs       TestRun[]
+  @@unique([testCaseId, version])
+  @@index([testCaseId])
+}
+
+model TestRun {
+  id          String       @id @default(cuid())
+  testCaseId  String
+  scriptId    String?
+  status      String       @default("PENDING")
+  startedAt   DateTime?
+  finishedAt  DateTime?
+  logs        String?
+  meta        Json?
+  createdAt   DateTime     @default(now())
+  testCase    TestCase     @relation(fields: [testCaseId], references: [id], onDelete: Cascade)
+  script      TestScript?  @relation(fields: [scriptId], references: [id], onDelete: SetNull)
+  stepResults StepResult[]
+  @@index([testCaseId])
+}
+
+model StepResult {
+  id         String   @id @default(cuid())
+  runId      String
+  stepIndex  Int
+  action     String
+  status     String   @default("PENDING")
+  message    String?
+  durationMs Int?
+  screenshot  String?
+  consoleLog  String?
+  networkLog  String?
+  healed      Boolean  @default(false)
+  /// 自愈找到的新定位器（act/observe 返回的 selector 转 Locator）。采纳时覆盖回原脚本。
+  healedLocator Json?
+  createdAt  DateTime @default(now())
+  run        TestRun  @relation(fields: [runId], references: [id], onDelete: Cascade)
+  @@index([runId])
+}
+
+/// 生成脚本流程的一次会话：关联 jobId，记录用户输入/最终状态/总 token 用量与最终步骤。
+model GenerationLog {
+  id          String   @id @default(cuid())
+  jobId       String   @unique
+  projectId   String?
+  testCaseId  String?
+  status      String   @default("RUNNING") // RUNNING | DONE | ERROR | CANCELLED | PAUSED
+  nl          String
+  startUrl    String?
+  finishedAt  DateTime?
+  totalUsage  Json?
+  scriptSteps Json?
+  error       String?
+  /// 暂停时的循环状态快照（messages + 大纲 + 目标文本），供「继续生成」读回续跑。
+  loopState   Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  steps       GenerationStep[]
+  testCase    TestCase? @relation(fields: [testCaseId], references: [id], onDelete: SetNull)
+  @@index([testCaseId])
+  @@index([projectId])
+  @@index([createdAt])
+}
+
+/// 生成脚本流程中的一个事件或 LLM 调用：plan/aifix/vision/tool/status/assist/revoke 等。
+model GenerationStep {
+  id          String   @id @default(cuid())
+  logId       String
+  type        String   // user_input | plan | aifix | vision | tool | status | plan_confirmed | revoke | assist | done | error
+  stepIndex   Int?
+  message     String?
+  system      String?  // LLM system prompt
+  user        String?  // LLM user content
+  assistant   String?  // LLM assistant content
+  tool        String?  // 工具名（observe/act/aiFix 等）
+  args        Json?    // 调用参数
+  result      String?  // 工具结果（截断）
+  error       String?  // 错误信息
+  usage       Json?    // 本步 TokenUsage
+  createdAt   DateTime @default(now())
+  log         GenerationLog @relation(fields: [logId], references: [id], onDelete: Cascade)
+  @@index([logId, createdAt])
+}
+
+/// 组件适配插件：页内脚本（detect/candidates/annotate/actions 四插槽），注入被测页面。
+/// 注入范围由 PluginPreset 编排（组合即开关），本表不设启用开关。
+model Plugin {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  version     String   @default("1.0.0")
+  description String?
+  kind        String   @default("inpage")
+  /// 入口 js 源码（裸 .js 直传或 zip 解包所得）。
+  entryFile   String
+  source      String   @default("upload") // builtin | upload
+  builtin     Boolean  @default(false)
+  /// 动作元数据 [{name, doc, preferFill}]：内置插件随定义维护；用户插件在试运行后回写。
+  actions     Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  presets     PluginPresetItem[]
+  @@index([source])
+}
+
+/// 插件预设：一组有序插件（成员顺序即注入优先级）；每个项目关联一个 preset。
+model PluginPreset {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  builtin     Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  items       PluginPresetItem[]
+  projects    Project[]
+}
+
+model PluginPresetItem {
+  id       String       @id @default(cuid())
+  presetId String
+  pluginId String
+  /// 注入顺序为升序（越小越先注入）；编辑抽屉展示的顺序数字与之相反（越大越优先）。
+  priority Int
+  preset   PluginPreset @relation(fields: [presetId], references: [id], onDelete: Cascade)
+  plugin   Plugin       @relation(fields: [pluginId], references: [id], onDelete: Cascade)
+  @@unique([presetId, pluginId])
+  @@index([presetId, priority])
+}

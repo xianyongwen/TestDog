@@ -1,0 +1,56 @@
+{
+  "format": "testcase",
+  "version": 1,
+  "title": "聊天室发送消息并校验 WebSocket 回声",
+  "description": "进入聊天页，发送一条消息，断言客户端 WS 发出含该文本的消息、服务端回传消息且消息 type 字段为 message。\n需在项目设置定义变量：baseUrl、msgText。",
+  "naturalLanguage": "打开聊天页，发送一条消息，断言 WebSocket 收发消息",
+  "steps": [
+    {
+      "instruction": "打开聊天页",
+      "description": "进入聊天页并建立 WebSocket 连接，地址取自环境变量 {{baseUrl}}",
+      "kind": "navigate",
+      "action": "goto",
+      "url": "{{baseUrl}}/chat"
+    },
+    {
+      "instruction": "在消息输入框填写消息文本",
+      "description": "在消息输入框填写文本，值取自环境变量 {{msgText}}",
+      "kind": "action",
+      "action": "fill",
+      "locator": { "strategy": "placeholder", "value": "输入消息" },
+      "value": "{{msgText}}"
+    },
+    {
+      "instruction": "在输入框按回车发送",
+      "description": "在输入框上按回车，触发 WS 发送消息",
+      "kind": "action",
+      "action": "press",
+      "locator": { "strategy": "placeholder", "value": "输入消息" },
+      "key": "Enter"
+    },
+    {
+      "instruction": "断言客户端 WS 发出的消息包含文本",
+      "description": "校验客户端已通过 WS 发出包含该文本的消息（ws_sent 断言自动轮询约 1s）",
+      "kind": "assert",
+      "action": "assert",
+      "locator": { "strategy": "websocket", "value": "/ws/chat" },
+      "assertion": { "type": "ws_sent", "expected": "{{msgText}}" }
+    },
+    {
+      "instruction": "等待 300 毫秒",
+      "description": "等待服务端回传/广播消息（服务端推送可能略有延迟）",
+      "kind": "wait",
+      "action": "wait",
+      "value": "300"
+    },
+    {
+      "instruction": "断言服务端回传消息的 type 字段为 message",
+      "description": "校验服务端推送的消息 JSON 的 type 字段为 message",
+      "kind": "assert",
+      "action": "assert",
+      "locator": { "strategy": "websocket", "value": "/ws/chat" },
+      "assertion": { "type": "ws_received", "expected": "message", "jsonPath": "type" }
+    }
+  ],
+  "rawCode": ""
+}

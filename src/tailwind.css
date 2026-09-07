@@ -1,0 +1,185 @@
+/* Tailwind CSS v4 入口（必须为 CSS 文件，@tailwindcss/vite 插件才能正确处理 @import）。
+   layer 优先级顺序：theme < base < antd < components < utilities。
+   antd 组件样式（StyleProvider layer 注入）进入 antd 层，Tailwind 工具类（utilities）排在最后，
+   因此 Tailwind 类可以覆盖 antd 组件默认样式。 */
+@layer theme, base, antd, components, utilities;
+@import 'antd/dist/reset.css' layer(antd);
+@import "tailwindcss";
+
+/* ============ 语义 token ============
+   取值源自 TestDog 设计稿（testdog_light_mode.html / testdog_dark_mode.html，
+   蓝紫光晕渐变风格）。light 为默认表，dark 在 :root[data-theme='dark'] 覆盖
+   （由 src/theme.ts 的 applyTheme 写入）。
+   antd 侧在 src/theme.ts PALETTES 维护一份字面量镜像（antd 色板派生需要真实 hex），
+   两表改值时需对照更新。 */
+:root {
+  color-scheme: light;
+
+  /* 背景层级 */
+  /* 窗口底层：蓝紫光晕 + 135° 渐变（多层 background 简写，经 @utility bg-page 使用） */
+  --tk-bg-page:
+    radial-gradient(circle at 88% 8%, rgba(151, 190, 255, 0.18), transparent 30%),
+    radial-gradient(circle at 58% 92%, rgba(170, 150, 255, 0.12), transparent 32%),
+    linear-gradient(135deg, #f8fbff 0%, #f5f7fc 48%, #f8f7fc 100%);
+  --tk-bg-base: #ffffff;          /* 内容卡片/容器底（镜像 antd colorBgContainer） */
+  --tk-bg-elevated: #ffffff;      /* 弹层/抽屉 */
+  /* 表格卡片（设计稿 .table）：磨砂半透明底 + 全周边框 + 双层柔和投影 */
+  --tk-bg-card: rgba(255, 255, 255, 0.84);
+  --tk-border-card: rgba(205, 216, 232, 0.72);
+  --tk-shadow-card:
+    0 12px 36px rgba(77, 103, 145, 0.07),
+    0 2px 8px rgba(77, 103, 145, 0.035);
+  --tk-bg-subtle: #f2f6fb;        /* hint 条/表头 */
+  --tk-bg-zebra: #f7fafd;         /* 表格斑马纹 */
+  /* 不透明悬停色：fixed 列（如操作列）hover 时若用半透明色，
+     底下滚动的内容会透出来，所以必须是实色 */
+  --tk-bg-hover: #eef2f8;
+  --tk-bg-code: #1e1e1e;          /* 代码块（两态都偏暗） */
+  /* 侧栏：光晕 + 145° 渐变（设计稿渐变侧栏，style.scss 的 .ant-layout-sider 使用） */
+  --tk-bg-sidebar:
+    radial-gradient(circle at 100% 0%, rgba(129, 177, 255, 0.5) 0, rgba(129, 177, 255, 0) 32%),
+    radial-gradient(circle at 0% 100%, rgba(155, 125, 255, 0.28) 0, rgba(155, 125, 255, 0) 35%),
+    linear-gradient(145deg, #f4f8ff 0%, #eaf2ff 48%, #edf0ff 100%);
+
+  /* 文字层级 */
+  --tk-text-primary: #263241;
+  --tk-text-secondary: #697382;
+  --tk-text-tertiary: #b6c0cf;
+
+  /* 边框 */
+  --tk-border-line: #d2dbe5;
+  --tk-border-subtle: #e6ecf4;
+  --tk-border-sidebar: rgba(113, 145, 190, 0.15);
+  /* 按钮描边（设计稿 button 的 border 取值原样保留半透明） */
+  --tk-border-btn: rgba(205, 214, 226, 0.9);
+
+  /* 强调色（设计稿蓝） */
+  --tk-accent: #1677ff;
+  --tk-accent-subtle: rgba(22, 119, 255, 0.1);
+  --tk-link: #1677ff;
+
+  /* 状态色（设计稿 通过/失败 徽标） */
+  --tk-danger: #ff5b55;
+  --tk-danger-subtle: #fff4f3;
+  --tk-warning: #c93400;
+  --tk-warning-subtle: #fff6e5;
+  --tk-success: #2c9b4b;
+
+  /* 侧栏导航选中态：渐变胶囊 + 描边/投影（设计稿 nav-item.active，
+     style.scss 的 .ant-menu-item-selected 覆盖使用） */
+  --tk-bg-nav-active: linear-gradient(90deg, rgba(255, 255, 255, 0.72), rgba(210, 229, 255, 0.72));
+  --tk-nav-active-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.45),
+    0 4px 14px rgba(62, 122, 205, 0.08);
+
+  /* 字号/圆角（Finder 尺度）。--tk-font-scale 随设置页字号档位缩放（data-font-scale，
+     由 src/theme.ts 的 applyFontScale 写入），小 = 1 即现有尺寸 */
+  --tk-font-scale: 1;
+  --tk-font-body: calc(13px * var(--tk-font-scale));
+  --tk-font-small: calc(11px * var(--tk-font-scale));
+  --tk-radius: 6px;
+}
+
+/* 字号档位覆盖表：与 src/theme.ts 的 FONT_SCALE_BASE_SIZE 对照更新 */
+:root[data-font-scale='medium'] {
+  --tk-font-scale: 1.0769; /* 13px → 14px */
+}
+
+:root[data-font-scale='large'] {
+  --tk-font-scale: 1.1538; /* 13px → 15px */
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --tk-bg-page:
+    radial-gradient(circle at 88% 5%, rgba(83, 139, 255, 0.16), transparent 28%),
+    radial-gradient(circle at 55% 95%, rgba(135, 96, 255, 0.13), transparent 30%),
+    radial-gradient(circle at 5% 45%, rgba(61, 126, 205, 0.08), transparent 25%),
+    linear-gradient(135deg, #101521 0%, #121824 48%, #151522 100%);
+  --tk-bg-base: #1a2130;
+  --tk-bg-elevated: #222b3d;
+  --tk-bg-card: rgba(25, 31, 44, 0.82);
+  --tk-border-card: rgba(117, 137, 166, 0.2);
+  --tk-shadow-card:
+    0 18px 48px rgba(0, 0, 0, 0.22),
+    0 2px 10px rgba(0, 0, 0, 0.12);
+  --tk-bg-subtle: #232c3b;
+  --tk-bg-zebra: #202735;
+  --tk-bg-hover: #2b3548;
+  --tk-bg-code: #141924;
+  --tk-bg-sidebar:
+    radial-gradient(circle at 100% 0%, rgba(72, 133, 255, 0.34) 0, rgba(72, 133, 255, 0) 34%),
+    radial-gradient(circle at 0% 100%, rgba(139, 91, 255, 0.24) 0, rgba(139, 91, 255, 0) 36%),
+    linear-gradient(145deg, #182235 0%, #172237 48%, #1b1c30 100%);
+
+  --tk-text-primary: #dce4f0;
+  --tk-text-secondary: #9eacc0;
+  --tk-text-tertiary: #5f6b80;
+
+  --tk-border-line: #2f3948;
+  --tk-border-subtle: #262f3f;
+  --tk-border-sidebar: rgba(137, 164, 205, 0.16);
+  --tk-border-btn: rgba(130, 148, 177, 0.24);
+
+  --tk-accent: #1677ff;
+  --tk-accent-subtle: rgba(22, 119, 255, 0.22);
+  --tk-link: #1677ff;
+
+  --tk-danger: #ff817c;
+  --tk-danger-subtle: rgba(255, 92, 87, 0.12);
+  --tk-warning: #ff9f0a;
+  --tk-warning-subtle: rgba(255, 159, 10, 0.14);
+  --tk-success: #72e39a;
+
+  --tk-bg-nav-active: linear-gradient(90deg, rgba(75, 139, 255, 0.25), rgba(125, 96, 255, 0.2));
+  --tk-nav-active-shadow:
+    inset 0 0 0 1px rgba(122, 170, 255, 0.14),
+    0 4px 18px rgba(31, 87, 170, 0.14);
+}
+
+/* ============ Tailwind v4 接线 ============
+   @theme inline：工具类直接输出 var(--tk-*) 引用而非复制 light 值，
+   随 data-theme 实时切换。生成的类名如 text-ink-2 / bg-base / border-line。 */
+@theme inline {
+  --color-base: var(--tk-bg-base);
+  --color-elevated: var(--tk-bg-elevated);
+  --color-subtle: var(--tk-bg-subtle);
+  --color-hover: var(--tk-bg-hover);
+  --color-code: var(--tk-bg-code);
+
+  --color-ink: var(--tk-text-primary);
+  --color-ink-2: var(--tk-text-secondary);
+  --color-ink-3: var(--tk-text-tertiary);
+
+  --color-line: var(--tk-border-line);
+  --color-line-subtle: var(--tk-border-subtle);
+
+  --color-accent: var(--tk-accent);
+  --color-accent-subtle: var(--tk-accent-subtle);
+  --color-link: var(--tk-link);
+
+  --color-danger: var(--tk-danger);
+  --color-danger-subtle: var(--tk-danger-subtle);
+  --color-warning: var(--tk-warning);
+  --color-warning-subtle: var(--tk-warning-subtle);
+  --color-success: var(--tk-success);
+
+  --text-body: var(--tk-font-body);
+  --text-small: var(--tk-font-small);
+
+  /* 标准字号工具类随字号档位缩放；默认行高是无单位比值，随 font-size 自动缩放 */
+  --text-xs: calc(0.75rem * var(--tk-font-scale));
+  --text-sm: calc(0.875rem * var(--tk-font-scale));
+  --text-base: calc(1rem * var(--tk-font-scale));
+  --text-lg: calc(1.125rem * var(--tk-font-scale));
+  --text-xl: calc(1.25rem * var(--tk-font-scale));
+
+  --radius-control: var(--tk-radius);
+}
+
+/* 窗口底层渐变背景：--tk-bg-page 是多层 background 简写（渐变不是颜色），
+   不能用 Tailwind 的 bg-* 颜色工具类，这里注册同名自定义工具类 */
+@utility bg-page {
+  background: var(--tk-bg-page);
+}

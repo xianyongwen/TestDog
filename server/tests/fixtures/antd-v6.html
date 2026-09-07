@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>antd v6 selectOption 测试</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/antd@6.4.5/dist/reset.css" />
+  <style>
+    body { font-family: system-ui, sans-serif; padding: 24px; }
+    .block { margin: 20px 0; }
+    .block > label { display: block; margin-bottom: 6px; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <h3>antd v6 (React) selectOption 测试页（v6 触发器 DOM：无 .ant-select-selector，回显为 .ant-select-content）</h3>
+  <div id="root"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dayjs@1.11.13/dayjs.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/antd@6.4.5/dist/antd.min.js"></script>
+  <script>
+    const { createRoot } = ReactDOM;
+    const { Select, TreeSelect, ConfigProvider } = antd;
+
+    function App() {
+      return React.createElement(
+        ConfigProvider,
+        null,
+        React.createElement(
+          'div',
+          null,
+          React.createElement(
+            'div',
+            { className: 'block' },
+            React.createElement('label', null, 'antd v6 Select 单选'),
+            React.createElement(Select, {
+              id: 'citySelect',
+              placeholder: '请选择城市',
+              style: { width: 200 },
+              options: [
+                { label: '北京', value: 'beijing' },
+                { label: '上海', value: 'shanghai' },
+                { label: '广州', value: 'guangzhou' },
+                { label: '深圳', value: 'shenzhen' },
+              ],
+            })
+          ),
+          React.createElement(
+            'div',
+            { className: 'block' },
+            React.createElement('label', null, 'antd v6 Select 单选（第二字段，弹层残留归属用例）'),
+            React.createElement(Select, {
+              id: 'sizeSelect',
+              placeholder: '请选择规模',
+              style: { width: 200 },
+              options: [
+                { label: '小型', value: 's' },
+                { label: '中型', value: 'm' },
+                { label: '大型', value: 'l' },
+              ],
+            })
+          ),
+          React.createElement(
+            'div',
+            { className: 'block' },
+            React.createElement('label', null, 'antd v6 Select 多选（multiple，选中后弹层不自动收起）'),
+            React.createElement(Select, {
+              id: 'multiTagSelect',
+              mode: 'multiple',
+              placeholder: '请选择标签',
+              style: { width: 300 },
+              options: [
+                { label: '标签一', value: 't1' },
+                { label: '标签二', value: 't2' },
+                { label: '标签三', value: 't3' },
+              ],
+            })
+          ),
+          React.createElement(
+            'div',
+            { className: 'block' },
+            React.createElement('label', null, 'antd v6 TreeSelect 树形选择器'),
+            React.createElement(TreeSelect, {
+              id: 'deptTreeSelect',
+              placeholder: '请选择部门',
+              style: { width: 200 },
+              treeDefaultExpandAll: true,
+              treeData: [
+                {
+                  title: '总公司', value: 'hq',
+                  children: [
+                    { title: '研发部', value: 'dev' },
+                    { title: '市场部', value: 'mkt' },
+                  ],
+                },
+              ],
+            })
+          )
+        )
+      );
+    }
+
+    createRoot(document.getElementById('root')).render(React.createElement(App));
+  </script>
+</body>
+</html>

@@ -1,0 +1,5 @@
+{
+  // 允许 `!w-[200px]` 这类 `!` 前缀写法（antd 组件宽高覆盖场景），
+  // 关闭 Tailwind IntelliSense 将其规范化为 `w-50!` 的建议警告。
+  "tailwindCSS.lint.suggestCanonicalClasses": "none"
+}
