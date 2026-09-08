@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { randomUUID } from 'node:crypto';
 import { isConfigured } from '../config';
-import { generate, confirmPlan, assistStep, pauseJob, continueGenerate, type PlanStep, type AssistDecision } from '../services/generationService';
+import { generate, confirmPlan, assistStep, pauseJob, continueGenerate, isJobRunning, type PlanStep, type AssistDecision } from '../services/generationService';
 import { prisma } from '../db';
 import { publish } from '../ws/hub';
 
@@ -100,6 +100,7 @@ export default async function generateRoutes(app: FastifyInstance) {
       for (const v of vars) envMap[v.key] = v.value;
     }
 
+    if (isJobRunning(jobId)) return { error: '该任务正在执行或暂停收尾，请稍后继续' };
     continueGenerate(jobId, {
       nl,
       envMap,

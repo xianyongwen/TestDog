@@ -3,6 +3,8 @@ import { closeSession } from '../stagehandManager';
 import { clearUsage, type TokenUsage } from '../tokenUsage';
 import { pub } from './logBridge';
 import type { AssistDecision, PlanStep } from './types';
+import { clearCheckpoint } from './checkpoint';
+import { clearGenerationEnvironment } from './privacy';
 
 type Wait =
   | { type: 'plan'; resolve: (v: PlanStep[] | null) => void }
@@ -22,6 +24,17 @@ export const revokeHandlers = new Map<string, (from: number, to: number) => stri
 const pauseHandlers = new Map<string, () => void>();
 /** 停止后未继续的会话回收定时器（30 分钟）。 */
 const pauseTimers = new Map<string, NodeJS.Timeout>();
+const runningJobs = new Map<string, symbol>();
+export function isJobRunning(jobId: string): boolean { return runningJobs.has(jobId); }
+export function claimJob(jobId: string): symbol | null {
+  if (runningJobs.has(jobId)) return null;
+  const owner = Symbol(jobId);
+  runningJobs.set(jobId, owner);
+  return owner;
+}
+export function releaseJobSlot(jobId: string, owner?: symbol): void {
+  if (!owner || runningJobs.get(jobId) === owner) runningJobs.delete(jobId);
+}
 
 function setWait(jobId: string, wait: Wait, timeoutMs: number): void {
   waits.set(jobId, wait);
@@ -50,10 +63,15 @@ export function pauseJob(jobId: string): boolean {
 
 /** 停止后长时间未继续：回收浏览器会话。 */
 export function scheduleSessionGc(jobId: string): void {
+  cancelSessionGc(jobId);
   const t = setTimeout(
     () => {
       pauseTimers.delete(jobId);
       pauseHandlers.delete(jobId);
+      clearCheckpoint(jobId);
+      clearGenerationEnvironment(jobId);
+      clearUsage(jobId);
+      unregisterCancel(jobId);
       closeSession(jobId).catch(() => {});
     },
     30 * 60_000,
@@ -134,19 +152,28 @@ export function createJobRuntime(jobId: string): JobRuntime {
   const abortCtrl = new AbortController(); // 中断工具循环（取消/暂停共用）
   // 取消：中断执行并关闭浏览器（用户点取消 / 浏览器被手动关闭均走这里）
   const cancel = (message: string) => {
+    paused = false;
     cancelled = true;
     abortCtrl.abort();
     resolveWait(jobId, null);
-    closeSession(jobId);
+    void closeSession(jobId).catch(() => {});
     pub({ type: 'gen:error', jobId, message });
+    if (!isJobRunning(jobId)) {
+      cancelSessionGc(jobId);
+      clearCheckpoint(jobId);
+      clearGenerationEnvironment(jobId);
+      clearUsage(jobId);
+      unregisterCancel(jobId);
+    }
   };
   registerCancel(jobId, () => cancel('已取消'));
   const pause = () => {
+    if (cancelled) return;
     paused = true;
     cancelled = true; // 复用取消的循环退出与跳过逻辑
     abortCtrl.abort();
     resolveWait(jobId, null);
-    pub({ type: 'gen:paused', jobId, message: '已暂停，可调整步骤后继续生成' });
+    pub({ type: 'gen:status', jobId, message: '正在暂停，等待当前操作记录和保存完成…' });
   };
   pauseHandlers.set(jobId, pause);
   return { abortCtrl, isCancelled: () => cancelled, isPaused: () => paused, cancel, pause };
@@ -156,10 +183,17 @@ export function createJobRuntime(jobId: string): JobRuntime {
  *  清理（pauseHandlers/waits/cancel/usage）交给接管任务的 continueGenerate 处理，
  *  否则 generate 的延迟 finally 可能清掉 continue 已重新初始化的 usage，导致步骤 token 全为 0。 */
 export function releaseJob(jobId: string, paused: boolean): void {
+  pauseHandlers.delete(jobId);
+  resolveWait(jobId, null);
+  releaseJobSlot(jobId);
+  if (paused) {
+    pub({ type: 'gen:paused', jobId, message: '已暂停，可调整步骤后继续生成' });
+  }
   if (!paused) {
-    pauseHandlers.delete(jobId);
-    resolveWait(jobId, null);
+    cancelSessionGc(jobId);
     unregisterCancel(jobId);
     clearUsage(jobId);
+    clearCheckpoint(jobId);
+    clearGenerationEnvironment(jobId);
   }
 }

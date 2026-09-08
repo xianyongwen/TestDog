@@ -9,11 +9,12 @@ import {
   friendlyBrowserLaunchError,
   onSessionBrowserClosed,
 } from './stagehandManager';
-import { prisma } from '../db';
 import { getUsage, initUsage, ensureUsage } from './tokenUsage';
 import { appendStep, upsertLog, STEP_TYPE } from './generationLogService';
 import { pub, activeLogIds } from './generation/logBridge';
-import { awaitPlanConfirm, cancelSessionGc, createJobRuntime, releaseJob } from './generation/jobControl';
+import { awaitPlanConfirm, cancelSessionGc, claimJob, createJobRuntime, releaseJob, releaseJobSlot } from './generation/jobControl';
+import { loadCheckpoint, saveCheckpoint, type GenerationCheckpoint } from './generation/checkpoint';
+import { redactGenerationData, redactGenerationText, setGenerationEnvironment } from './generation/privacy';
 import {
   buildEnvVarHint,
   createStepEmitter,
@@ -27,7 +28,7 @@ import {
 import { preSplit, splitSystemWithVocab } from './generation/preSplit';
 import { runGenerationLoop } from './generation/generationLoop';
 
-export { pauseJob, confirmPlan, assistStep } from './generation/jobControl';
+export { pauseJob, confirmPlan, assistStep, isJobRunning } from './generation/jobControl';
 export type { GenerateParams, ContinueParams, PlanStep, AssistDecision } from './generation/types';
 import type { ContinueParams, GenerateParams, PlanStep } from './generation/types';
 
@@ -37,11 +38,25 @@ import type { ContinueParams, GenerateParams, PlanStep } from './generation/type
  * / gen:tool（实时工具轨迹）/ gen:step（脚本步骤）/ gen:done / gen:error。
  */
 export async function generate(jobId: string, params: GenerateParams): Promise<void> {
+  const owner = claimJob(jobId);
+  if (!owner) throw new Error('该任务正在执行或暂停收尾，请稍后继续');
+  try { await generateOwned(jobId, params); } finally { releaseJobSlot(jobId, owner); }
+}
+
+async function persistPausedCheckpoint(jobId: string, checkpoint: GenerationCheckpoint): Promise<void> {
+  try { await saveCheckpoint(jobId, checkpoint); } catch {
+    pub({ type: 'gen:status', jobId, message: '检查点写入数据库失败，已保留内存状态，可在当前会话继续生成' });
+  }
+}
+
+async function generateOwned(jobId: string, params: GenerateParams): Promise<void> {
   if (!isConfigured()) {
     pub({ type: 'gen:error', jobId, message: '请先在「设置」中配置网关地址与密钥' });
     return;
   }
   const cfg = getConfig();
+  setGenerationEnvironment(jobId, params.envMap ?? {});
+  params = { ...params, nl: redactGenerationText(jobId, params.nl), startUrl: params.startUrl ? redactGenerationText(jobId, params.startUrl) : undefined };
   initUsage(jobId);
 
   // 创建生成记录：upsertLog 允许同 jobId 续接；返回 logId 后所有 pub() 都会自动写入。
@@ -69,6 +84,8 @@ export async function generate(jobId: string, params: GenerateParams): Promise<v
 
   const job = createJobRuntime(jobId);
   const { abortCtrl } = job;
+  const substitution = createSubstituter(params.envMap ?? {}, Date.now());
+  const checkpoint: GenerationCheckpoint = { messages: [], steps: [], goalText: params.nl, outline: [], substitution: substitution.state };
 
   try {
     const envMap = params.envMap ?? {};
@@ -79,6 +96,7 @@ export async function generate(jobId: string, params: GenerateParams): Promise<v
     const att = loadGenAttachments(jobId, params.attachments ?? []);
     if (!att) return;
     const { text: attachmentText, images: attachmentImages } = att;
+    checkpoint.goalText = `${params.nl}${attachmentText}${params.startUrl ? `\n起始地址：${params.startUrl}` : ''}`;
 
     // -- 启动浏览器（登录配置 → 已登录态会话；项目配置的窗口尺寸一并注入）--
     let stagehand: any;
@@ -102,13 +120,14 @@ export async function generate(jobId: string, params: GenerateParams): Promise<v
     // 用户手动关闭浏览器 -> 取消生成流程（closeSession 主动关闭前已解除该回调，不会误触发）
     onSessionBrowserClosed(jobId, () => job.cancel('浏览器已被关闭，生成已取消'));
 
-    const steps: TestStep[] = [];
-    const { sub } = createSubstituter(envMap, Date.now());
+    const steps = checkpoint.steps;
+    const { sub } = substitution;
     const emit = createStepEmitter(jobId, steps, () => 0);
 
     try {
       const page = await sessionPage(stagehand);
       if (!page) throw new Error('浏览器页面不可用');
+      if (job.isCancelled()) return;
       const setup = await setupGenPage(jobId, page, params.projectId);
       if (setup.error) {
         if (!job.isCancelled()) pub({ type: 'gen:error', jobId, message: setup.error, usage: getUsage(jobId) });
@@ -116,6 +135,7 @@ export async function generate(jobId: string, params: GenerateParams): Promise<v
       }
       pwBrowser = setup.pwBrowser;
       pwPage = setup.pwPage;
+      if (job.isCancelled()) return;
 
       // 起始页：自动导航并记录为第 0 步（保持「生成脚本必带 goto」的行为）
       if (params.startUrl) {
@@ -139,7 +159,7 @@ export async function generate(jobId: string, params: GenerateParams): Promise<v
 
       const systemContent = cfg.splitSystemPrompt || DEFAULT_SPLIT_SYSTEM_PROMPT;
       const userContent = `【测试目标】\n${params.nl}${attachmentText}${params.startUrl ? `\n\n起始地址：${params.startUrl}` : ''}${pageCtx}`;
-      const split = await preSplit(client, cfg.openaiModel, await splitSystemWithVocab(systemContent, params.projectId), userContent, envVarHint, cfg.reasoningEffort, logId, jobId, attachmentImages);
+      const split = await preSplit(client, cfg.openaiModel, await splitSystemWithVocab(systemContent, params.projectId), userContent, envVarHint, cfg.reasoningEffort, logId, jobId, attachmentImages, abortCtrl.signal);
       if (job.isCancelled()) return;
       const plan = split.steps;
       if (!plan || !plan.length) {
@@ -154,6 +174,7 @@ export async function generate(jobId: string, params: GenerateParams): Promise<v
         return;
       }
       pub({ type: 'gen:status', jobId, message: `大纲已确认（${confirmed.length} 步参考），开始智能体生成…` });
+      checkpoint.outline = confirmed;
 
       // ---- Phase B：function call 循环（LLM 在回路自主选择工具；动作成功即语义化落库）----
       // 大纲降级为软约束（拼进 system）；后续循环由 continueGenerate（续跑/常规继续）承接。
@@ -176,24 +197,8 @@ export async function generate(jobId: string, params: GenerateParams): Promise<v
         logId,
         isCancelled: job.isCancelled,
         signal: abortCtrl.signal,
+        onCheckpoint: (messages) => { checkpoint.messages = messages; },
       });
-      // 暂停：持久化循环状态（messages + 上下文），「继续生成」可 resumeLoop 读回续跑
-      if (job.isPaused() && loopResult.messages.length) {
-        await prisma.generationLog
-          .update({
-            where: { jobId },
-            data: {
-              loopState: {
-                messages: loopResult.messages,
-                goalText: `${params.nl}${attachmentText}`,
-                envVarHint,
-                outline: confirmed,
-                projectId: params.projectId ?? null,
-              } as any,
-            },
-          })
-          .catch(() => {});
-      }
       if (job.isCancelled()) return;
       if (!loopResult.ok) return;
 
@@ -214,6 +219,7 @@ export async function generate(jobId: string, params: GenerateParams): Promise<v
     // 暂停（非取消）时保留 usage 累计与会话，供「继续生成」在同一 jobId 上接着累计；
     // 清理（pauseHandlers/waits/cancel/usage）交给接管任务的 continueGenerate 处理，
     // 否则 generate 的延迟 finally 可能清掉 continue 已重新初始化的 usage，导致步骤 token 全为 0。
+    if (job.isPaused()) await persistPausedCheckpoint(jobId, checkpoint);
     releaseJob(jobId, job.isPaused());
   }
 }
@@ -224,6 +230,12 @@ export async function generate(jobId: string, params: GenerateParams): Promise<v
  * gen:done 下发 baseSteps + 新步骤的完整脚本（包含用户在停止期间的手动调整）。
  */
 export async function continueGenerate(jobId: string, params: ContinueParams): Promise<void> {
+  const owner = claimJob(jobId);
+  if (!owner) throw new Error('该任务正在执行或暂停收尾，请稍后继续');
+  try { await continueGenerateOwned(jobId, params); } finally { releaseJobSlot(jobId, owner); }
+}
+
+async function continueGenerateOwned(jobId: string, params: ContinueParams): Promise<void> {
   if (!isConfigured()) {
     pub({ type: 'gen:error', jobId, message: '请先在「设置」中配置网关地址与密钥' });
     return;
@@ -236,6 +248,8 @@ export async function continueGenerate(jobId: string, params: ContinueParams): P
   // 还在 GC 宽限期内继续：取消会话回收
   cancelSessionGc(jobId);
   const cfg = getConfig();
+  setGenerationEnvironment(jobId, params.envMap ?? {});
+  params = { ...params, nl: redactGenerationText(jobId, params.nl), baseSteps: redactGenerationData(jobId, params.baseSteps) };
   // 复用同一 jobId 的累计（暂停时 generate 不清 usage）：继续生成的步骤差分、最终 gen:done 总量都基于全量累计
   ensureUsage(jobId);
 
@@ -260,10 +274,14 @@ export async function continueGenerate(jobId: string, params: ContinueParams): P
 
   const job = createJobRuntime(jobId);
   const { abortCtrl } = job;
+  let checkpoint: GenerationCheckpoint | null = null;
   // 用户手动关闭浏览器 -> 取消生成流程（会话由暂停保留，此处 session 已存在，可直接注册）
   onSessionBrowserClosed(jobId, () => job.cancel('浏览器已被关闭，生成已取消'));
 
   try {
+    const saved = await loadCheckpoint(jobId);
+    const substitution = createSubstituter(params.envMap ?? {}, Date.now(), saved?.substitution);
+    checkpoint = { messages: [], steps: params.baseSteps, goalText: params.nl, outline: [], substitution: substitution.state };
     const envMap = params.envMap ?? {};
     const envVarHint = buildEnvVarHint(envMap);
 
@@ -280,9 +298,10 @@ export async function continueGenerate(jobId: string, params: ContinueParams): P
     }
     pwBrowser = setup.pwBrowser;
     pwPage = setup.pwPage;
+    if (job.isCancelled()) return;
 
     const steps: TestStep[] = [];
-    const { sub } = createSubstituter(envMap, Date.now());
+    const { sub } = substitution;
     const emit = createStepEmitter(jobId, steps, () => params.baseSteps.length);
 
     try {
@@ -299,9 +318,12 @@ export async function continueGenerate(jobId: string, params: ContinueParams): P
 
       // —— 续跑模式：读回暂停时保存的 messages 直接继续工具循环（不重新拆分/确认）——
       if (params.resumeLoop) {
-        const saved = await prisma.generationLog.findUnique({ where: { jobId }, select: { loopState: true } });
-        const st = saved?.loopState as any;
+        const st = saved;
         if (st?.messages?.length) {
+          checkpoint.goalText = st.goalText ?? params.nl;
+          checkpoint.outline = st.outline ?? [];
+          // 用户暂停期间可能修改步骤；旧编号和旧脚本摘要不得被当作当前状态。
+          const resumeMessages = [...st.messages, { role: 'user' as const, content: `【续跑状态】以下为用户当前保留的完整脚本，请以此为准，不要重复已完成操作。先 snapshot 确认页面，旧元素编号不再有效。\n${JSON.stringify(params.baseSteps)}\n【补充说明】${params.nl}` }];
           const resumeResult = await runGenerationLoop({
             jobId,
             page,
@@ -324,7 +346,8 @@ export async function continueGenerate(jobId: string, params: ContinueParams): P
             logId: continueLogId,
             isCancelled: job.isCancelled,
             signal: abortCtrl.signal,
-            resumeMessages: st.messages,
+            resumeMessages,
+            onCheckpoint: (messages) => { checkpoint!.messages = messages; checkpoint!.steps = [...params.baseSteps, ...steps]; },
           });
           if (job.isCancelled()) return;
           if (!resumeResult.ok) return;
@@ -341,7 +364,7 @@ export async function continueGenerate(jobId: string, params: ContinueParams): P
 
       const systemContent = cfg.splitSystemPrompt || DEFAULT_SPLIT_SYSTEM_PROMPT;
       const userContent = `【模式】继续生成。这是一次被中途暂停的测试，浏览器停留在当前页面。已完成步骤保留不动，请只为「从当前页面状态继续」的剩余流程拆分步骤：不要重复已完成步骤，不要输出回到起始页的 goto，计划仍必须以一条断言步骤结尾。\n\n【追加目标】\n${params.nl}${attachmentText}\n\n【已完成步骤】\n${doneSummary || '（无）'}\n\n【当前页面】标题：${title}；URL：${url}`;
-      const split = await preSplit(client, cfg.openaiModel, await splitSystemWithVocab(systemContent, params.projectId), userContent, envVarHint, cfg.reasoningEffort, continueLogId, jobId, attachmentImages);
+      const split = await preSplit(client, cfg.openaiModel, await splitSystemWithVocab(systemContent, params.projectId), userContent, envVarHint, cfg.reasoningEffort, continueLogId, jobId, attachmentImages, abortCtrl.signal);
       if (job.isCancelled()) return;
       const plan = split.steps;
       if (!plan || !plan.length) {
@@ -356,6 +379,8 @@ export async function continueGenerate(jobId: string, params: ContinueParams): P
         return;
       }
       pub({ type: 'gen:status', jobId, message: `大纲已确认（${confirmed.length} 步参考），继续智能体生成…` });
+      checkpoint.goalText = `【追加目标】${params.nl}${attachmentText}`;
+      checkpoint.outline = confirmed;
 
       // ---- Phase B（续）：function call 循环（LLM 在回路自主选择工具；动作成功即语义化落库）----
       const loopResult = await runGenerationLoop({
@@ -378,6 +403,7 @@ export async function continueGenerate(jobId: string, params: ContinueParams): P
         logId: continueLogId,
         isCancelled: job.isCancelled,
         signal: abortCtrl.signal,
+        onCheckpoint: (messages) => { checkpoint!.messages = messages; checkpoint!.steps = [...params.baseSteps, ...steps]; },
       });
       if (job.isCancelled()) return;
       if (!loopResult.ok) return;
@@ -391,11 +417,14 @@ export async function continueGenerate(jobId: string, params: ContinueParams): P
       pub({ type: 'gen:done', jobId, script, usage: getUsage(jobId) });
     } catch (e) {
       if (!job.isCancelled()) pub({ type: 'gen:error', jobId, message: `执行失败：${String(e)}`, usage: getUsage(jobId) });
-    } finally {
-      await finalizeGenJob(jobId, { paused: job.isPaused(), pwBrowser, logId: continueLogId });
     }
   } finally {
-    // 二次暂停同样保留 usage 累计与会话；清理交给下一次 continueGenerate
-    releaseJob(jobId, job.isPaused());
+    try {
+      await finalizeGenJob(jobId, { paused: job.isPaused(), pwBrowser, logId: continueLogId });
+    } finally {
+      // 收尾出错也保存检查点并释放任务，避免一直卡在“正在暂停”。
+      if (job.isPaused() && checkpoint) await persistPausedCheckpoint(jobId, checkpoint);
+      releaseJob(jobId, job.isPaused());
+    }
   }
 }

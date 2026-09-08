@@ -1,11 +1,16 @@
 import type OpenAI from 'openai';
 import type { ReasoningEffort } from '../config';
 import { getUsage, type TokenUsage } from './tokenUsage';
+import { redactGenerationData, redactGenerationText } from './generation/privacy';
 
 /** 工具结果：文本 + 可选截图（stateful 工具的截图槽随同槽降级/水位压缩回收，防历史截图滚雪球）。 */
 export interface AgentToolResult {
+  /** 旧文本/截图工具默认 success；动作失败必须显式返回 failed 或抛异常。 */
+  status?: 'success' | 'failed' | 'uncertain';
   text: string;
   image?: string;
+  recordedStep?: number;
+  effect?: 'observed' | 'unknown';
 }
 
 export interface AgentTool {
@@ -298,7 +303,7 @@ export async function runToolLoop(opts: ToolLoopOpts): Promise<ToolLoopResult> {
     }
   };
 
-  for (let i = 0; i < maxSteps; i++) {
+  for (let i = 0; i < maxSteps && steps < maxSteps; i++) {
     if (signal?.aborted) break;
     compressIfNeeded();
     round = i + 1;
@@ -313,6 +318,7 @@ export async function runToolLoop(opts: ToolLoopOpts): Promise<ToolLoopResult> {
         function: { name: t.name, description: t.description, parameters: t.parameters },
       })),
       tool_choice: 'auto',
+      parallel_tool_calls: false,
     };
     if (reasoningEffort) req.reasoning_effort = reasoningEffort;
     else {
@@ -320,13 +326,17 @@ export async function runToolLoop(opts: ToolLoopOpts): Promise<ToolLoopResult> {
       req.thinking = { type: 'disabled' };
       req.temperature = 0;
     }
-    const completion = await client.chat.completions.create(
-      req as never,
-      signal ? { signal } : undefined,
-    );
+    let completion;
+    try {
+      completion = await client.chat.completions.create(req as never, signal ? { signal } : undefined);
+    } catch (error) {
+      // 暂停/取消是正常出口，保留调用方持有的 messages 供检查点保存。
+      if (signal?.aborted) break;
+      throw error;
+    }
     // 记录本轮主调用输入（=当前上下文大小），供下轮水位判断；此区间仅该调用，差分即其输入
     lastRoundInput = getUsage(usageKey).inputTokens - base.inputTokens;
-    const msg = completion.choices?.[0]?.message;
+    const msg = redactGenerationData(usageKey, completion.choices?.[0]?.message);
     const toolCalls = msg?.tool_calls ?? [];
 
     // see 的「模型作答」滞后一轮到达：本轮 content 即上一轮 see 观察的回应，按步骤序号回传上层落库
@@ -351,9 +361,9 @@ export async function runToolLoop(opts: ToolLoopOpts): Promise<ToolLoopResult> {
     let prev = base;
     const answeredIds = new Set<string>();
     for (const tc of toolCalls) {
-      if (signal?.aborted) {
+      if (signal?.aborted || finished || steps >= maxSteps) {
         // 中止时为剩余 tool_calls 补占位消息：否则 messages 留下孤儿 tool_calls（协议违规，续跑时网关 400）
-        messages.push({ role: 'tool', tool_call_id: tc.id, content: '（已中止）' } as OpenAI.ChatCompletionMessageParam);
+        messages.push({ role: 'tool', tool_call_id: tc.id, content: finished ? '（未执行：任务已结束）' : signal?.aborted ? '（已中止）' : '（未执行：已达到工具步数上限）' } as OpenAI.ChatCompletionMessageParam);
         continue;
       }
       let args: Record<string, unknown> = {};
@@ -369,7 +379,14 @@ export async function runToolLoop(opts: ToolLoopOpts): Promise<ToolLoopResult> {
       let toolOk = false; // 工具执行是否成功（观察空转保护：仅成功调用参与连击/重置）
       if (tool?.name === 'finish') {
         // 有校验钩子（如「最后一步必须是断言」）时先校验；拒绝则回灌消息继续，不结束
-        const rejectMsg = validateFinish ? await validateFinish(args) : null;
+        let rejectMsg: string | null;
+        try {
+          rejectMsg = validateFinish ? await validateFinish(args) : null;
+        } catch (error) {
+          if (!signal?.aborted) throw error;
+          rejectMsg = '（已中止）';
+        }
+        if (signal?.aborted) rejectMsg = '（已中止）';
         if (rejectMsg) {
           result = rejectMsg;
         } else {
@@ -384,14 +401,15 @@ export async function runToolLoop(opts: ToolLoopOpts): Promise<ToolLoopResult> {
           } else {
             result = r.text;
             resultImage = r.image;
+            if (r.status === 'failed') throw new Error(r.text);
           }
-          toolOk = true;
-          onSuccess?.(tool.name, args); // 成功即通知上层（重置连续失败计数等）
+          toolOk = typeof r === 'string' || r.status == null || r.status === 'success';
+          if (toolOk) onSuccess?.(tool.name, args);
         } catch (e) {
-          const err = String(e);
+          const err = redactGenerationText(usageKey, String(e));
           // 失败先问 onFailure 钩子：null → 错误照常回灌让模型自愈；字符串 → 人工介入完成的替换结果
           let override: string | null = null;
-          if (onFailure) {
+          if (onFailure && !signal?.aborted) {
             try {
               override = await onFailure(tool.name, args, err);
             } catch {
@@ -413,7 +431,7 @@ export async function runToolLoop(opts: ToolLoopOpts): Promise<ToolLoopResult> {
       // 分支因此从未生效，观察连击只认 goto（cmtqvusc6 案例：首次提交后的关键观察被误挂起）。
       const progressed = toolOk && !finished ? Boolean(isProgress?.(toolName)) : false;
       const sig = stuckSig(toolName, args);
-      if (sig && !finished && !progressed) {
+      if (sig && !finished && !progressed && !signal?.aborted) {
         stuckHist.push(sig);
         if (stuckHist.length > STUCK_WINDOW) stuckHist.shift();
         const total = (stuckTotal.get(sig) ?? 0) + 1;
@@ -444,7 +462,7 @@ export async function runToolLoop(opts: ToolLoopOpts): Promise<ToolLoopResult> {
       }
       // —— 观察空转保护：see 自上次进展（goto/落库新步骤）以来连击达阈值 → 挂起人工决策 ——
       // 仅计成功执行：失败的观察/动作不重置也不累计（失败本身会走 onFailure/同签名空转通道）
-      if (tool?.name === 'see' && !finished && toolOk) {
+      if (tool?.name === 'see' && !finished && toolOk && !signal?.aborted) {
         seeStreak++;
         if (seeStreak >= SEE_ASSIST_AT) {
           let override: string | null = null;
@@ -463,7 +481,7 @@ export async function runToolLoop(opts: ToolLoopOpts): Promise<ToolLoopResult> {
       // —— 联动死锁保护：select 类成功调用在两个元素间交替（选择其一另一个被页面回设）达阈值 → 挂起人工决策 ——
       // 仅计成功执行：失败的 select 不构成「选上又被联动打回」的翻转证据（失败本身走 onFailure/同签名空转通道）；
       // 与同签名重复通道不会同时达到挂起阈值（同签名占窗 6+ 时窗口余量不足以构成 4 次转移），不会连环弹窗。
-      if (!finished && toolOk && tool && isSelectLike(toolName, args)) {
+      if (!finished && toolOk && tool && !signal?.aborted && isSelectLike(toolName, args)) {
         const sel = String(args.selector ?? '').trim();
         if (sel) {
           linkHist.push(sel);
@@ -484,6 +502,7 @@ export async function runToolLoop(opts: ToolLoopOpts): Promise<ToolLoopResult> {
           }
         }
       }
+      result = redactGenerationText(usageKey, result);
       const after = { ...getUsage(usageKey) };
       const delta = usageDelta(prev, after);
       prev = after;

@@ -2,12 +2,14 @@ import { publish, type ServerMsg } from '../../ws/hub';
 import { appendStep, markFinished, markStatus, STEP_TYPE, updateStepAssistant, type GenLogStatus } from '../generationLogService';
 import type { TokenUsage } from '../tokenUsage';
 import { trunc } from './util';
+import { redactGenerationData, redactGenerationText } from './privacy';
 
 /** jobId -> 当前活跃 logId 的运行时映射。done/error 时清空；paused 时保留以便 continue 续写。 */
 export const activeLogIds = new Map<string, string>();
 
 /** publish 的本地包装：发送 WS 同时把事件落到生成记录。 */
 export function pub(msg: ServerMsg): void {
+  if (msg.jobId) msg = redactGenerationData(String(msg.jobId), msg);
   publish(msg);
   const logId = msg.jobId ? activeLogIds.get(msg.jobId as string) : null;
   if (logId) logFromWsEvent(msg, logId);
@@ -122,5 +124,5 @@ export function pubToolWithUsage(jobId: string, index: number, actionLabel: stri
 /** 回填 see 观察步骤的模型回答（GenerationStep.assistant）：toolLoop 下一轮 completion 到达时回调，
  *  只写库不推送——回答晚于该步骤的 WS 事件到达，属事后补录，供事后排查「模型当时对截图说了什么」。 */
 export function updateToolAssistant(jobId: string, stepIndex: number, assistant: string): void {
-  updateStepAssistant(activeLogIds.get(jobId), stepIndex, assistant);
+  updateStepAssistant(activeLogIds.get(jobId), stepIndex, redactGenerationText(jobId, assistant));
 }

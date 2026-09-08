@@ -436,6 +436,7 @@ describe('runActionShell 动作前预采集（capture-before-mutation）', () =>
       envMap: {},
       emit: async (s: any) => {
         emitted.push(s);
+        return { index: emitted.length };
       },
       onTool: () => {},
       note: () => {},
@@ -447,7 +448,8 @@ describe('runActionShell 动作前预采集（capture-before-mutation）', () =>
     };
     const clickTool = buildGenTools(ctx).find((t) => t.name === 'click')!;
     const res = await clickTool.execute({ selector: '1', instruction: '点击展开' });
-    expect(String(res)).toContain('完成');
+    expect(res).toMatchObject({ status: 'success', recordedStep: 1 });
+    expect(typeof res === 'object' ? res.text : res).toContain('点击已执行');
     expect(emitted).toHaveLength(1);
     // 修复前：语义化在点击后执行，采到动作后的可访问名「收起」，回放初始态必不命中
     expect(emitted[0].locator).toMatchObject({ strategy: 'role', role: 'button', name: '展开' });

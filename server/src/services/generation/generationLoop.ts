@@ -12,6 +12,7 @@ import { pub, pubToolWithUsage, updateToolAssistant } from './logBridge';
 import { createManualCapture } from './manualCapture';
 import { normalizeStepSystemVars, safeJsonParse, stripFences } from './util';
 import type { AssistDecision, PlanStep } from './types';
+import { redactGenerationData } from './privacy';
 
 const MAX_ASSIST_PER_STEP = 3;
 /** 断言同签名累计失败达该次数 → 挂起 gen:assist：断言是「判断」不是「动作」，同目标重试不会改变页面结果。 */
@@ -43,7 +44,7 @@ const GEN_LOOP_SYSTEM_PROMPT = `你是 Web 测试脚本生成 Agent：通过调�
     - 无声失败：成功/失败提示皆无，接口也无对应请求（点击未触发任何调用）或响应无法判断成败。
 11. 完成测试意图后，至少添加一条 assert 断言（末步必须是断言），然后调用 finish。
 12. 环境变量以 {{key}} 占位符引用（fill 的 value 里直接写 {{key}}），不要写死真实值。
-13. 修正后重做提交时，若旧提交/填写操作已落库为脚本步骤，配合调用 revise 清理，回放脚本应是最短成功路径。两类场景：① 提交失败原因是参数问题（如手机号重复、名称已存在、值不合法）需换值重试——先 revise 改 value、删除冗余的旧值提交/重填链，再执行修正动作；② 点击提交后弹窗未关、被必填校验拦截（提交未生效）——补填缺失字段重新提交，成功后调用 revise 删除先前落空的旧提交步。不要留下「注定失败的提交 + 重填」的冗余链路。所有成功执行的操作都会如实落库（含有意重复，如循环造数的多次填写同一输入框）——落库步骤与浏览器实际执行一一对应，不要重复执行已成功且已落库的操作；失败重试产生的冗余链请用 revise 清理，finish 时系统还会做一次全局脚本审查兜底。`;
+13. 修正后重做提交时，若旧提交/填写操作已落库为脚本步骤，配合调用 revise 清理，回放脚本应保留完整、可验证的成功流程，仅清理有明确证据的失败重试冗余，不以步骤最少为目标。两类场景：① 提交失败原因是参数问题（如手机号重复、名称已存在、值不合法）需换值重试——先实际执行修正动作并验证成功，再 revise 同步已验证的新值、删除有明确证据的旧值提交/重填冗余链；② 点击提交后弹窗未关、被必填校验拦截（提交未生效）——补填缺失字段重新提交，成功后调用 revise 删除先前落空的旧提交步。不要留下「注定失败的提交 + 重填」的冗余链路。所有成功执行的操作都会如实落库（含有意重复，如循环造数的多次填写同一输入框）——落库步骤与浏览器实际执行一一对应，不要重复执行已成功且已落库的操作；失败重试产生的冗余链请用 revise 清理，finish 时系统还会做一次全局脚本审查兜底。`;
 
 /** 断言失败签名：type + expected + selector 定位同一「判断」；instruction 文本不参与（避免措辞变化绕过累计）。 */
 function assertFailSig(args: Record<string, unknown>): string {
@@ -80,6 +81,7 @@ async function runScriptReview(o: {
   reasoningEffort: ReasoningEffort;
   steps: TestStep[];
   revise: (ops: ReviseOp[]) => Promise<string>;
+  signal?: AbortSignal;
 }): Promise<void> {
   const { jobId, client } = o;
   if (o.steps.length < 4) return; // goto+动作+断言的最小脚本无冗余空间
@@ -108,11 +110,11 @@ async function runScriptReview(o: {
         {
           role: 'system',
           content:
-            '你是回放测试脚本的审查员。已落步骤与浏览器实际执行一一对应。请找出「失败重试/被后续操作替代」的冗余步骤并清理，使脚本成为最短成功回放路径：\n' +
-            '- 删除：注定失败或已落空的操作链（落空的提交、旧值填写、同 URL 的重复导航等）；\n' +
+            '你是回放测试脚本的审查员。已落步骤与浏览器实际执行一一对应。请找出「失败重试/被后续操作替代」的冗余步骤并清理，保持已验证流程的行为等价，仅清理有明确证据的失败重试冗余，不以步骤最少为目标：\n' +
+            '- 删除：已确认未生效且已被成功重试替代的操作链；不得仅因 URL、元素或值相同就删除重复操作，重复导航可能承担刷新作用；\n' +
             '- 保留：有意的重复操作（循环造数、逐行填写、反复切换等，即使元素与值完全相同）；\n' +
             '- 断言一般保留；唯一可删例外：两条断言互为冗余（同一定位、期望值一方是另一方的前缀/子集，如泛化 text=客户_ 与精确 text=客户_1788703830578 并存，不论谁前谁后），只删其中一条、保留另一条；无论删否，应用全部 ops 后脚本末步必须是断言——若末步断言不属于冗余对，任何删除都不得触及它；\n' +
-            '- 不确定时保留，宁多勿错删；可用 update 修正 value；ops 按顺序应用，delete 会使之后的原序号前移——连续删除一段请合并为一个范围 op（from~to），先删后改时 update 的 step 序号按删除后的新编号给出。\n' +
+            '- 不确定时保留，宁多勿错删；仅在已实际执行并验证替代值后，才可用 update 同步修正 value；不得为通过测试而弱化断言或改写未经验证的值。ops 按顺序应用，delete 会使之后的原序号前移——连续删除一段请合并为一个范围 op（from~to），先删后改时 update 的 step 序号按删除后的新编号给出。\n' +
             '输出 JSON：{"ops": [{"op":"delete","from":n,"to":m} 或 {"op":"update","step":n,"value":"新值"}]}，ops 为空数组表示无需修订。只输出 JSON。',
         },
         { role: 'user', content: `【已落步骤】\n${detail}` },
@@ -124,8 +126,9 @@ async function runScriptReview(o: {
       req.thinking = { type: 'disabled' };
       req.temperature = 0;
     }
-    const res = await client.chat.completions.create(req as never);
-    const text = res.choices?.[0]?.message?.content ?? '';
+    const res = await client.chat.completions.create(req as never, o.signal ? { signal: o.signal } : undefined);
+    if (o.signal?.aborted) return;
+    const text = redactGenerationData(jobId, res.choices?.[0]?.message?.content ?? '');
     const usage = usageDelta(before, getUsage(jobId));
     const parsed = safeJsonParse(stripFences(text)) as { ops?: ReviseOp[] } | undefined;
     const ops = Array.isArray(parsed?.ops) ? (parsed!.ops as ReviseOp[]) : [];
@@ -154,7 +157,7 @@ async function runScriptReview(o: {
   } catch (e) {
     // 审查异常不阻塞 finish：模型也可在 finish 前自用 revise 清理。但要留痕——静默失败会让
     // 「审查兜底失效」无从排查（如 DeepSeek 对 json_object 要求提示词含 json 一词，缺失即 400）。
-    console.warn(`[gen:${jobId}] 脚本审查失败，跳过清理：`, e);
+    if (!o.signal?.aborted) console.warn(`[gen:${jobId}] 脚本审查失败，跳过清理：`, redactGenerationData(jobId, String(e)));
   }
 }
 
@@ -186,6 +189,8 @@ export async function runGenerationLoop(o: {
   signal?: AbortSignal;
   /** 续跑：外部传入已持久化的 messages（继续生成读回），不再重建 system/user。 */
   resumeMessages?: OpenAI.ChatCompletionMessageParam[];
+  /** 无论完成、暂停还是异常，交还当前消息以保存检查点。 */
+  onCheckpoint?: (messages: OpenAI.ChatCompletionMessageParam[]) => void;
 }): Promise<{ ok: boolean; finishMessage?: string; messages: OpenAI.ChatCompletionMessageParam[] }> {
   const { jobId, pwPage, page, client, cfg } = o;
 
@@ -299,7 +304,7 @@ export async function runGenerationLoop(o: {
   const reviewScriptSteps = async (): Promise<void> => {
     if (scriptReviewed) return;
     scriptReviewed = true; // 一次生成只审一次：finish 被拒后续跑不重复审（无新步骤则无新冗余）
-    await runScriptReview({ jobId, client, model: cfg.openaiModel, reasoningEffort: cfg.reasoningEffort, steps: o.steps, revise });
+    await runScriptReview({ jobId, client, model: cfg.openaiModel, reasoningEffort: cfg.reasoningEffort, steps: o.steps, revise, signal: o.signal });
   };
 
   // finish 校验：脚本末步必须是断言，随后做全局脚本审查（LLM 语义去重兜底）
@@ -344,6 +349,7 @@ export async function runGenerationLoop(o: {
       content: `【测试目标】\n${o.goalText}\n\n【参考大纲（软约束：按实际情况执行，允许合理偏离；不要照抄大纲文本当作操作）】\n${outlineText}`,
     },
   ];
+  messages.splice(0, messages.length, ...redactGenerationData(jobId, messages));
 
   // 连续失败计数：变更类工具连续异常达阈值即挂起 gen:assist 请求人工决策；
   // 重置只认「推进型成功」——观察类工具（GEN_OBSERVATION_TOOLS）成功不清零，
@@ -468,6 +474,7 @@ export async function runGenerationLoop(o: {
   }).finally(() => {
     revokeHandlers.delete(jobId);
     network.dispose();
+    o.onCheckpoint?.(messages);
   });
 
   if (o.isCancelled()) return { ok: false, messages };

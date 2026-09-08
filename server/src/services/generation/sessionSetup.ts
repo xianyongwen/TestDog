@@ -3,7 +3,6 @@ import { prisma } from '../../db';
 import { getAttachment } from '../attachmentService';
 import { CANDIDATE_SCRIPT } from '../locatorCandidateScript';
 import { readViewport, type ViewportSize } from '../../shared/viewport';
-import { collectSystemKeys, resolveSystemKeys, substituteAll } from '../../shared/envVars';
 import { closeSession, getCdpPort } from '../stagehandManager';
 import { enabledInpageScripts } from '../pluginStore';
 import { buildPluginInitScript, type PluginInjectItem } from '../pluginRuntime';
@@ -14,6 +13,9 @@ import { scheduleSessionGc } from './jobControl';
 import { buildAttachmentParts, normalizeStepSystemVars, safeJsonParse } from './util';
 import type { SplitImage } from './types';
 import type { TestStep } from '../../shared/testScript';
+import { redactGenerationData } from './privacy';
+
+export { createSubstituter } from './substitution';
 
 /** 环境变量提示：拼进预拆分 prompt，引导模型用 {{key}} 占位符引用而非写死真实值。 */
 export function buildEnvVarHint(envMap: Record<string, string>): string {
@@ -38,23 +40,11 @@ export function loadGenAttachments(jobId: string, ids: string[]): { text: string
   return { text, images };
 }
 
-/** 占位符替换器：环境变量用真实值；系统变量惰性求值——首次遇到某键才生成值并缓存，
- *  同一次生成内同键值一致（systemTime 固定为本次生成开始时间 now）。
- *  collectSystemKeys 同时识别 {{...}}（统一写法）与 ${...}（模型偶发旧写法，入库前由 normalizeStepSystemVars 归一化）。 */
-export function createSubstituter(envMap: Record<string, string>, now: number): { sub: (t: string | undefined | null) => string | undefined } {
-  const sysVars: Record<string, string> = {};
-  const sub = (t: string | undefined | null): string | undefined => {
-    const missing = collectSystemKeys(t ? [t] : []).filter((k) => !(k in sysVars));
-    if (missing.length) Object.assign(sysVars, resolveSystemKeys(missing, now));
-    return substituteAll(t, envMap, sysVars);
-  };
-  return { sub };
-}
-
 /** 落库 emit：归一化旧写法后 push 步骤并广播 gen:step。index 以 offsetOf() 动态偏移
  *  （续跑模式撤销决策可能中途裁掉 baseSteps 尾部，固定偏移会让 gen:step 索引错位）。 */
 export function createStepEmitter(jobId: string, steps: TestStep[], offsetOf: () => number): (step: TestStep) => Promise<void> {
   return async (step: TestStep): Promise<void> => {
+    step = redactGenerationData(jobId, step);
     normalizeStepSystemVars(step); // 原地归一化，push/pub 同一对象（引用一致性）
     steps.push(step);
     pub({ type: 'gen:step', jobId, index: offsetOf() + steps.length - 1, step });

@@ -52,9 +52,9 @@ function makeCtx(chainMessage: string): GenToolContext {
 async function runComponentAction(chainMessage: string): Promise<string> {
   const tools = buildGenTools(makeCtx(chainMessage));
   const tool = tools.find((t) => t.name === 'component_action')!;
-  return String(
-    await tool.execute({ action: 'select', selector: '121', value: '普通用户', instruction: '选择「用户角色」' }),
-  );
+  const result = await tool.execute({ action: 'select', selector: '121', value: '普通用户', instruction: '选择「用户角色」' });
+  expect(typeof result === 'object' && result.status).toBe('failed');
+  return typeof result === 'string' ? result : result.text;
 }
 
 describe('component_action 全链失败回灌文案', () => {

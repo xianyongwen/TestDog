@@ -1,4 +1,5 @@
 import type OpenAI from 'openai';
+import { redactGenerationText } from './privacy';
 import type { ReasoningEffort } from '../../config';
 import { getUsage, type TokenUsage } from '../tokenUsage';
 import { usageDelta } from '../toolLoop';
@@ -40,9 +41,11 @@ export async function preSplit(
   logId: string | null,
   jobId: string,
   images: SplitImage[] = [],
+  signal?: AbortSignal,
 ): Promise<{ steps: PlanStep[] | null; usage: TokenUsage }> {
   // reasoning_effort 不在 openai v4 SDK 的类型里，网关透传，故整体放宽类型
-  const fullUser = `${envVarHint ? envVarHint + '\n\n' : ''}${userContent}`;
+  const fullUser = redactGenerationText(jobId, `${envVarHint ? envVarHint + '\n\n' : ''}${userContent}`);
+  systemContent = redactGenerationText(jobId, systemContent);
   const userMsgContent: unknown = images.length
     ? [
         { type: 'text', text: fullUser },
@@ -68,8 +71,8 @@ export async function preSplit(
   }
   // 必须在 LLM 调用之前快照：调用返回时 usage 已入账，否则差分恒为 0
   const before = { ...getUsage(jobId) };
-  const res = await client.chat.completions.create(req as never);
-  const text = res.choices?.[0]?.message?.content ?? '';
+  const res = await client.chat.completions.create(req as never, signal ? { signal } : undefined);
+  const text = redactGenerationText(jobId, res.choices?.[0]?.message?.content ?? '');
   // 网关的真实 usage 由 createGatewayClient 在底层入账，这里用差分拿到本次调用消耗
   const usage = usageDelta(before, getUsage(jobId));
   const parsed = safeJsonParse(stripFences(text)) as { steps?: any[] } | undefined;

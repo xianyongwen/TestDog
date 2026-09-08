@@ -9,6 +9,7 @@ import { getConfig } from '../config';
 import { browserLaunchOptions, detectSystemChrome, DEFAULT_VIEWPORT } from '../browser';
 import type { ViewportSize } from '../shared/viewport';
 import { addUsage, getUsage } from './tokenUsage';
+import { redactGenerationData } from './generation/privacy';
 
 /** 按 jobId 隔离的 Stagehand 会话（生成/智能体各自一个干净浏览器，结束即关）。 */
 interface Session {
@@ -88,7 +89,11 @@ function wrapOpenAIWithUsage(client: OpenAI, jobId: string): OpenAI {
 
 export function createGatewayClient(usageKey: string): OpenAI {
   const c = getConfig();
-  return wrapOpenAIWithUsage(new OpenAI({ apiKey: c.openaiApiKey, baseURL: c.openaiBaseUrl }), usageKey);
+  const client = wrapOpenAIWithUsage(new OpenAI({ apiKey: c.openaiApiKey, baseURL: c.openaiBaseUrl }), usageKey);
+  const create = client.chat.completions.create.bind(client.chat.completions);
+  (client.chat.completions as any).create = (body: any, ...rest: any[]) =>
+    (create as any)({ ...body, messages: redactGenerationData(usageKey, body.messages) }, ...rest);
+  return client;
 }
 
 // ---- Stagehand v4 ClientLLM：把浏览器 worker 的 LLM 请求转发到 OpenAI 兼容网关 ----
