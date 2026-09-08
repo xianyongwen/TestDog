@@ -127,7 +127,7 @@ The workflow `.github/workflows/build-desktop.yml` builds macOS Apple Silicon an
 
 No Apple account, paid certificate, or Secrets are required. CI uses `src-tauri/tauri.ci.conf.json` for ad-hoc signing while preserving the local `xywMacAppSign` setting. The macOS app is not notarized and may require manually allowing it in **System Settings → Privacy & Security**. The unsigned Windows installer may also show an unknown-publisher warning.
 
-CI uses Node.js 22 and Rust stable, installs frontend/backend dependencies, and regenerates Prisma, the backend, and an empty database template without local `.env` files or business data. Checks cover the existing sidecar smoke tests, bundled Node / native SQLite compatibility, and macOS signature / DMG verification. Installer versions come from project configuration; tags do not update them automatically.
+CI uses Node.js 24 and Rust stable, installs frontend/backend dependencies, and regenerates Prisma, the backend, and an empty database template without local `.env` files or business data. Checks cover the existing sidecar smoke tests, bundled Node / native SQLite compatibility, and macOS signature / DMG verification. Installer versions come from project configuration; tags do not update them automatically.
 
 To control usage, builds run only manually or on version tags, use npm / Rust caches, and time out after 60 minutes per job. A new run on the same branch or tag cancels the previous unfinished run. Private repositories remain subject to the account's Actions allowance and billing settings.
 

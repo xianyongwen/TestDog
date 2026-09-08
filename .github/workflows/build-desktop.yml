@@ -43,11 +43,22 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '24'
           cache: npm
           cache-dependency-path: |
             package-lock.json
             server/package-lock.json
+
+      - name: Resolve artifact version
+        id: artifact-version
+        shell: bash
+        run: |
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            version="$GITHUB_REF_NAME"
+          else
+            version="v$(node -p "require('./package.json').version")"
+          fi
+          printf 'version=%s\n' "$version" >> "$GITHUB_OUTPUT"
 
       - name: Set up Rust
         shell: bash
@@ -106,7 +117,7 @@ jobs:
         if: runner.os == 'macOS'
         uses: actions/upload-artifact@v4
         with:
-          name: TestDog-${{ matrix.platform }}-${{ github.run_number }}
+          name: TestDog-${{ matrix.platform }}-${{ steps.artifact-version.outputs.version }}
           path: src-tauri/target/release/bundle/dmg/*.dmg
           if-no-files-found: error
           retention-days: 7
@@ -116,7 +127,7 @@ jobs:
         if: runner.os == 'Windows'
         uses: actions/upload-artifact@v4
         with:
-          name: TestDog-${{ matrix.platform }}-${{ github.run_number }}
+          name: TestDog-${{ matrix.platform }}-${{ steps.artifact-version.outputs.version }}
           path: src-tauri/target/release/bundle/nsis/*-setup.exe
           if-no-files-found: error
           retention-days: 7

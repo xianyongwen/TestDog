@@ -127,7 +127,7 @@ npm run dist        # scripts/dist.mjs：macOS 出 .app/.dmg，Windows 出 NSIS 
 
 无需配置 Apple 账号、付费证书或 Secrets。macOS 使用 `src-tauri/tauri.ci.conf.json` 覆盖为 ad-hoc 签名，本地 `xywMacAppSign` 配置保持不变；未经过 Apple 公证，下载后 macOS 可能要求在“系统设置 → 隐私与安全性”中手动允许打开。Windows 安装包未签名，也可能显示未知发布者提示。
 
-CI 使用 Node.js 22 和 Rust stable，自动安装前后端依赖并重新生成 Prisma 客户端、后端及空数据库模板，不使用本地 `.env` 或业务数据库。构建包含现有 sidecar 自检、内置 Node / SQLite 原生模块验证，以及 macOS 签名和 DMG 校验。安装包版本来自项目配置，标签名不会自动修改版本。
+CI 使用 Node.js 24 和 Rust stable，自动安装前后端依赖并重新生成 Prisma 客户端、后端及空数据库模板，不使用本地 `.env` 或业务数据库。构建包含现有 sidecar 自检、内置 Node / SQLite 原生模块验证，以及 macOS 签名和 DMG 校验。安装包版本来自项目配置，标签名不会自动修改版本。
 
 为控制用量，仅在手动运行或发版本标签时构建，启用 npm / Rust 缓存，每个构建任务最多运行 60 分钟；同一分支或标签的新运行会取消尚未完成的旧运行。私有仓库仍受账户 Actions 免费额度及计费设置约束。
 
