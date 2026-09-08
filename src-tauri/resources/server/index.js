@@ -574,8 +574,8 @@ var SET_VALUE_ACTION_DOC = '\u8BBE\u7F6E\u6ED1\u5757\uFF08Slider\uFF09\u6570\u50
 var BUILTIN_PLUGIN_DEFS = [
   {
     name: "ant-select",
-    version: "1.1.0",
-    description: "Ant Design \u4E0B\u62C9\u9009\u62E9\u9002\u914D\uFF1Aselect \u52A8\u4F5C\uFF08\u539F\u751F <select> \u7531\u5206\u53D1\u5668\u539F\u751F\u5C42\u515C\u5E95\uFF09\u3001combobox \u8BED\u4E49\u5019\u9009\u4E0E\u300C\u52FF fill\u300D\u6807\u6CE8\uFF08\u5185\u7F6E\uFF09\u3002\u5F39\u5C42\u5DF2\u5F00\u65F6\u590D\u7528\uFF1B\u591A\u9009\u6A21\u5F0F\u9009\u4E2D\u540E\u81EA\u52A8\u6536\u8D77\u5F39\u5C42",
+    version: "1.2.0",
+    description: "Ant Design \u4E0B\u62C9\u9009\u62E9\u9002\u914D\uFF08\u517C\u5BB9 antd v5/v6 \u89E6\u53D1\u5668 DOM\uFF09\uFF1Aselect \u52A8\u4F5C\uFF08\u539F\u751F <select> \u7531\u5206\u53D1\u5668\u539F\u751F\u5C42\u515C\u5E95\uFF09\u3001combobox \u8BED\u4E49\u5019\u9009\u4E0E\u300C\u52FF fill\u300D\u6807\u6CE8\uFF08\u5185\u7F6E\uFF09\u3002\u5F39\u5C42\u5DF2\u5F00\u4E14\u5F52\u5C5E\u672C\u63A7\u4EF6\u65F6\u590D\u7528\uFF0C\u4ED6\u4EBA\u6B8B\u7559\u5148\u6536\u8D77\u518D\u6253\u5F00\uFF1B\u591A\u9009\u6A21\u5F0F\u9009\u4E2D\u540E\u81EA\u52A8\u6536\u8D77\u5F39\u5C42",
     entryFile: loadSource("ant-select"),
     actionsMeta: [{ name: "select", doc: SELECT_ACTION_DOC, preferFill: false }]
   },
@@ -588,8 +588,8 @@ var BUILTIN_PLUGIN_DEFS = [
   },
   {
     name: "ant-tree-select",
-    version: "1.0.0",
-    description: "Ant Design \u6811\u5F62\u9009\u62E9\u5668\uFF08TreeSelect\uFF09\u9002\u914D\uFF1Aselect \u52A8\u4F5C\u515C\u5E95\uFF08\u5C55\u5F00\u7956\u5148\u95ED\u73AF + \u6811\u8282\u70B9\u6587\u672C\u5339\u914D\uFF09\uFF0C\u6392\u5728 ant-select \u4E4B\u540E\uFF08\u5185\u7F6E\uFF09",
+    version: "1.0.1",
+    description: "Ant Design \u6811\u5F62\u9009\u62E9\u5668\uFF08TreeSelect\uFF09\u9002\u914D\uFF08\u517C\u5BB9 antd v5/v6\uFF09\uFF1Aselect \u52A8\u4F5C\u515C\u5E95\uFF08\u5C55\u5F00\u7956\u5148\u95ED\u73AF + \u6811\u8282\u70B9\u6587\u672C\u5339\u914D\uFF09\uFF0C\u6392\u5728 ant-select \u4E4B\u540E\uFF08\u5185\u7F6E\uFF09",
     entryFile: loadSource("ant-tree-select"),
     actionsMeta: [{ name: "select", doc: SELECT_ACTION_DOC, preferFill: false }]
   },
@@ -644,8 +644,8 @@ var BUILTIN_PLUGIN_DEFS = [
   },
   {
     name: "ant-cascader",
-    version: "1.0.0",
-    description: "Ant Design \u7EA7\u8054\u9009\u62E9\u5668\uFF08Cascader\uFF09\u9002\u914D\uFF1Aselect \u52A8\u4F5C\uFF08\u81EA\u52A8\u5F00\u5F39\u5C42\u5E76\u9010\u7EA7\u5C55\u5F00\u70B9\u9009\u5B8C\u6574\u8DEF\u5F84\uFF1B\u591A\u9009\u6A21\u5F0F\u52FE\u9009\u540E\u81EA\u52A8\u6536\u8D77\u5F39\u5C42\uFF0C\u52FE\u7236\u7EA7\u5373\u5168\u9009\u5B50\u7EA7\uFF09\uFF08\u5185\u7F6E\uFF09",
+    version: "1.0.1",
+    description: "Ant Design \u7EA7\u8054\u9009\u62E9\u5668\uFF08Cascader\uFF09\u9002\u914D\uFF08\u517C\u5BB9 antd v5/v6\uFF09\uFF1Aselect \u52A8\u4F5C\uFF08\u81EA\u52A8\u5F00\u5F39\u5C42\u5E76\u9010\u7EA7\u5C55\u5F00\u70B9\u9009\u5B8C\u6574\u8DEF\u5F84\uFF1B\u591A\u9009\u6A21\u5F0F\u52FE\u9009\u540E\u81EA\u52A8\u6536\u8D77\u5F39\u5C42\uFF0C\u52FE\u7236\u7EA7\u5373\u5168\u9009\u5B50\u7EA7\uFF09\uFF08\u5185\u7F6E\uFF09",
     entryFile: loadSource("ant-cascader"),
     actionsMeta: [{ name: "select", doc: SELECT_ACTION_DOC, preferFill: false }]
   },
@@ -1460,6 +1460,59 @@ async function sessionPage(stagehand) {
   } catch {
     return void 0;
   }
+}
+
+// src/services/connectivityProbe.ts
+var PROBE_TIMEOUT_MS = 1e4;
+function resolveProbeTarget(steps) {
+  return steps.find((s) => s.action === "goto" && s.url)?.url;
+}
+function probeable(url) {
+  if (!/^https?:\/\//i.test(url)) return false;
+  if (url.includes("{{") || url.includes("${")) return false;
+  try {
+    new URL(url);
+  } catch {
+    return false;
+  }
+  return true;
+}
+function classifyProbeError(e) {
+  const cause = e?.cause ?? e;
+  const code = cause?.code ?? e?.code ?? "";
+  const name = [e?.name, cause?.name].find((n) => n && n !== "Error") ?? "";
+  if (name === "TimeoutError" || name === "AbortError" || code === "ABORT_ERR" || /timeout|timed?\s*out/i.test(String(cause?.message ?? ""))) {
+    return `\u8FDE\u63A5\u8D85\u65F6\uFF08${PROBE_TIMEOUT_MS / 1e3} \u79D2\u65E0\u54CD\u5E94\uFF09`;
+  }
+  switch (code) {
+    case "ENOTFOUND":
+    case "EAI_AGAIN":
+      return "\u57DF\u540D\u89E3\u6790\u5931\u8D25\uFF08\u8BF7\u68C0\u67E5\u57DF\u540D\u62FC\u5199\u6216 DNS \u914D\u7F6E\uFF09";
+    case "ECONNREFUSED":
+      return "\u8FDE\u63A5\u88AB\u62D2\u7EDD\uFF08\u76EE\u6807\u670D\u52A1\u53EF\u80FD\u672A\u542F\u52A8\uFF09";
+    case "ECONNRESET":
+      return "\u8FDE\u63A5\u88AB\u91CD\u7F6E";
+    case "EHOSTUNREACH":
+    case "ENETUNREACH":
+      return "\u7F51\u7EDC\u4E0D\u53EF\u8FBE\uFF08\u8BF7\u68C0\u67E5\u7F51\u7EDC\u6216\u4EE3\u7406\u914D\u7F6E\uFF09";
+    default:
+      if (/CERT|SSL|TLS/i.test(code)) return `\u8BC1\u4E66\u6821\u9A8C\u5931\u8D25\uFF08${code}\uFF09`;
+      return String(cause?.message || code || e);
+  }
+}
+async function probeConnectivity(url) {
+  if (!probeable(url)) return void 0;
+  let res;
+  try {
+    res = await fetch(url, { method: "GET", redirect: "follow", signal: AbortSignal.timeout(PROBE_TIMEOUT_MS) });
+  } catch (e) {
+    throw new Error(`\u8FDE\u901A\u6027\u63A2\u6D4B\u5931\u8D25\uFF1A\u65E0\u6CD5\u8BBF\u95EE ${url}\uFF08${classifyProbeError(e)}\uFF09`);
+  }
+  try {
+    await res.body?.cancel();
+  } catch {
+  }
+  return res.status;
 }
 
 // src/services/pluginRuntime.ts
@@ -3241,8 +3294,40 @@ async function runScript(jobId, params) {
   let shPage;
   let useSelfHeal = selfHeal;
   let cancelled = false;
+  let probeFailed = false;
   try {
     initUsage(jobId);
+    const envMap = await loadEnvMap(params.testCaseId);
+    const sysVars = resolveSystemVars(
+      params.steps.flatMap((s) => [s.instruction, s.url, s.value, s.locator?.value, s.locator?.name, s.locator?.scope?.value, s.locator?.scope?.name, s.assertion?.expected, s.assertion?.jsonPath])
+    );
+    const missingVars = /* @__PURE__ */ new Set();
+    const resolvedSteps = params.steps.map((s) => substituteStep(s, envMap, sysVars, missingVars));
+    if (missingVars.size) logs.push(`[\u8B66\u544A] \u672A\u5B9A\u4E49\u7684\u73AF\u5883\u53D8\u91CF\uFF1A${[...missingVars].join("\u3001")}`);
+    registerCancel(jobId, () => {
+      cancelled = true;
+      cancelRun(jobId, run.id, logs, stepUsages, async () => {
+        if (pwBrowser) {
+          try {
+            await pwBrowser.close();
+          } catch {
+          }
+        }
+        await closeSession(jobId);
+      });
+    });
+    const probeTarget = resolveProbeTarget(resolvedSteps);
+    if (probeTarget) {
+      try {
+        const probeStatus = await probeConnectivity(probeTarget);
+        if (probeStatus != null) logs.push(`[\u8FDE\u901A\u6027\u63A2\u6D4B] GET ${probeTarget} \u2192 ${probeStatus}`);
+      } catch (e) {
+        if (cancelled) return "CANCELLED";
+        probeFailed = true;
+        throw e;
+      }
+    }
+    if (cancelled) return "CANCELLED";
     const viewport = await viewportOfTestCase(params.testCaseId);
     if (viewport) logs.push(`[\u6D4F\u89C8\u5668\u7A97\u53E3] \u6309\u9879\u76EE\u914D\u7F6E\u4F7F\u7528 ${viewport.width}\xD7${viewport.height}`);
     const rb = await createRunBrowser(jobId, { usageKey: jobId, headless, viewport });
@@ -3309,25 +3394,6 @@ async function runScript(jobId, params) {
         wsEntries.push({ url, direction: "received", payload: String(frame.payload) });
       });
     });
-    registerCancel(jobId, () => {
-      cancelled = true;
-      cancelRun(jobId, run.id, logs, stepUsages, async () => {
-        if (pwBrowser) {
-          try {
-            await pwBrowser.close();
-          } catch {
-          }
-        }
-        await closeSession(jobId);
-      });
-    });
-    const envMap = await loadEnvMap(params.testCaseId);
-    const sysVars = resolveSystemVars(
-      params.steps.flatMap((s) => [s.instruction, s.url, s.value, s.locator?.value, s.locator?.name, s.locator?.scope?.value, s.locator?.scope?.name, s.assertion?.expected, s.assertion?.jsonPath])
-    );
-    const missingVars = /* @__PURE__ */ new Set();
-    const resolvedSteps = params.steps.map((s) => substituteStep(s, envMap, sysVars, missingVars));
-    if (missingVars.size) logs.push(`[\u8B66\u544A] \u672A\u5B9A\u4E49\u7684\u73AF\u5883\u53D8\u91CF\uFF1A${[...missingVars].join("\u3001")}`);
     let allPass = true;
     for (let i = 0; i < resolvedSteps.length; i++) {
       if (cancelled) break;
@@ -3394,13 +3460,14 @@ async function runScript(jobId, params) {
     publish({ type: "run:done", jobId, runId: run.id, status: allPass ? "PASSED" : "FAILED", usage });
     return allPass ? "PASSED" : "FAILED";
   } catch (e) {
+    if (cancelled) return "CANCELLED";
     const usage = { ...getUsage(jobId) };
     await prisma.testRun.update({
       where: { id: run.id },
       data: { status: "ERROR", finishedAt: /* @__PURE__ */ new Date(), logs: [...logs, String(e)].join("\n"), meta: { usage, stepUsages } }
     });
     publish({ type: "run:done", jobId, runId: run.id, status: "ERROR", message: String(e), usage });
-    return "ERROR";
+    return probeFailed ? "PROBE_FAILED" : "ERROR";
   } finally {
     unregisterCancel(jobId);
     clearUsage(jobId);
@@ -3443,6 +3510,22 @@ async function runBatch(jobId, testCaseIds, opts = {}) {
       headless: true
       // 批量运行固定无头
     });
+    if (status === "PROBE_FAILED") {
+      publish({ type: "batch:case", jobId, testCaseId, title, index: i, total, status: "ERROR", message: "\u8FDE\u901A\u6027\u63A2\u6D4B\u5931\u8D25\uFF0C\u5DF2\u7EC8\u6B62\u6279\u91CF\u8FD0\u884C" });
+      summary.push({ testCaseId, title, status: "ERROR" });
+      const restIds = testCaseIds.slice(i + 1);
+      if (restIds.length) {
+        const rows = await prisma.testCase.findMany({ where: { id: { in: restIds } }, select: { id: true, title: true } });
+        const titleOf = new Map(rows.map((r) => [r.id, r.title]));
+        for (let j = i + 1; j < testCaseIds.length; j++) {
+          const rid = testCaseIds[j];
+          const rtitle = titleOf.get(rid) ?? rid;
+          publish({ type: "batch:case", jobId, testCaseId: rid, title: rtitle, index: j, total, status: "SKIPPED", message: "\u5DF2\u8DF3\u8FC7\uFF1A\u8FDE\u901A\u6027\u63A2\u6D4B\u5931\u8D25" });
+          summary.push({ testCaseId: rid, title: rtitle, status: "SKIPPED" });
+        }
+      }
+      break;
+    }
     publish({ type: "batch:case", jobId, testCaseId, title, index: i, total, status });
     summary.push({ testCaseId, title, status });
     if (status === "CANCELLED") break;
@@ -3581,6 +3664,16 @@ async function runAssertion(page, step, networkEntries, wsEntries) {
     return;
   }
   if (a.type === "hidden" && !step.locator) return;
+  if (a.type === "text" && !step.locator) {
+    const expected = a.expected ?? "";
+    if (!expected) return;
+    for (let i = 0; i < 50; i++) {
+      const body = await page.locator("body").textContent() ?? "";
+      if (body.includes(expected)) return;
+      await new Promise((r) => setTimeout(r, 200));
+    }
+    throw new Error(`\u6587\u672C\u65AD\u8A00\u5931\u8D25\uFF1A\u9875\u9762\u672A\u5305\u542B\u300C${expected}\u300D`);
+  }
   const loc = buildLocator(page, step.locator);
   if (a.type === "visible") {
     await loc.waitFor({ state: "visible", timeout: 1e4 });
@@ -3682,7 +3775,12 @@ async function selfHealStep(stagehand, shPage, page, step) {
       if (step.assertion?.type === "hidden") return { healed: false };
       const { data: actions } = await stagehand.observe(step.instruction, { page: shPage });
       if (Array.isArray(actions) && actions.length > 0) {
-        return { healed: true, locator: await semantic(actions[0]?.selector) };
+        const locator = await semantic(actions[0]?.selector);
+        if (step.assertion?.type === "text" && step.assertion.expected && locator) {
+          const text = await buildLocator(page, locator).textContent() ?? "";
+          if (!text.includes(step.assertion.expected)) return { healed: false };
+        }
+        return { healed: true, locator };
       }
       return { healed: false };
     }
@@ -4348,6 +4446,15 @@ function appendStep(logId, step) {
     }).then(() => void 0)
   );
 }
+function updateStepAssistant(logId, stepIndex, assistant) {
+  if (!logId || !Number.isInteger(stepIndex)) return;
+  swallow(
+    prisma.generationStep.updateMany({
+      where: { logId, stepIndex, type: STEP_TYPE.TOOL },
+      data: { assistant: trunc(assistant) }
+    }).then(() => void 0)
+  );
+}
 function markFinished(jobId, status, extra) {
   swallow(
     prisma.generationLog.update({
@@ -4544,6 +4651,7 @@ function logFromWsEvent(msg, logId) {
         tool: String(s.actionLabel ?? ""),
         message: String(s.actionDetail ?? ""),
         result: String(s.result ?? ""),
+        args: msg.args ?? null,
         usage: msg.usage ?? null
       });
       return;
@@ -4617,14 +4725,18 @@ function logFromWsEvent(msg, logId) {
     }
   }
 }
-function pubToolWithUsage(jobId, index, actionLabel2, actionDetail, result, usage) {
+function pubToolWithUsage(jobId, index, actionLabel2, actionDetail, result, usage, args) {
   pub({
     type: "gen:tool",
     jobId,
     index,
     step: { actionLabel: actionLabel2, actionDetail, result: trunc2(result, 300) },
-    usage
+    usage,
+    args
   });
+}
+function updateToolAssistant(jobId, stepIndex, assistant) {
+  updateStepAssistant(activeLogIds.get(jobId), stepIndex, assistant);
 }
 
 // src/services/generation/jobControl.ts
@@ -5086,7 +5198,7 @@ var observeWarnText = (count) => `
 var linkFlipWarnText = (a, b, count) => `
 \u26A0\uFE0F \u7CFB\u7EDF\u63D0\u793A\uFF1A\u5143\u7D20\u300C${a}\u300D\u4E0E\u300C${b}\u300D\u7684 select \u5DF2\u4EA4\u66FF\u6210\u529F\u6267\u884C ${count} \u8F6E\u2014\u2014\u9009\u62E9\u5176\u4E2D\u4E00\u4E2A\u540E\u53E6\u4E00\u4E2A\u88AB\u9875\u9762\u56DE\u8BBE/\u6E05\u7A7A\uFF0C\u7591\u4F3C\u8054\u52A8\u5B57\u6BB5\uFF08\u5F53\u524D\u7EC4\u5408\u4E0D\u88AB\u9875\u9762\u63A5\u53D7\uFF09\u3002\u4E0D\u8981\u7EE7\u7EED\u4EA4\u66FF\u91CD\u8BBE\uFF1A\u8BF7\u5148 snapshot \u786E\u8BA4\u4E24\u5B57\u6BB5\u5F53\u524D\u503C\uFF0C\u6539\u9009\u4E0E\u5DF2\u9009\u5B57\u6BB5\u4E00\u81F4\u7684\u7EC4\u5408\uFF08\u5728\u5176\u4E2D\u4E00\u4E2A\u5B57\u6BB5\u7684\u5F53\u524D\u53EF\u9009\u5217\u8868\u91CC\u53E6\u9009\uFF09\uFF0C\u6216\u8C03\u7528 ask_human \u5411\u7528\u6237\u8BF4\u660E\u8BE5\u8054\u52A8\u73B0\u8C61\u5E76\u786E\u8BA4\u76EE\u6807\u7EC4\u5408\u3002`;
 async function runToolLoop(opts) {
-  const { client, model, reasoningEffort, tools, messages, maxSteps, usageKey, signal, validateFinish, onFailure, onSuccess, onStuck, isProgress, onStep } = opts;
+  const { client, model, reasoningEffort, tools, messages, maxSteps, usageKey, signal, validateFinish, onFailure, onSuccess, onStuck, isProgress, onAssistantContent, onStep } = opts;
   let finished = null;
   let steps = 0;
   const statefulSlots = /* @__PURE__ */ new Map();
@@ -5096,6 +5208,7 @@ async function runToolLoop(opts) {
   const stuckAssistLatched = /* @__PURE__ */ new Set();
   let stuckAbortMsg = null;
   let seeStreak = 0;
+  let pendingSeeStep = null;
   let linkHist = [];
   const linkLabels = /* @__PURE__ */ new Map();
   const compactResult = (text, stateful) => {
@@ -5191,6 +5304,14 @@ ${text.slice(-120)}`;
     lastRoundInput = getUsage(usageKey).inputTokens - base.inputTokens;
     const msg = completion.choices?.[0]?.message;
     const toolCalls = msg?.tool_calls ?? [];
+    if (pendingSeeStep != null && msg?.content) {
+      const content = typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content);
+      try {
+        onAssistantContent?.(pendingSeeStep, content);
+      } catch {
+      }
+      pendingSeeStep = null;
+    }
     if (!toolCalls.length) {
       return { finished: false, finishMessage: msg?.content ?? void 0, steps };
     }
@@ -5248,8 +5369,9 @@ ${text.slice(-120)}`;
         result = `\u672A\u77E5\u5DE5\u5177\uFF1A${tc.function?.name}`;
       }
       const toolName = tc.function?.name ?? "";
+      const progressed = toolOk && !finished ? Boolean(isProgress?.(toolName)) : false;
       const sig = stuckSig(toolName, args);
-      if (sig && !finished && !(toolOk && isProgress?.(toolName))) {
+      if (sig && !finished && !progressed) {
         stuckHist.push(sig);
         if (stuckHist.length > STUCK_WINDOW) stuckHist.shift();
         const total = (stuckTotal.get(sig) ?? 0) + 1;
@@ -5291,7 +5413,7 @@ ${text.slice(-120)}`;
           else result += observeWarnText(seeStreak);
           seeStreak = 0;
         }
-      } else if (tool && toolOk && !finished && isProgress?.(tool.name)) {
+      } else if (tool && toolOk && !finished && progressed) {
         seeStreak = 0;
       }
       if (!finished && toolOk && tool && isSelectLike(toolName, args)) {
@@ -5320,6 +5442,7 @@ ${text.slice(-120)}`;
       prev = after;
       steps++;
       await onStep({ index: steps, name: tc.function?.name ?? "", args, result, usageDelta: delta });
+      if ((tc.function?.name ?? "") === "see") pendingSeeStep = steps;
       if (tool?.stateful) {
         demoteOldSlots([tool.stateful, ...tool.supersedes ?? []], tc.id);
         statefulSlots.set(tc.id, { kind: tool.stateful, round });
@@ -6418,7 +6541,13 @@ var GEN_LOOP_SYSTEM_PROMPT = `\u4F60\u662F Web \u6D4B\u8BD5\u811A\u672C\u751F\u6
 7. \u9047\u5230\u9519\u8BEF\u4E0D\u8981\u91CD\u590D\u540C\u4E00\u64CD\u4F5C\uFF1A\u5148 snapshot \u67E5\u770B\u5F53\u524D\u72B6\u6001\uFF0C\u6362\u8DEF\u5F84\u6216\u8C03\u6574\u53C2\u6570\uFF1B\u8FDE\u7EED\u5931\u8D25\u4F1A\u8BF7\u6C42\u4EBA\u5DE5\u534F\u52A9\u3002\u5DF2\u6210\u529F\u6267\u884C\u7684\u6B65\u9AA4\u90FD\u4F1A\u81EA\u52A8\u8BB0\u5F55\u4E3A\u811A\u672C\u6B65\u9AA4\uFF0C\u4E0D\u8981\u91CD\u505A\u2014\u2014\u91CD\u590D\u767B\u5F55/\u91CD\u590D\u63D0\u4EA4\u53EA\u4F1A\u4EA7\u751F\u5197\u4F59\u6B65\u9AA4\u3001\u8FD8\u53EF\u80FD\u7834\u574F\u5F53\u524D\u9875\u9762\u72B6\u6001\u3002
 8. \u7EA7\u8054/\u8054\u52A8\u4E0B\u62C9\uFF1A\u82E5\u9009\u62E9\u67D0\u5B57\u6BB5\u540E\u53E6\u4E00\u4E2A\u5B57\u6BB5\u7684\u503C\u88AB\u9875\u9762\u6E05\u7A7A/\u56DE\u8BBE\uFF0C\u8BF4\u660E\u4E24\u8005\u662F\u8054\u52A8\u5B57\u6BB5\u3001\u6240\u9009\u7EC4\u5408\u4E0D\u88AB\u9875\u9762\u63A5\u53D7\u2014\u2014\u5148\u9009\u7236\u5B57\u6BB5\uFF08\u5982\u90E8\u95E8\uFF09\uFF0C\u518D\u6253\u5F00\u5B50\u5B57\u6BB5\u4E0B\u62C9\u3001\u4ECE\u5F53\u524D\u53EF\u9009\u5217\u8868\u91CC\u9009\u62E9\u5339\u914D\u7684\u5B50\u9879\uFF08\u5982\u8BE5\u90E8\u95E8\u4E0B\u7684\u8D26\u53F7\uFF09\uFF1B\u82E5\u9009\u5B8C\u5B50\u9879\u7236\u5B57\u6BB5\u4ECD\u88AB\u6253\u56DE\uFF0C\u6362\u5B50\u5B57\u6BB5\u5F53\u524D\u53EF\u9009\u5217\u8868\u91CC\u7684\u5176\u4ED6\u9009\u9879\uFF0C\u6216\u8C03\u7528 ask_human \u8BF4\u660E\u8054\u52A8\u73B0\u8C61\u8BF7\u7528\u6237\u786E\u8BA4\u76EE\u6807\u7EC4\u5408\uFF1B\u4E0D\u8981\u4EA4\u66FF\u53CD\u590D\u91CD\u8BBE\u4E24\u4E2A\u4E92\u76F8\u6253\u56DE\u7684\u5B57\u6BB5\u3002
 9. \u611F\u5230\u56F0\u60D1\u65F6\u4E0D\u8981\u53CD\u590D\u8BD5\u9519\uFF0C\u7ACB\u5373\u8C03\u7528 ask_human \u4E3B\u52A8\u5411\u7528\u6237\u6C42\u52A9\uFF08\u6302\u8D77\u751F\u6210\u3001\u7B49\u5F85\u4EBA\u5DE5\u51B3\u7B56\uFF09\u3002\u4EE5\u4E0B\u60C5\u51B5\u89C6\u4E3A\u56F0\u60D1\uFF1A\u6362\u8FC7\u4E0D\u540C\u65B9\u5F0F\u4ECD\u65E0\u6CD5\u8FBE\u6210\u76EE\u6807\u3001\u9875\u9762\u72B6\u6001\u4E0E\u9884\u671F\u4E0D\u7B26\u4E14\u770B\u4E0D\u51FA\u539F\u56E0\u3001\u7F16\u53F7\u8868\u548C\u7ED3\u6784\u6811\u91CC\u90FD\u627E\u4E0D\u5230\u76EE\u6807\u5143\u7D20\u3001\u6216\u4E0B\u4E00\u6B65\u53EA\u80FD\u662F\u91CD\u590D\u4E4B\u524D\u5DF2\u505A\u8FC7\u7684\u64CD\u4F5C\u3002args.question \u7B80\u8FF0\u56F0\u60D1\u70B9\u4E0E\u5DF2\u5C1D\u8BD5\u7684\u505A\u6CD5\uFF0C\u7528\u6237\u4F1A\u636E\u6B64\u7ED9\u51FA\u8865\u5145\u8BF4\u660E\u3001AI \u4FEE\u6B63\u3001\u624B\u52A8\u5B8C\u6210\u6216\u8DF3\u8FC7\u3002\u7CFB\u7EDF\u4E5F\u4F1A\u5728\u591A\u6B21\u89C6\u89C9\u89C2\u5BDF\u4ECD\u65E0\u8FDB\u5C55\u65F6\u81EA\u52A8\u6302\u8D77\u8BF7\u6C42\u4EBA\u5DE5\u534F\u52A9\u2014\u2014\u4E0E\u5176\u53CD\u590D\u622A\u56FE\u76F2\u627E\uFF0C\u4E0D\u5982\u5C3D\u65E9\u6C42\u52A9\u3002
-10. \u63D0\u4EA4\u7C7B\u64CD\u4F5C\uFF08\u70B9\u51FB \u786E\u5B9A/\u63D0\u4EA4/\u4FDD\u5B58/\u53D1\u5E03\uFF09\u540E\u82E5\u5F39\u7A97\u672A\u5173\u95ED\u3001\u9875\u9762\u65E0\u53D8\u5316\u6216\u7ED3\u679C\u5F02\u5E38\uFF0C\u53EF\u80FD\u662F\u540E\u7AEF\u63A5\u53E3\u8FD4\u56DE\u4E86\u9519\u8BEF\u4F46 UI \u672A\u5C55\u793A\uFF1A\u8C03\u7528 api \u5DE5\u5177\u67E5\u770B\u6700\u8FD1\u7684\u63A5\u53E3\u8BF7\u6C42/\u54CD\u5E94\uFF08\u72B6\u6001\u7801\u4E0E\u54CD\u5E94\u4F53\uFF09\u5B9A\u4F4D\u771F\u5B9E\u539F\u56E0\uFF0C\u518D\u51B3\u5B9A\u4FEE\u6B63\u53C2\u6570\u3001\u6362\u8DEF\u5F84\u6216\u5982\u5B9E finish\uFF1B\u4E0D\u8981\u76F2\u76EE\u91CD\u590D\u70B9\u51FB\u3002\u82E5\u67E5\u8BC1\u786E\u8BA4\u63A5\u53E3\u5DF2\u8FD4\u56DE\u6210\u529F\uFF082xx\uFF09\u800C\u9875\u9762\u672A\u5448\u73B0\u65AD\u8A00\u76EE\u6807\uFF08\u5982\u5217\u8868\u65E0\u65B0\u6761\u76EE\uFF09\u3001\u6216\u9875\u9762\u8868\u73B0\u4E0E\u9884\u671F\u660E\u663E\u77DB\u76FE\u2014\u2014\u7591\u4F3C\u88AB\u6D4B\u9875\u9762 Bug\uFF1A\u8C03\u7528 ask_human \u5411\u7528\u6237\u6C42\u52A9\uFF08question \u5199\u660E\u300C\u7591\u4F3C\u88AB\u6D4B\u9875\u9762 Bug\u300D\u5E76\u9644\u4E0A\u67E5\u8BC1\u5230\u7684\u63A5\u53E3\u72B6\u6001\u7801\u4E0E\u9875\u9762\u5B9E\u9645\u8868\u73B0\uFF09\uFF0C\u4E0D\u8981\u76F2\u76EE\u91CD\u8BD5\u65AD\u8A00\uFF0C\u4E5F\u4E0D\u8981\u4E3A\u8FC1\u5C31 Bug \u4FEE\u6539\u6D4B\u8BD5\u76EE\u6807\u3002
+10. \u63D0\u4EA4\u7C7B\u64CD\u4F5C\uFF08\u70B9\u51FB \u786E\u5B9A/\u63D0\u4EA4/\u4FDD\u5B58/\u53D1\u5E03\uFF09\u540E\u82E5\u5F39\u7A97\u672A\u5173\u95ED\u3001\u9875\u9762\u65E0\u53D8\u5316\u6216\u7ED3\u679C\u5F02\u5E38\uFF1A\u8C03\u7528 api \u5DE5\u5177\u67E5\u770B\u6700\u8FD1\u7684\u63A5\u53E3\u8BF7\u6C42/\u54CD\u5E94\uFF08\u72B6\u6001\u7801\u4E0E\u54CD\u5E94\u4F53\uFF09\uFF0C\u4EE5\u63A5\u53E3\u4E3A\u771F\u503C\u4E0E\u9875\u9762\u5B9E\u9645\u8868\u73B0\u4EA4\u53C9\u6838\u5BF9\uFF0C\u518D\u51B3\u5B9A\u4E0B\u4E00\u6B65\uFF0C\u4E0D\u8981\u76F2\u76EE\u91CD\u590D\u70B9\u51FB\u3002\u5206\u6D41\u53EA\u770B\u4E00\u6761\u6807\u51C6\u2014\u2014\u5931\u8D25\u539F\u56E0\u662F\u5426\u88AB\u9875\u9762\u660E\u786E\u544A\u77E5\u3001\u4E14\u53EF\u5F52\u56E0\u4E8E\u8F93\u5165\uFF1A
+  \xB7 \u53EF\u5F52\u56E0\uFF08\u9875\u9762\u6709\u660E\u786E\u9519\u8BEF\u63D0\u793A/\u7EA2\u5B57\u6821\u9A8C\uFF0C\u4E14\u63A5\u53E3\u540C\u6837\u62A5\u9519\u3001\u6307\u5411\u53EF\u4FEE\u6B63\u7684\u8F93\u5165\u95EE\u9898\uFF09\u2192 \u6309\u53C2\u6570\u95EE\u9898\u6362\u503C\u91CD\u8BD5\uFF08revise \u914D\u5408\u89C1\u89C4\u5219 13\uFF09\u3002
+  \xB7 \u4E0D\u53EF\u5F52\u56E0\uFF0C\u6216\u9875\u9762\u8868\u73B0\u4E0E\u63A5\u53E3\u771F\u503C\u4E92\u76F8\u77DB\u76FE\u2014\u2014\u7591\u4F3C\u88AB\u6D4B\u9875\u9762 Bug\uFF1A\u8C03\u7528 ask_human \u6C42\u52A9\uFF08question \u5199\u660E\u300C\u7591\u4F3C\u88AB\u6D4B\u9875\u9762 Bug\u300D\uFF0C\u9644\u4E0A\u67E5\u8BC1\u5230\u7684\u63A5\u53E3\u771F\u5B9E\u54CD\u5E94\u4E0E\u9875\u9762\u5B9E\u9645\u8868\u73B0\uFF09\uFF0C\u4E0D\u8981\u76F2\u76EE\u91CD\u8BD5\uFF0C\u4E5F\u4E0D\u8981\u4E3A\u8FC1\u5C31 Bug \u4FEE\u6539\u6D4B\u8BD5\u76EE\u6807\u3002\u77DB\u76FE\u5F62\u6001\u4E0D\u9650\u4E8E\u4EE5\u4E0B\u4F8B\u5B50\uFF1A
+    - \u63A5\u53E3\u62A5\u9519\u4F46 UI \u88C5\u4F5C\u6210\u529F\uFF1A\u5F39\u7A97/\u8868\u5355\u7167\u5E38\u5173\u95ED\uFF0C\u65E0\u4EFB\u4F55\u9519\u8BEF\u63D0\u793A\uFF08UI \u541E\u6389\u5931\u8D25\uFF09\uFF1B
+    - \u63A5\u53E3\u6210\u529F\u4F46\u9875\u9762\u672A\u5448\u73B0\u7ED3\u679C\uFF1A\u5217\u8868\u65E0\u65B0\u6761\u76EE\u3001\u6570\u636E\u672A\u53D8\u5316\uFF1B
+    - \u9875\u9762\u62A5\u9519\u4F46\u63A5\u53E3\u5B9E\u9645\u6210\u529F\uFF1A\u51FA\u73B0\u9519\u8BEF\u63D0\u793A\u6216\u72B6\u6001\u56DE\u6EDA\uFF0C\u800C\u63A5\u53E3\u54CD\u5E94\u6B63\u5E38\u3001\u6570\u636E\u5DF2\u751F\u6548\uFF1B
+    - \u65E0\u58F0\u5931\u8D25\uFF1A\u6210\u529F/\u5931\u8D25\u63D0\u793A\u7686\u65E0\uFF0C\u63A5\u53E3\u4E5F\u65E0\u5BF9\u5E94\u8BF7\u6C42\uFF08\u70B9\u51FB\u672A\u89E6\u53D1\u4EFB\u4F55\u8C03\u7528\uFF09\u6216\u54CD\u5E94\u65E0\u6CD5\u5224\u65AD\u6210\u8D25\u3002
 11. \u5B8C\u6210\u6D4B\u8BD5\u610F\u56FE\u540E\uFF0C\u81F3\u5C11\u6DFB\u52A0\u4E00\u6761 assert \u65AD\u8A00\uFF08\u672B\u6B65\u5FC5\u987B\u662F\u65AD\u8A00\uFF09\uFF0C\u7136\u540E\u8C03\u7528 finish\u3002
 12. \u73AF\u5883\u53D8\u91CF\u4EE5 {{key}} \u5360\u4F4D\u7B26\u5F15\u7528\uFF08fill \u7684 value \u91CC\u76F4\u63A5\u5199 {{key}}\uFF09\uFF0C\u4E0D\u8981\u5199\u6B7B\u771F\u5B9E\u503C\u3002
 13. \u4FEE\u6B63\u540E\u91CD\u505A\u63D0\u4EA4\u65F6\uFF0C\u82E5\u65E7\u63D0\u4EA4/\u586B\u5199\u64CD\u4F5C\u5DF2\u843D\u5E93\u4E3A\u811A\u672C\u6B65\u9AA4\uFF0C\u914D\u5408\u8C03\u7528 revise \u6E05\u7406\uFF0C\u56DE\u653E\u811A\u672C\u5E94\u662F\u6700\u77ED\u6210\u529F\u8DEF\u5F84\u3002\u4E24\u7C7B\u573A\u666F\uFF1A\u2460 \u63D0\u4EA4\u5931\u8D25\u539F\u56E0\u662F\u53C2\u6570\u95EE\u9898\uFF08\u5982\u624B\u673A\u53F7\u91CD\u590D\u3001\u540D\u79F0\u5DF2\u5B58\u5728\u3001\u503C\u4E0D\u5408\u6CD5\uFF09\u9700\u6362\u503C\u91CD\u8BD5\u2014\u2014\u5148 revise \u6539 value\u3001\u5220\u9664\u5197\u4F59\u7684\u65E7\u503C\u63D0\u4EA4/\u91CD\u586B\u94FE\uFF0C\u518D\u6267\u884C\u4FEE\u6B63\u52A8\u4F5C\uFF1B\u2461 \u70B9\u51FB\u63D0\u4EA4\u540E\u5F39\u7A97\u672A\u5173\u3001\u88AB\u5FC5\u586B\u6821\u9A8C\u62E6\u622A\uFF08\u63D0\u4EA4\u672A\u751F\u6548\uFF09\u2014\u2014\u8865\u586B\u7F3A\u5931\u5B57\u6BB5\u91CD\u65B0\u63D0\u4EA4\uFF0C\u6210\u529F\u540E\u8C03\u7528 revise \u5220\u9664\u5148\u524D\u843D\u7A7A\u7684\u65E7\u63D0\u4EA4\u6B65\u3002\u4E0D\u8981\u7559\u4E0B\u300C\u6CE8\u5B9A\u5931\u8D25\u7684\u63D0\u4EA4 + \u91CD\u586B\u300D\u7684\u5197\u4F59\u94FE\u8DEF\u3002\u6240\u6709\u6210\u529F\u6267\u884C\u7684\u64CD\u4F5C\u90FD\u4F1A\u5982\u5B9E\u843D\u5E93\uFF08\u542B\u6709\u610F\u91CD\u590D\uFF0C\u5982\u5FAA\u73AF\u9020\u6570\u7684\u591A\u6B21\u586B\u5199\u540C\u4E00\u8F93\u5165\u6846\uFF09\u2014\u2014\u843D\u5E93\u6B65\u9AA4\u4E0E\u6D4F\u89C8\u5668\u5B9E\u9645\u6267\u884C\u4E00\u4E00\u5BF9\u5E94\uFF0C\u4E0D\u8981\u91CD\u590D\u6267\u884C\u5DF2\u6210\u529F\u4E14\u5DF2\u843D\u5E93\u7684\u64CD\u4F5C\uFF1B\u5931\u8D25\u91CD\u8BD5\u4EA7\u751F\u7684\u5197\u4F59\u94FE\u8BF7\u7528 revise \u6E05\u7406\uFF0Cfinish \u65F6\u7CFB\u7EDF\u8FD8\u4F1A\u505A\u4E00\u6B21\u5168\u5C40\u811A\u672C\u5BA1\u67E5\u515C\u5E95\u3002`;
@@ -6457,7 +6586,7 @@ async function runScriptReview(o) {
       messages: [
         {
           role: "system",
-          content: '\u4F60\u662F\u56DE\u653E\u6D4B\u8BD5\u811A\u672C\u7684\u5BA1\u67E5\u5458\u3002\u5DF2\u843D\u6B65\u9AA4\u4E0E\u6D4F\u89C8\u5668\u5B9E\u9645\u6267\u884C\u4E00\u4E00\u5BF9\u5E94\u3002\u8BF7\u627E\u51FA\u300C\u5931\u8D25\u91CD\u8BD5/\u88AB\u540E\u7EED\u64CD\u4F5C\u66FF\u4EE3\u300D\u7684\u5197\u4F59\u6B65\u9AA4\u5E76\u6E05\u7406\uFF0C\u4F7F\u811A\u672C\u6210\u4E3A\u6700\u77ED\u6210\u529F\u56DE\u653E\u8DEF\u5F84\uFF1A\n- \u5220\u9664\uFF1A\u6CE8\u5B9A\u5931\u8D25\u6216\u5DF2\u843D\u7A7A\u7684\u64CD\u4F5C\u94FE\uFF08\u843D\u7A7A\u7684\u63D0\u4EA4\u3001\u65E7\u503C\u586B\u5199\u3001\u540C URL \u7684\u91CD\u590D\u5BFC\u822A\u7B49\uFF09\uFF1B\n- \u4FDD\u7559\uFF1A\u6709\u610F\u7684\u91CD\u590D\u64CD\u4F5C\uFF08\u5FAA\u73AF\u9020\u6570\u3001\u9010\u884C\u586B\u5199\u3001\u53CD\u590D\u5207\u6362\u7B49\uFF0C\u5373\u4F7F\u5143\u7D20\u4E0E\u503C\u5B8C\u5168\u76F8\u540C\uFF09\uFF1B\n- \u65AD\u8A00\u6B65\u9AA4\u4E00\u5F8B\u4FDD\u7559\uFF08\u811A\u672C\u672B\u6B65\u5FC5\u987B\u662F\u65AD\u8A00\uFF09\uFF1B\n- \u4E0D\u786E\u5B9A\u65F6\u4FDD\u7559\uFF0C\u5B81\u591A\u52FF\u9519\u5220\uFF1B\u53EF\u7528 update \u4FEE\u6B63 value\u3002\n\u8F93\u51FA JSON\uFF1A{"ops": [{"op":"delete","from":n,"to":m} \u6216 {"op":"update","step":n,"value":"\u65B0\u503C"}]}\uFF0Cops \u4E3A\u7A7A\u6570\u7EC4\u8868\u793A\u65E0\u9700\u4FEE\u8BA2\u3002\u53EA\u8F93\u51FA JSON\u3002'
+          content: '\u4F60\u662F\u56DE\u653E\u6D4B\u8BD5\u811A\u672C\u7684\u5BA1\u67E5\u5458\u3002\u5DF2\u843D\u6B65\u9AA4\u4E0E\u6D4F\u89C8\u5668\u5B9E\u9645\u6267\u884C\u4E00\u4E00\u5BF9\u5E94\u3002\u8BF7\u627E\u51FA\u300C\u5931\u8D25\u91CD\u8BD5/\u88AB\u540E\u7EED\u64CD\u4F5C\u66FF\u4EE3\u300D\u7684\u5197\u4F59\u6B65\u9AA4\u5E76\u6E05\u7406\uFF0C\u4F7F\u811A\u672C\u6210\u4E3A\u6700\u77ED\u6210\u529F\u56DE\u653E\u8DEF\u5F84\uFF1A\n- \u5220\u9664\uFF1A\u6CE8\u5B9A\u5931\u8D25\u6216\u5DF2\u843D\u7A7A\u7684\u64CD\u4F5C\u94FE\uFF08\u843D\u7A7A\u7684\u63D0\u4EA4\u3001\u65E7\u503C\u586B\u5199\u3001\u540C URL \u7684\u91CD\u590D\u5BFC\u822A\u7B49\uFF09\uFF1B\n- \u4FDD\u7559\uFF1A\u6709\u610F\u7684\u91CD\u590D\u64CD\u4F5C\uFF08\u5FAA\u73AF\u9020\u6570\u3001\u9010\u884C\u586B\u5199\u3001\u53CD\u590D\u5207\u6362\u7B49\uFF0C\u5373\u4F7F\u5143\u7D20\u4E0E\u503C\u5B8C\u5168\u76F8\u540C\uFF09\uFF1B\n- \u65AD\u8A00\u4E00\u822C\u4FDD\u7559\uFF1B\u552F\u4E00\u53EF\u5220\u4F8B\u5916\uFF1A\u4E24\u6761\u65AD\u8A00\u4E92\u4E3A\u5197\u4F59\uFF08\u540C\u4E00\u5B9A\u4F4D\u3001\u671F\u671B\u503C\u4E00\u65B9\u662F\u53E6\u4E00\u65B9\u7684\u524D\u7F00/\u5B50\u96C6\uFF0C\u5982\u6CDB\u5316 text=\u5BA2\u6237_ \u4E0E\u7CBE\u786E text=\u5BA2\u6237_1788703830578 \u5E76\u5B58\uFF0C\u4E0D\u8BBA\u8C01\u524D\u8C01\u540E\uFF09\uFF0C\u53EA\u5220\u5176\u4E2D\u4E00\u6761\u3001\u4FDD\u7559\u53E6\u4E00\u6761\uFF1B\u65E0\u8BBA\u5220\u5426\uFF0C\u5E94\u7528\u5168\u90E8 ops \u540E\u811A\u672C\u672B\u6B65\u5FC5\u987B\u662F\u65AD\u8A00\u2014\u2014\u82E5\u672B\u6B65\u65AD\u8A00\u4E0D\u5C5E\u4E8E\u5197\u4F59\u5BF9\uFF0C\u4EFB\u4F55\u5220\u9664\u90FD\u4E0D\u5F97\u89E6\u53CA\u5B83\uFF1B\n- \u4E0D\u786E\u5B9A\u65F6\u4FDD\u7559\uFF0C\u5B81\u591A\u52FF\u9519\u5220\uFF1B\u53EF\u7528 update \u4FEE\u6B63 value\uFF1Bops \u6309\u987A\u5E8F\u5E94\u7528\uFF0Cdelete \u4F1A\u4F7F\u4E4B\u540E\u7684\u539F\u5E8F\u53F7\u524D\u79FB\u2014\u2014\u8FDE\u7EED\u5220\u9664\u4E00\u6BB5\u8BF7\u5408\u5E76\u4E3A\u4E00\u4E2A\u8303\u56F4 op\uFF08from~to\uFF09\uFF0C\u5148\u5220\u540E\u6539\u65F6 update \u7684 step \u5E8F\u53F7\u6309\u5220\u9664\u540E\u7684\u65B0\u7F16\u53F7\u7ED9\u51FA\u3002\n\u8F93\u51FA JSON\uFF1A{"ops": [{"op":"delete","from":n,"to":m} \u6216 {"op":"update","step":n,"value":"\u65B0\u503C"}]}\uFF0Cops \u4E3A\u7A7A\u6570\u7EC4\u8868\u793A\u65E0\u9700\u4FEE\u8BA2\u3002\u53EA\u8F93\u51FA JSON\u3002'
         },
         { role: "user", content: `\u3010\u5DF2\u843D\u6B65\u9AA4\u3011
 ${detail}` }
@@ -6474,17 +6603,22 @@ ${detail}` }
     const usage = usageDelta(before, getUsage(jobId));
     const parsed = safeJsonParse2(stripFences(text));
     const ops = Array.isArray(parsed?.ops) ? parsed.ops : [];
+    const reviewArgs = { reviewOutput: text, ops };
     if (ops.length) {
       const probe = applyReviseOps(o.steps, ops);
-      if (typeof probe === "string" || !probe.steps.length || probe.steps[probe.steps.length - 1].kind !== "assert") {
-        pubToolWithUsage(jobId, 0, "\u811A\u672C\u5BA1\u67E5", `\u5BA1\u67E5 ${o.steps.length} \u6B65`, "\u5BA1\u67E5\u4EA7\u51FA\u4E0D\u5408\u89C4\uFF08\u672B\u6B65\u5FC5\u987B\u662F\u65AD\u8A00\uFF09\uFF0C\u5DF2\u8DF3\u8FC7\u6E05\u7406", usage);
+      if (typeof probe === "string") {
+        pubToolWithUsage(jobId, 0, "\u811A\u672C\u5BA1\u67E5", `\u5BA1\u67E5 ${o.steps.length} \u6B65`, `\u5BA1\u67E5\u4EA7\u51FA\u4E0D\u5408\u89C4\uFF08${probe}\uFF09\uFF0C\u5DF2\u8DF3\u8FC7\u6E05\u7406`, usage, reviewArgs);
+        return;
+      }
+      if (!probe.steps.length || probe.steps[probe.steps.length - 1].kind !== "assert") {
+        pubToolWithUsage(jobId, 0, "\u811A\u672C\u5BA1\u67E5", `\u5BA1\u67E5 ${o.steps.length} \u6B65`, "\u5BA1\u67E5\u4EA7\u51FA\u4E0D\u5408\u89C4\uFF08\u5E94\u7528\u540E\u672B\u6B65\u4E0D\u518D\u662F\u65AD\u8A00\uFF09\uFF0C\u5DF2\u8DF3\u8FC7\u6E05\u7406", usage, reviewArgs);
         return;
       }
       const n = o.steps.length;
       const summary = await o.revise(ops);
-      pubToolWithUsage(jobId, 0, "\u811A\u672C\u5BA1\u67E5", `\u5BA1\u67E5 ${n} \u6B65`, summary, usage);
+      pubToolWithUsage(jobId, 0, "\u811A\u672C\u5BA1\u67E5", `\u5BA1\u67E5 ${n} \u6B65`, summary, usage, reviewArgs);
     } else {
-      pubToolWithUsage(jobId, 0, "\u811A\u672C\u5BA1\u67E5", `\u5BA1\u67E5 ${o.steps.length} \u6B65`, "\u5BA1\u67E5\u901A\u8FC7\uFF1A\u65E0\u5197\u4F59\u6B65\u9AA4\u9700\u8981\u6E05\u7406", usage);
+      pubToolWithUsage(jobId, 0, "\u811A\u672C\u5BA1\u67E5", `\u5BA1\u67E5 ${o.steps.length} \u6B65`, "\u5BA1\u67E5\u901A\u8FC7\uFF1A\u65E0\u5197\u4F59\u6B65\u9AA4\u9700\u8981\u6E05\u7406", usage, reviewArgs);
     }
   } catch (e) {
     console.warn(`[gen:${jobId}] \u811A\u672C\u5BA1\u67E5\u5931\u8D25\uFF0C\u8DF3\u8FC7\u6E05\u7406\uFF1A`, e);
@@ -6688,8 +6822,10 @@ ${outlineText}`
       } catch {
         detail = "";
       }
-      pubToolWithUsage(jobId, index, label, detail, result, ud);
-    }
+      pubToolWithUsage(jobId, index, label, detail, result, ud, name === "see" ? args : void 0);
+    },
+    // see 截图的「模型作答」在下一轮 completion 到达（toolLoop 回调），回填对应 GenerationStep.assistant
+    onAssistantContent: (stepIndex, content) => updateToolAssistant(jobId, stepIndex, content)
   }).finally(() => {
     revokeHandlers.delete(jobId);
     network.dispose();

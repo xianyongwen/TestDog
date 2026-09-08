@@ -130,7 +130,8 @@
     annotate(el) {
       const root = el.closest('.ant-cascader');
       if (!root) return '';
-      const value = root.querySelector('.ant-select-selection-item');
+      // 选中回显读值 v5/v6 双类名（同 ant-select）
+      const value = root.querySelector('.ant-select-selection-item, .ant-select-content.ant-select-content-has-value');
       const multiple = !!root.classList.contains('ant-select-multiple');
       return `Ant Design 级联选择器（非原生 select 勿 fill；用 select 动作，value 传完整路径「A / B / C」${multiple ? '；多选模式勾选后面板不自动收起' : ''}），当前值: ${(value && value.textContent) || '(空)'}`;
     },
@@ -168,14 +169,15 @@
           }
           return `已在级联中选择：${labels.join(' / ')}`;
         },
-        // 页内后验：回显与期望一致（单选 title 为「A / B / C」；多选 tag 文本为末级 label）
+        // 页内后验：回显与期望一致（单选 title 为「A / B / C」；多选 tag 文本为末级 label；
+        // 读值 v5/v6 双类名——v6 回显重构为 .ant-select-content，选中态含 -has-value）
         verify(el, args) {
           const want = String(args?.value || '').trim();
           if (!want) return false;
           const root = cascaderRoot(el);
           if (!root) return false;
           const lastLabel = want.split(/\s+\/\s+/).pop();
-          for (const it of root.querySelectorAll('.ant-select-selection-item')) {
+          for (const it of root.querySelectorAll('.ant-select-selection-item, .ant-select-content.ant-select-content-has-value')) {
             const t = (it.getAttribute('title') || it.textContent || '').trim();
             if (t === want || t === lastLabel) return true;
           }

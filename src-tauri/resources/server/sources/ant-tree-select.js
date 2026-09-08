@@ -6,6 +6,11 @@
  *
  * 注册在 ant-select 之后作为 select 动作的树形兜底（ant-select 先试：树形弹层无
  * .ant-select-item 选项，等待超时 failed 后落到本插件）。
+ *
+ * antd v5/v6 双版本兼容：v6 重构了触发器 DOM——选中回显由 .ant-select-selection-item
+ * 改为 .ant-select-content（选中态含 ant-select-content-has-value），读值处一律双类名并取。
+ * 弹层归属：复用已开弹层（含 ant-select 先试失败的合法跨插件复用）前经
+ * aria-controls/aria-owns 校验弹层属于当前触发器，他人残留先收起再全新打开。
  */
 (() => {
   if (!window.__ttPluginRuntimeInstalled__) return null; // 未注入运行时框架时无槽位可注册（平台封装层兜底空对象）
@@ -22,10 +27,48 @@
     return null;
   }
 
+  // 弹层归属：触发器 input 的 aria-controls/aria-owns 指向弹层内 listbox（rc-select 展开时
+  // 才设置，antd v5/v6 同机制）。同 ant-select 的 dropdownOwned 口径：他人残留弹层不能复用。
+  function dropdownOwned(editor, dropdown) {
+    const input = editor.querySelector('input');
+    const ac = input && (input.getAttribute('aria-controls') || input.getAttribute('aria-owns'));
+    if (!ac) return false;
+    const esc = (window.CSS && CSS.escape) ? CSS.escape(ac) : ac.replace(/([^\w-])/g, '\\$1');
+    return !!dropdown.querySelector('#' + esc);
+  }
+
   async function treeSelect(el, want) {
     const editor = el.closest('.ant-tree-select') || el;
-    // 弹层已开则复用，避免 select 插件先试失败后再点一次收起
+    // 弹层已开且归属本控件则复用（含 ant-select 先试失败的合法跨插件复用——同一触发器，
+    // 归属校验通过），避免再点一次触发器收起；他人残留先收起再全新打开（收起策略同
+    // ant-select：定位弹层归属触发器 toggle，document 级 clickoutside 对 antd 弹层不可靠）
     let dropdown = visibleTreeDropdown();
+    if (dropdown && !dropdownOwned(editor, dropdown)) {
+      for (let i = 0; i < 3; i++) {
+        const d = visibleTreeDropdown();
+        if (!d) break;
+        const listEl = d.querySelector('[id]');
+        let ownerInput = null;
+        if (listEl && listEl.id) {
+          for (const inp of document.querySelectorAll('input')) {
+            if (inp.getAttribute('aria-controls') === listEl.id || inp.getAttribute('aria-owns') === listEl.id) {
+              ownerInput = inp;
+              break;
+            }
+          }
+        }
+        const ownerSel = ownerInput && ownerInput.closest('.ant-select');
+        const trigger = ownerSel && (ownerSel.querySelector('.ant-select-selector') || ownerSel);
+        if (trigger) {
+          trigger.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+          trigger.click();
+        } else {
+          document.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+        }
+        await sleep(200);
+      }
+      dropdown = null;
+    }
     if (!dropdown) {
       const selectorEl = editor.querySelector('.ant-select-selector') || editor;
       selectorEl.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
@@ -71,7 +114,8 @@
     annotate(el) {
       const sel = el.closest('.ant-tree-select');
       if (sel && !el.closest('.ant-select-dropdown')) {
-        const value = sel.querySelector('.ant-select-selection-item');
+        // 选中回显读值 v5/v6 双类名（同 ant-select）
+        const value = sel.querySelector('.ant-select-selection-item, .ant-select-content.ant-select-content-has-value');
         return `Ant Design 树形选择器（TreeSelect，非原生 select，勿对其 fill/selectOption；弹层为 .ant-select-tree 树形节点，深层节点需先展开祖先；用 select 动作，args.value=节点可见文本），当前值: ${(value && value.textContent) || '(空)'}`;
       }
       return '';
@@ -87,13 +131,13 @@
           if (!el.closest('.ant-tree-select')) throw new Error('目标元素不属于 Ant Design 树形选择器（.ant-tree-select）');
           return await treeSelect(el, want);
         },
-        // 页内后验：选中标签与期望一致
+        // 页内后验：选中标签与期望一致（v5/v6 双类名，同 ant-select）
         verify(el, args) {
           const want = String(args?.value || '').trim();
           if (!want) return false;
           const sel = el.closest('.ant-tree-select');
           if (!sel) return false;
-          for (const it of sel.querySelectorAll('.ant-select-selection-item')) {
+          for (const it of sel.querySelectorAll('.ant-select-selection-item, .ant-select-content.ant-select-content-has-value')) {
             if ((it.textContent || '').trim() === want) return true;
           }
           return false;

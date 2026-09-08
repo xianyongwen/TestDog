@@ -8,6 +8,12 @@
  * 树形选择器（.ant-tree-select，根节点同样含 .ant-select 类）也由本插件 detect 命中，
  * 以获得候选与标注；其 select 动作先试失败（树形弹层无 .ant-select-item 选项）后
  * 由 ant-tree-select 插件兜底闭环。原生 <select> 不经过插件（分发器原生层兜底 selectOption）。
+ *
+ * antd v5/v6 双版本兼容：v6 重构了触发器 DOM——无 .ant-select-selector（开弹层回退根节点）、
+ * 选中回显由 .ant-select-selection-item 改为 .ant-select-content（选中态含
+ * ant-select-content-has-value，placeholder 独立为 .ant-select-placeholder）。
+ * 弹层归属：复用已开弹层前经 aria-controls/aria-owns 校验弹层属于当前触发器，他人残留
+ * 先经 clickoutside 收起再全新打开（避免读到其它字段的选项清单并点错值）。
  */
 (() => {
   if (!window.__ttPluginRuntimeInstalled__) return null; // 未注入运行时框架时无槽位可注册（平台封装层兜底空对象）
@@ -22,11 +28,57 @@
     return null;
   }
 
+  // 弹层归属：触发器 input 的 aria-controls/aria-owns 指向弹层内 listbox（rc-select 展开时
+  // 才设置，antd v5/v6 同机制）。不归属的弹层是其它字段的残留——复用会让选项清单/点选落到
+  // 错误字段上（真实案例：规模弹层未关，状态下拉的 select 读到规模选项清单并误报）。
+  function dropdownOwned(editor, dropdown) {
+    const input = editor.querySelector('input');
+    const ac = input && (input.getAttribute('aria-controls') || input.getAttribute('aria-owns'));
+    if (!ac) return false;
+    const esc = (window.CSS && CSS.escape) ? CSS.escape(ac) : ac.replace(/([^\w-])/g, '\\$1');
+    return !!dropdown.querySelector('#' + esc);
+  }
+
+  // 残留他人弹层收起：document 级合成 mousedown 的 clickoutside 对 antd 弹层不可靠
+  // （Modal 内实测收不掉，Escape 合成键亦无效），改为定位弹层归属的触发器——弹层内
+  // listbox 的 id 必与其归属 input 的 aria-controls/aria-owns 一致（仅展开时设置）——
+  // 对归属触发器再 mousedown 一次，借 rc-select toggle 语义收起它自己的弹层。
+  async function closeForeignDropdowns() {
+    for (let i = 0; i < 3; i++) {
+      const dropdown = itemDropdown();
+      if (!dropdown) return;
+      const listEl = dropdown.querySelector('[id]');
+      let ownerInput = null;
+      if (listEl && listEl.id) {
+        for (const inp of document.querySelectorAll('input')) {
+          if (inp.getAttribute('aria-controls') === listEl.id || inp.getAttribute('aria-owns') === listEl.id) {
+            ownerInput = inp;
+            break;
+          }
+        }
+      }
+      const ownerSel = ownerInput && ownerInput.closest('.ant-select');
+      const trigger = ownerSel && (ownerSel.querySelector('.ant-select-selector') || ownerSel);
+      if (trigger) {
+        trigger.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+        trigger.click();
+      } else {
+        document.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })); // 无归属信息时 clickoutside 兜底
+      }
+      await sleep(200);
+    }
+  }
+
   async function selectOption(el, want) {
     const editor = el.closest('.ant-select') || el.closest('.ant-select-selector') || el;
     const selectorEl = editor.querySelector('.ant-select-selector') || editor;
-    // 弹层已开则复用（重复 mousedown 会先收起，导致等待弹层超时）
+    // 弹层已开且归属本控件则复用（重复 mousedown 会先收起，导致等待弹层超时）；
+    // 他人残留先收起再全新打开
     let dropdown = itemDropdown();
+    if (dropdown && !dropdownOwned(editor, dropdown)) {
+      await closeForeignDropdowns();
+      dropdown = null;
+    }
     if (!dropdown) {
       selectorEl.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
       selectorEl.click();
@@ -78,7 +130,8 @@
     annotate(el) {
       const sel = el.closest('.ant-select');
       if (sel && !el.closest('.ant-select-dropdown')) {
-        const value = sel.querySelector('.ant-select-selection-item');
+        // 选中回显读值 v5/v6 双类名：v5 为 .ant-select-selection-item，v6 为 .ant-select-content（选中态含 -has-value）
+        const value = sel.querySelector('.ant-select-selection-item, .ant-select-content.ant-select-content-has-value');
         return `Ant Design 下拉（非原生 select，勿对其 fill/selectOption；选项弹层为 .ant-select-dropdown；用 select 动作），当前值: ${(value && value.textContent) || '(空)'}`;
       }
       return '';
@@ -98,13 +151,14 @@
           if (el.closest('.ant-tree-select')) throw new Error('目标是 Ant Design 树形选择器（.ant-tree-select），由 ant-tree-select 插件的 select 动作处理');
           return await selectOption(el, want);
         },
-        // 页内后验：选中标签与期望一致（单选/多选的选中项均为 .ant-select-selection-item）
+        // 页内后验：选中标签与期望一致（单选/多选的选中项均为 .ant-select-selection-item；
+        // v6 重构为 .ant-select-content，选中态含 -has-value，文本直挂 content div）
         verify(el, args) {
           const want = String(args?.value || '').trim();
           if (!want) return false;
           const sel = el.closest('.ant-select');
           if (!sel) return false;
-          for (const it of sel.querySelectorAll('.ant-select-selection-item')) {
+          for (const it of sel.querySelectorAll('.ant-select-selection-item, .ant-select-content.ant-select-content-has-value')) {
             if ((it.textContent || '').trim() === want) return true;
           }
           return false;
