@@ -22,7 +22,7 @@ export function redactGenerationText(jobId: string, text: string): string {
 }
 
 /** 保留协议字段/标识符，只处理载荷里的文本；不修改二进制图片、工具调用 ID 等。 */
-const structuralKeys = new Set(['role', 'type', 'kind', 'action', 'strategy', 'status', 'jobId', 'tool_call_id', 'id', 'model', 'pluginId', 'pluginAction', '__ttSlotKind']);
+const structuralKeys = new Set(['role', 'type', 'kind', 'action', 'strategy', 'status', 'jobId', 'tool_call_id', 'id', 'model', 'pluginId', 'pluginAction', '__ttSlotKind', '__ttStateKind', 'observationKind', 'stateFingerprint', 'snapshotVersion']);
 export function redactGenerationData<T>(jobId: string, data: T): T {
   const visit = (value: any, key = '', parent = ''): any => {
     if (typeof value === 'string') {

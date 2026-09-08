@@ -48,6 +48,7 @@ export const testStepSchema = z.object({
   url: z.string().optional(),
   value: z.string().optional(),
   key: z.string().optional(),
+  checked: z.boolean().optional(), // 旧脚本缺省 true；false 明确取消勾选
   assertion: z
     .object({
       type: z.enum(['visible', 'hidden', 'text', 'url', 'response_status', 'response_body', 'response_json', 'ws_sent', 'ws_received']),

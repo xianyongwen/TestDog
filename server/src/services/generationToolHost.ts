@@ -11,7 +11,9 @@ import type { AgentTool, AgentToolResult } from './toolLoop';
 import type { TestStep, ReviseOp, EmitOutcome } from '../shared/testScript';
 import { semanticizeLocator } from './locatorVerifier';
 import { analyzeElement } from './locatorCandidateScript';
-import { shotHash, waitStable, waitStableInPage, effectChanged, shotBase64 } from './visualFrameService';
+import { executeLocatorAction, observedAction, waitForBrowserAssertion } from './browserExecution';
+import { captureObservation, observationText, stateFingerprint, batchBoundary, type BrowserObservation } from './browserObservation';
+import { shotHash, waitStableInPage, effectChanged, shotBase64 } from './visualFrameService';
 import { componentActionParameters, buildPluginActionStep } from './genToolsPlugin';
 import type { ActionVocabEntry } from './pluginStore';
 import type { PluginActionResult } from '../types/plugin-api';
@@ -21,6 +23,9 @@ import { redactGenerationData, redactGenerationText } from './generation/privacy
 
 export interface GenToolContext {
   jobId: string;
+  signal?: AbortSignal;
+  snapshotVersion?: string;
+  lastObservation?: BrowserObservation;
   page: any; // Stagehand page（snapshot/act）
   stagehand: any; // Stagehand 实例（act/observe 挂在实例上）
   pwPage: any; // CDP 桥 playwright 视图（locator/evaluate/screenshot）
@@ -63,10 +68,16 @@ function semanticSource(selector: string): string {
 }
 
 /** 快照数字编号/定位表达式 → playwright locator（编号 = data-tt-idx 属性，绝对唯一）。 */
-async function resolveLocator(ctx: GenToolContext, selector: string): Promise<any> {
+async function resolveLocator(ctx: GenToolContext, selector: string, version?: unknown): Promise<any> {
   const raw = String(sub(ctx, selector) ?? '').trim();
   if (/^\d+$/.test(raw)) {
-    // 编号元素带 data-tt-idx 属性（collect 时打标），属性选择器在动态渲染下稳定唯一
+    if (version != null || ctx.snapshotVersion) {
+      const current = await captureObservation(ctx.pwPage);
+      if (version != null && String(version) !== current.version || ctx.snapshotVersion && ctx.snapshotVersion.split(':')[0] !== current.documentId) {
+        throw new Error('元素编号来自过期快照，请使用最新 snapshotVersion 和编号');
+      }
+    }
+    // 文档内唯一编号；路由切换不会复用旧节点的身份。
     return ctx.pwPage.locator(`[data-tt-idx="${Number(raw)}"]`);
   }
   return ctx.pwPage.locator(raw.startsWith('/') ? `xpath=${raw}` : raw);
@@ -126,11 +137,12 @@ async function runActionShell(
   if (!selector) throw new Error(`${action} 缺少 selector（元素编号或定位表达式）`);
   const instruction = String(args.instruction ?? '').trim();
   if (!instruction) throw new Error(`${action} 缺少 instruction（本步自然语言描述）`);
-  const loc = await resolveLocator(ctx, selector);
+  const loc = await resolveLocator(ctx, selector, args.snapshotVersion);
 
   const blocked = await checkOcclusion(ctx, loc);
   if (blocked) return { status: 'failed', text: `错误：${blocked}` };
 
+  if ((action === 'fill' || action === 'select') && typeof args.value !== 'string') throw new Error(`${action} 缺少 value`);
   const rawValue = args.value != null ? String(args.value) : undefined;
   const realValue = sub(ctx, rawValue);
   // 语义化候选在动作前采集（capture-before-mutation）：动作引发的状态类（checked/selected/
@@ -138,44 +150,15 @@ async function runActionShell(
   // 采集态一致。预采集失败时不执行动作，避免页面变化后无法记录。
   const semPre = await semanticizeLocator(ctx.pwPage, semanticSource(sub(ctx, selector) ?? selector), { mode: 'playwright', noRawFallback: true }).catch(() => null);
   if (!semPre) throw new Error('无法在操作前生成可靠定位器，本步未执行。请重新 snapshot 定位。');
-  let clickBefore: string | null = null;
-  switch (action) {
-    case 'fill':
-      await loc.fill(realValue ?? '', { timeout: ACTION_TIMEOUT_MS });
-      break;
-    case 'select':
-      // 原生 select 才走 selectOption；组件库假控件会在此失败 → 回灌提示用插件动作
-      await loc.selectOption(String(realValue ?? ''), { timeout: ACTION_TIMEOUT_MS });
-      break;
-    case 'press':
-      await loc.click({ timeout: ACTION_TIMEOUT_MS });
-      await ctx.pwPage.keyboard.press(extra?.pressKey ?? 'Enter');
-      break;
-    case 'check':
-      await loc.check({ timeout: ACTION_TIMEOUT_MS });
-      break;
-    default: {
-      clickBefore = await shotHash(ctx.pwPage).catch(() => null);
-      await loc.click({ timeout: ACTION_TIMEOUT_MS });
-    }
-  }
-
-  // 使用动作前验证过的定位器落库，避免动作引起节点消失或名称变化。
-  const sem = semPre;
-  const step = buildStep(action, sem, instruction, action === 'fill' || action === 'select' ? rawValue : undefined, action === 'press' ? extra?.pressKey ?? 'Enter' : undefined);
+  if (action === 'check' && args.checked != null && typeof args.checked !== 'boolean') throw new Error('checked 必须是布尔值');
+  const step = buildStep(action, semPre, instruction, action === 'fill' || action === 'select' ? rawValue : undefined, action === 'press' ? extra?.pressKey ?? 'Enter' : undefined);
+  if (action === 'check') step.checked = args.checked == null ? true : args.checked as boolean;
+  if (ctx.signal?.aborted) throw new Error('操作已中止');
+  await executeLocatorAction(loc, { ...step, value: realValue }, ACTION_TIMEOUT_MS);
+  // 一旦执行成功就保存；后验失败也不能抹掉已执行的操作。
   const oc = await ctx.emit(step);
   ctx.note(`${instruction}（${action}）`);
-  if (action === 'click') {
-    // 动作成功即记录；像素无变化只能说明效果未知，不能删除已经执行的操作。
-    await new Promise((r) => setTimeout(r, 400));
-    const after = await shotHash(ctx.pwPage).catch(() => null);
-    const changed = Boolean(clickBefore && after && effectChanged(clickBefore, after));
-    return {
-      status: 'success', recordedStep: oc.index, effect: changed ? 'observed' : 'unknown',
-      text: `点击已执行。${落库提示(ctx, oc)}${changed ? '' : '尚未观察到画面变化，请检查页面或接口结果，不要直接重复提交。'}`,
-    };
-  }
-  return `${actionLabel(action)}完成。${落库提示(ctx, oc)}`;
+  return { status: 'success', recordedStep: oc.index, effect: 'unknown', text: `${actionLabel(action)}已执行。${落库提示(ctx, oc)}` };
 }
 
 function buildStep(
@@ -207,26 +190,49 @@ function 落库提示(ctx: GenToolContext, oc: EmitOutcome | undefined | null): 
 /** 读最新快照：仅可交互元素编号表（单一编号体系，与截图标注同源）。
  *  默认不带语义树——树文本是上下文里最大的单块增量（实测约 3-4k token/次），编号表已够模型选元素操作；
  *  完整结构树由 page_tree 按需兜底。 */
-async function doSnapshot(ctx: GenToolContext): Promise<string> {
-  let idxLines: string[] = [];
-  try {
-    idxLines = (await ctx.pwPage.evaluate(() => ((window as any).__ttCollectInteractive ? (window as any).__ttCollectInteractive() : []))) as string[];
-  } catch {
-    /* 编号收集失败时快照仍可用（模型改用 css/xpath 定位） */
-  }
-  const idxText = idxLines.length ? idxLines.join('\n') : '（编号收集失败，请用 css/xpath 定位）';
-  return `【可交互元素编号（工具 selector 填 [n] 的数字；带 * 为本次新出现，如弹层内容）】\n${idxText}`;
+async function doSnapshot(ctx: GenToolContext, options: Record<string, unknown> = {}): Promise<string> {
+  const snap = await captureObservation(ctx.pwPage, options);
+  ctx.lastObservation = snap;
+  ctx.snapshotVersion = snap.version;
+  return observationText(snap);
 }
 
-/** 完整语义树兜底：编号表看不出的问题（目标不在编号表/需要层级结构）才取；
- *  体积大（单次可达数千 token），靠 stateful 槽治理保证上下文里只留最新一份。 */
-async function doPageTree(ctx: GenToolContext): Promise<string> {
-  const snap = await ctx.page.snapshot();
-  const tree = String(snap?.formattedTree ?? '');
-  ctx.xpathMap = (snap?.xpathMap ?? {}) as Record<string, string>; // stagehand act 内部沿用（模型不再直接引用）
-  const trimmed = tree.length > 45000 ? tree.slice(0, 45000) + '\n…(已截断)' : tree;
-  return `【页面语义树（层级结构 + 文本。树内编号为结构 id，不能用作工具 selector；定位一律以最新 snapshot 编号表的数字为准）】\n${trimmed}`;
+async function doPageTree(ctx: GenToolContext, options: Record<string, unknown> = {}): Promise<string> {
+  let tree: string;
+  const scope = String(options.scope ?? 'auto');
+  const active = ctx.pwPage.locator('dialog[open], [role="dialog"]:visible, [role="listbox"]:visible');
+  if (scope !== 'page' && (scope !== 'auto' || await active.count())) {
+    tree = await (scope === 'auto' ? active.last() : ctx.pwPage.locator(scope)).ariaSnapshot({ timeout: 5000 });
+  } else {
+    const snap = await ctx.page.snapshot();
+    tree = String(snap?.formattedTree ?? '');
+    ctx.xpathMap = snap?.xpathMap ?? {};
+  }
+  let lines = tree.split('\n');
+  if (options.query) {
+    const selected = new Set<number>();
+    lines.forEach((line, i) => { if (line.toLowerCase().includes(String(options.query).toLowerCase())) for (let j = Math.max(0, i - 2); j <= i; j++) selected.add(j); });
+    lines = lines.filter((_, i) => selected.has(i));
+  }
+  const offset = Math.max(0, Math.floor(Number(options.offset) || 0));
+  const out: string[] = [];
+  let chars = 0;
+  for (const line of lines.slice(offset)) {
+    if (chars + line.length > 14000 && out.length) break;
+    out.push(line.slice(0, 14000)); chars += line.length + 1;
+  }
+  return `【结构树；树内编号不能用于 selector】\n${out.join('\n')}\n${offset + out.length}/${lines.length} 行` +
+    (offset + out.length < lines.length ? `；继续 page_tree(offset=${offset + out.length})，保持 scope/query` : '');
 }
+
+const snapshotParameters = {
+  type: 'object', properties: {
+    scope: { type: 'string', description: 'auto（默认活动浮层/视口）、page、viewport 或 CSS 区域选择器' },
+    query: { type: 'string', description: '按元素名称或状态筛选' },
+    offset: { type: 'integer', minimum: 0 },
+    limit: { type: 'integer', minimum: 1, maximum: 150 },
+  },
+};
 
 /** 组装全套生成工具。askHuman：主动求助回调（困惑时挂起 gen:assist 等人决策），未传则不注册 ask_human 工具。 */
 export function buildGenTools(
@@ -237,18 +243,18 @@ export function buildGenTools(
   const tools: AgentTool[] = [
     {
       name: 'snapshot',
-      description: '获取当前页面可交互元素编号表（工具 selector 填 [n] 的数字）。操作前必看；页面变化后重新获取。编号只在最新快照内有效。默认不含完整页面结构，需要层级结构时用 page_tree。',
-      parameters: { type: 'object', properties: {} },
+      description: '获取带字段值和校验状态的编号快照，默认聚焦活动浮层/视口。可用 scope/query 扩大或缩小范围，offset 翻页。动作已附快照时直接使用，无需重复调用。',
+      parameters: snapshotParameters,
       stateful: 'snapshot',
-      supersedes: ['tree'], // 新快照 = 页面已变化，旧结构树层级信息一并失效
-      execute: async () => doSnapshot(ctx),
+      supersedes: ['tree', 'screenshot'], // 新快照 = 页面已变化，旧结构树层级信息一并失效
+      execute: async (a) => doSnapshot(ctx, a),
     },
     {
       name: 'page_tree',
       description: '获取当前页面完整语义树（层级结构 + 文本，体积大，仅在需要时调用）。用于编号表看不出的问题：目标不在编号表、需要理解区域层级/排查结构类问题。树内编号是结构 id，不能用作工具 selector。',
-      parameters: { type: 'object', properties: {} },
+      parameters: snapshotParameters,
       stateful: 'tree',
-      execute: async () => doPageTree(ctx),
+      execute: async (a) => doPageTree(ctx, a),
     },
     {
       name: 'goto',
@@ -287,7 +293,7 @@ export function buildGenTools(
     },
     {
       name: 'press',
-      description: '点击元素后按键（默认 Enter）。args.selector + args.key? + args.instruction（必填）',
+      description: '聚焦目标元素后按键（默认 Enter，不额外点击）。args.selector + args.key? + args.instruction（必填）',
       parameters: {
         type: 'object',
         properties: { selector: { type: 'string' }, key: { type: 'string' }, instruction: { type: 'string' } },
@@ -297,11 +303,11 @@ export function buildGenTools(
     },
     {
       name: 'check',
-      description: '勾选/取消勾选复选框。args.selector + args.instruction（必填）',
+      description: '设置控件勾选状态，checked=true 勾选、false 取消；radio 仅支持 true。args.selector + args.checked + args.instruction。',
       parameters: {
         type: 'object',
-        properties: { selector: { type: 'string' }, instruction: { type: 'string' } },
-        required: ['selector', 'instruction'],
+        properties: { selector: { type: 'string' }, instruction: { type: 'string' }, checked: { type: 'boolean' } },
+        required: ['selector', 'checked', 'instruction'],
       },
       execute: async (a) => runActionShell(ctx, 'check', a),
     },
@@ -335,6 +341,7 @@ export function buildGenTools(
     },
     {
       name: 'readText',
+      stateful: 'readText',
       description: '读取元素文本内容。args.selector',
       parameters: {
         type: 'object',
@@ -343,7 +350,7 @@ export function buildGenTools(
       },
       execute: async (a) => {
         const loc = await resolveLocator(ctx, String(a.selector ?? ''));
-        const text = await loc.textContent({ timeout: 8000 });
+        const text = await loc.innerText({ timeout: 8000 });
         return String(text ?? '').slice(0, 800) || '(空)';
       },
     },
@@ -355,6 +362,7 @@ export function buildGenTools(
         properties: {
           type: { type: 'string', enum: ['visible', 'text', 'url'] },
           selector: { type: 'string' },
+          timeoutMs: { type: 'integer', minimum: 0, maximum: 30000 },
           expected: { type: 'string' },
           instruction: { type: 'string' },
         },
@@ -363,43 +371,22 @@ export function buildGenTools(
       execute: async (a) => {
         const type = String(a.type);
         const instruction = String(a.instruction ?? '').trim() || `断言 ${type}`;
-        let ok = false;
-        let expect = String(a.expected ?? '');
-        if (type === 'visible') {
-          const loc = await resolveLocator(ctx, String(a.selector ?? ''));
-          ok = await loc.isVisible();
-          expect = expect || String(a.selector ?? '');
-        } else if (type === 'text') {
-          const body = await ctx.pwPage.locator('body').textContent({ timeout: 8000 });
-          expect = String(a.expected ?? '');
-          // 生成期校验用替换后的真实值（{{systemTime}} 等系统变量、{{key}} 环境变量，统一写法），
-          // expect 本身保留原始占位符落库，回放端会再次替换（与 fill 落库口径一致）——
-          // 否则模型会因校验必败而把解析后的真实值写死进脚本。
-          const realExpect = sub(ctx, expect) ?? expect;
-          ok = realExpect ? (body ?? '').includes(realExpect) : false;
-        } else if (type === 'url') {
-          expect = String(a.expected ?? '').trim();
-          if (!expect) throw new Error('URL 断言缺少 expected');
-          const u = String(await ctx.page.url());
-          const expected = sub(ctx, expect);
-          ok = expected ? u.includes(String(expected)) : false;
-        } else {
-          throw new Error(`未知断言类型：${type}`);
-        }
-        if (!ok) throw new Error(`断言未通过（${type}）：期望 ${expect || '(元素可见)'}，实际不满足`);
-        const assertSem = type === 'visible' && a.selector
-          ? await semanticizeLocator(ctx.pwPage, semanticSource(sub(ctx, String(a.selector)) ?? String(a.selector)), { mode: 'playwright' }).catch(() => null)
-          : null;
+        const expect = String(a.expected ?? '');
+        const loc = a.selector ? await resolveLocator(ctx, String(a.selector), a.snapshotVersion) : undefined;
+        await waitForBrowserAssertion({ page: { url: () => ctx.page.url(), locator: (selector: string) => ctx.pwPage.locator(selector) }, locator: loc, type, expected: sub(ctx, expect), timeoutMs: a.timeoutMs == null ? 10000 : Number(a.timeoutMs), signal: ctx.signal });
+        // 断言不改变页面；先等待异步挂载，再采集已验证目标的回放定位。
+        const assertSem = loc ? await semanticizeLocator(ctx.pwPage, semanticSource(sub(ctx, String(a.selector)) ?? String(a.selector)), { mode: 'playwright', noRawFallback: true }) : undefined;
+        if (loc && !assertSem) throw new Error('断言定位器未通过唯一性验证');
         const oc = await ctx.emit({ kind: 'assert', action: 'assert', assertion: { type: type as any, expected: expect || undefined }, ...(assertSem ? { locator: assertSem } : {}), instruction, description: instruction });
-        return `断言通过（${type}）。${落库提示(ctx, oc)}`;
+        return { status: 'success', progressed: true, recordedStep: oc.index, text: `断言通过（${type}）。${落库提示(ctx, oc)}` };
       },
     },
     {
       name: 'act',
-      description: '自然语言兜底操作（语义化定位失败时用，让浏览器 AI 直接理解指令执行）。args.instruction（必填）。不要用 Escape 关闭弹窗内展开的下拉——会把整个弹窗关掉、已填表单全丢；收起下拉改点触发器或直接点选项，关闭弹窗改点「取消/关闭」按钮。',
+      description: '自然语言单动作兜底：observe 解析最匹配候选，执行前验证定位并记录。复合目标一次只推进一个动作，依据返回快照继续。args.instruction（必填）。不要用 Escape 关闭弹窗内展开的下拉——会把整个弹窗关掉、已填表单全丢；收起下拉改点触发器或直接点选项，关闭弹窗改点「取消/关闭」按钮。',
       parameters: {
         type: 'object',
-        properties: { instruction: { type: 'string' } },
+        properties: { instruction: { type: 'string' }, scope: { type: 'string', description: '可选 CSS 区域，收窄 observe 上下文' } },
         required: ['instruction'],
       },
       execute: async (a) => {
@@ -415,29 +402,21 @@ export function buildGenTools(
             return { status: 'failed', text: `已拦截「按 Escape」：当前页面有${scene}，Escape 可能把整个弹窗一起关闭、已填内容全部丢失。请改用：收起下拉→再点一次触发器或直接点选目标选项；关闭弹窗→点「取消/关闭」按钮或右上角 ×。` };
           }
         }
-        // Stagehand v4 的 act 挂在实例上（同旧 executeAction 的 stagehand.act），page 仅作上下文传入
-        const res = await ctx.stagehand.act(instruction, { page: ctx.page });
-        const first = res?.data?.actions?.[0];
-        if (!res?.data?.success) throw new Error(`act 未能完成：${instruction}`);
-        let loc: any = null;
-        if (first?.selector) {
-          loc = await semanticizeLocator(ctx.pwPage, first.selector, { mode: 'playwright' }).catch(() => null);
-        }
-        const method = first?.method ? String(first.method) : '';
-        const act = ({ click: 'click', type: 'fill', fill: 'fill', press: 'press', select: 'select', selectOption: 'select', check: 'check', uncheck: 'check' } as any)[method] ?? 'click';
-        const arg0 = first?.arguments?.[0] != null ? String(first.arguments[0]) : undefined;
-        const step: TestStep = loc
-          ? buildStep(act, loc, String(a.instruction), act === 'fill' || act === 'select' ? arg0 : undefined, act === 'press' ? arg0 ?? 'Enter' : undefined)
-          : { kind: 'action', action: act as any, instruction: String(a.instruction), description: String(a.instruction), ...(arg0 ? { value: arg0 } : {}) };
-        const oc = await ctx.emit(step);
-        return `act 已完成。${落库提示(ctx, oc)}`;
+        const scope = a.scope ? ctx.page.locator(String(a.scope)) : undefined;
+        const result = await ctx.stagehand.observe(instruction, { page: ctx.page, ...(scope ? { locator: scope } : {}) });
+        if (ctx.signal?.aborted) throw new Error('操作已中止');
+        const candidates = result?.data;
+        if (!Array.isArray(candidates) || !candidates.length) throw new Error('observe 未找到候选动作');
+        // 只执行最匹配的候选；多个候选并不是多步计划。后续动作由新快照继续规划。
+        const parsed = observedAction(candidates[0]);
+        return runActionShell(ctx, parsed.action, { ...parsed, instruction: String(a.instruction) }, { pressKey: parsed.key });
       },
     },
     ...(ctx.modelVision
       ? [
           {
             name: 'see',
-            description: '视觉观察当前页面：截图（带编号标注）直接附于结果进入上下文（比文本快照省 token，也无子调用）。蓝色边框上的白色数字 = snapshot 元素编号，可直接用于 selector。用于确认页面状态/排查渲染错乱/图表/验证码/toast 等视觉问题。args.x/y/w/h 为可选裁剪区域（px），裁剪可提升小区域清晰度。',
+            description: '视觉观察当前页面：截图（带编号标注）直接附于结果进入上下文（无额外的图像描述子调用，成本依模型而定）。蓝色边框上的白色数字 = snapshot 元素编号，可直接用于 selector。用于确认页面状态/排查渲染错乱/图表/验证码/toast 等视觉问题。args.x/y/w/h 为可选裁剪区域（px），裁剪可提升小区域清晰度。',
             parameters: {
               type: 'object',
               properties: {
@@ -450,7 +429,9 @@ export function buildGenTools(
             },
             // 视觉观察与快照同为「当前画面」状态：新观察回灌时历史同槽（含所附截图）降级为占位，防止上下文累积
             stateful: 'screenshot',
+            supersedes: ['snapshot', 'tree'],
             execute: async (a) => {
+              await doSnapshot(ctx);
               // 绘制编号标注 → 截图（可选区域裁剪）→ 清除标注（恢复画面）
               await ctx.pwPage.evaluate(() => {
                 try {
@@ -472,8 +453,9 @@ export function buildGenTools(
               // 截图直连主上下文（按张固定计价），不再子调用转文字描述；观察请求回显在文本里引导主模型看图作答
               const q = String(a.question ?? '描述页面当前状态与可交互元素').slice(0, 200);
               return {
-                text: `截图已附于下一条消息（蓝色边框上的白色数字为元素编号，与 snapshot 编号一致，可直接用作工具 selector）。观察请求：${q}。请依据截图作答并决定下一步。`,
+                text: `snapshotVersion=${ctx.snapshotVersion}。截图已附于下一条消息（蓝色边框上的白色数字为元素编号，与 snapshot 编号一致，可直接用作工具 selector）。观察请求：${q}。请依据截图作答并决定下一步。`,
                 image: b64,
+                stateFingerprint: ctx.lastObservation ? stateFingerprint(ctx.lastObservation) : undefined,
               };
             },
           } as AgentTool,
@@ -539,6 +521,7 @@ export function buildGenTools(
   // 保持已验证流程的行为等价，只清理有明确证据的失败重试冗余。
   tools.push({
     name: 'revise',
+    stateful: 'script',
     description:
       '修订已记录的脚本步骤（只改脚本，不执行浏览器动作，不影响当前页面状态）。' +
       '适用场景（修正动作已实际执行并验证后，仅清理有明确证据的失败重试冗余；保留完整成功流程，不以步骤最少为目标，不得仅因 URL、元素或值相同就删除重复操作）：' +
@@ -593,14 +576,92 @@ export function buildGenTools(
     },
   });
 
-  // 工具直调与循环调用共用出口，错误/接口响应/插件消息也需要脱敏。
-  return tools.map((tool) => ({ ...tool, execute: async (args) => {
-    try {
-      return redactGenerationData(ctx.jobId, await tool.execute(args));
-    } catch (error) {
-      throw new Error(redactGenerationText(ctx.jobId, String(error)));
+  const mutations = new Set(['goto', 'click', 'fill', 'press', 'check', 'select', 'act', 'component_action', 'batch_actions']);
+  const batchTools = new Set(['fill', 'check', 'select']);
+  tools.push({
+    name: 'batch_actions',
+    description: '批量填写独立字段：最多 6 个 fill/check/原生 select，逐个串行验证、执行并保存。失败、页面/浮层变化、其他字段联动时立即停止，已完成动作不会重做。不要批量操作联动字段。',
+    parameters: { type: 'object', properties: { actions: { type: 'array', minItems: 1, maxItems: 6, items: { type: 'object', properties: {
+      action: { type: 'string', enum: ['fill', 'check', 'select'] }, selector: { type: 'string' }, instruction: { type: 'string' }, value: { type: 'string' }, checked: { type: 'boolean' },
+    }, required: ['action', 'selector', 'instruction'] } } }, required: ['actions'] },
+    execute: async (args) => {
+      if (!Array.isArray(args.actions) || !args.actions.length || args.actions.length > 6) throw new Error('批次必须包含 1~6 个动作');
+      const actions = args.actions as Record<string, unknown>[];
+      for (const a of actions) {
+        if (!a || !batchTools.has(String(a.action)) || !a.selector || !a.instruction) throw new Error('批次只能包含有效的 fill/check/select');
+        if (a.action === 'check' ? typeof a.checked !== 'boolean' : typeof a.value !== 'string') throw new Error('批次缺少 value/checked');
+      }
+      let before = await captureObservation(ctx.pwPage);
+      const completed: string[] = [];
+      for (const [i, action] of actions.entries()) {
+        if (ctx.signal?.aborted) return { status: 'uncertain', text: `批次已中止；已完成 ${completed.length} 项：${completed.join('；')}` };
+        let targetId: string | null = null;
+        try {
+          const loc = await resolveLocator(ctx, String(action.selector));
+          targetId = await loc.getAttribute('data-tt-idx', { timeout: 1000 });
+          const result = await runActionShell(ctx, action.action as 'fill' | 'check' | 'select', action);
+          if (typeof result !== 'string' && result.status === 'failed') throw new Error(result.text);
+          completed.push(`${i + 1}. ${String(action.instruction)}`);
+        } catch (e) {
+          return { status: 'failed', text: `第 ${i + 1} 项失败：${String(e)}。已完成 ${completed.length} 项（已保存，不要重做）：${completed.join('；')}；剩余未执行。` };
+        }
+        await waitStableInPage(ctx.pwPage);
+        const after = await captureObservation(ctx.pwPage);
+        if (!targetId || batchBoundary(before, after, targetId)) {
+          return { status: 'success', text: `批次在第 ${i + 1} 项后检测到页面/其他字段变化，已停止。已完成并保存：${completed.join('；')}；剩余 ${actions.length - completed.length} 项未执行，请依据新快照重新规划。` };
+        }
+        before = after;
+      }
+      return { status: 'success', text: `批次完成（逐项已保存）：${completed.join('；')}` };
+    },
+  });
+
+  return tools.map((tool) => {
+    if (mutations.has(tool.name)) {
+      const props = (tool.parameters.properties ?? {}) as Record<string, unknown>;
+      tool.parameters = { ...tool.parameters, properties: { ...props, snapshotVersion: { type: 'string', description: '使用编号时传最新快照版本；页面变化后旧版本会被拒绝' } } };
     }
-  } }));
+    return { ...tool, execute: async (args: Record<string, unknown>) => {
+      if (ctx.signal?.aborted) throw new Error('操作已中止');
+      const mutating = mutations.has(tool.name);
+      const before = mutating ? await captureObservation(ctx.pwPage).catch(() => null) : null;
+      if (mutating && args.snapshotVersion != null && (!before || args.snapshotVersion !== before.version)) throw new Error('快照版本已过期，请获取新快照后重新规划');
+      const targetId = before && args.selector ? await ctx.pwPage.locator(semanticSource(sub(ctx, String(args.selector)) ?? String(args.selector))).getAttribute('data-tt-idx', { timeout: 200 }).catch(() => null) : null;
+      const countBefore = ctx.stepCount();
+      let result: string | AgentToolResult;
+      try { result = await tool.execute(args); }
+      catch (error) {
+        if (!mutating) throw new Error(redactGenerationText(ctx.jobId, String(error)));
+        result = { status: 'failed', text: redactGenerationText(ctx.jobId, String(error)) };
+      }
+      if (mutating) {
+        // 成功动作已保存。观察失败不会诱导重新执行，也不撤销部分成功。
+        const data: AgentToolResult = typeof result === 'string' ? { status: 'success', text: result } : result;
+        try {
+          if (before && !ctx.signal?.aborted) await waitStableInPage(ctx.pwPage);
+          const after = await captureObservation(ctx.pwPage);
+          ctx.lastObservation = after;
+          ctx.snapshotVersion = after.version;
+          data.progressed = before ? stateFingerprint(before) !== stateFingerprint(after) : false;
+          data.effect = data.progressed ? 'observed' : 'unknown';
+          data.stateFingerprint = stateFingerprint(after);
+          data.observation = observationText(after);
+          data.observationKind = 'snapshot';
+          if (before) data.resetFields = Object.keys(before.values).filter(id => id !== (targetId ?? String(args.selector)) && id in after.values && before.values[id] !== after.values[id] && /value=\S|checked=true/.test(before.values[id]));
+        } catch { data.progressed = false; data.effect = 'unknown'; }
+        const recorded = ctx.stepCount() - countBefore;
+        if (recorded > 0) data.text += ` 本次共记录 ${recorded} 步。`;
+        if (!data.progressed && data.status !== 'failed') data.text += ' 尚未确认状态变化；请检查结果，不要直接重复提交。';
+        result = data;
+      } else if (['snapshot', 'page_tree', 'readText', 'api'].includes(tool.name)) {
+        const state = tool.name === 'snapshot' ? ctx.lastObservation : await captureObservation(ctx.pwPage).catch(() => null);
+        result = { text: typeof result === 'string' ? result : result.text, stateFingerprint: state ? stateFingerprint(state) : undefined };
+      }
+      // 直调异常保持原契约；部分成功保留结构化结果供循环处理。
+      if (typeof result !== 'string' && result.status === 'failed' && ctx.stepCount() === countBefore && tool.name !== 'select' && tool.name !== 'component_action' && tool.name !== 'act' && tool.name !== 'batch_actions') throw new Error(redactGenerationText(ctx.jobId, result.text));
+      return redactGenerationData(ctx.jobId, result);
+    } };
+  });
 }
 
 /** 页内动作转发（带 15s 超时兜底）：结果为运行时归一化的三态协议（string→success / throw→failed / 对象→显式三态）。 */
@@ -718,12 +779,13 @@ async function runComponentAction(ctx: GenToolContext, a: Record<string, unknown
     // 词表校验：未知动作直接回灌提示（含可用清单），不执行
     return { status: 'failed', text: `错误：未注册的语义动作「${action}」。可用动作：${ctx.pluginActions.map((v) => v.name).join('、') || '（无）'}。` };
   }
-  const loc = await resolveLocator(ctx, selector);
+  const loc = await resolveLocator(ctx, selector, a.snapshotVersion);
   const handle = await loc.elementHandle({ timeout: 8000 }).catch(() => null);
   if (!handle) return { status: 'failed', text: `错误：未找到目标元素（${selector}）。请重新 snapshot 确认编号后重试。` };
   // 语义化候选动作前预采集（同 runActionShell：动作引发的状态类/可访问名漂移不编入定位器）；
-  // 预采集失败时 finishOk 内动作后补采兜底。
+  // 无可靠定位器时不执行，避免操作完成却无法保存。
   const semPre = await semanticizeLocator(ctx.pwPage, semanticSource(sub(ctx, selector) ?? selector), { mode: 'playwright', noRawFallback: true }).catch(() => null);
+  if (!semPre) return { status: 'failed', text: '无法在操作前生成可靠定位器，本步未执行。请重新 snapshot 定位。' };
   const rawValue = a.value != null ? String(a.value) : undefined;
   const value = sub(ctx, rawValue);
   const extraArgs = (a.args && typeof a.args === 'object' ? a.args : {}) as Record<string, unknown>;

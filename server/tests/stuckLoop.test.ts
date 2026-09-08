@@ -171,7 +171,7 @@ describe('runToolLoop 空转保护', () => {
     clearUsage(JOB);
   });
 
-  it('观察类工具（snapshot/wait）重复不参与检测', async () => {
+  it('相同 snapshot 的反复观察参与停滞检测，wait 不清零', async () => {
     initUsage(JOB);
     const responses = [
       ...Array.from({ length: 6 }, (_, i) => [resp(call('snapshot', {}, `s${i}`), call('wait', { ms: 1000 }, `w${i}`))]).flat(),
@@ -186,8 +186,8 @@ describe('runToolLoop 空转保护', () => {
       maxSteps: 20, usageKey: JOB, onStep: ({ result: r }) => { results.push(r); }, onStuck,
     });
     expect(result.finished).toBe(true);
-    expect(results.every((r) => !r.includes('⚠️'))).toBe(true);
-    expect(onStuck).not.toHaveBeenCalled();
+    expect(results.some((r) => r.includes('⚠️'))).toBe(true);
+    expect(onStuck).toHaveBeenCalledWith('snapshot', expect.anything(), 4, 'observe');
     clearUsage(JOB);
   });
 });

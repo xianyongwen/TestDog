@@ -37,7 +37,9 @@ function buildActionStep(method: string, args: string, loc: Locator | undefined,
     case 'press':
       return { kind: 'action', action: 'press', locator: loc, key: firstQuoted(args), description: line };
     case 'check':
-      return { kind: 'action', action: 'check', locator: loc, description: line };
+    case 'uncheck':
+    case 'setChecked':
+      return { kind: 'action', action: 'check', checked: method === 'check' || (method === 'setChecked' && args.trim().startsWith('true')), locator: loc, description: line };
     case 'selectOption':
       return { kind: 'action', action: 'select', locator: loc, value: firstQuoted(args), description: line };
     default:

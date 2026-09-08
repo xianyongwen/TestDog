@@ -617,6 +617,8 @@ const zhCN = {
   },
 
   stepsTable: {
+    checked: '勾选',
+    unchecked: '取消勾选',
     strategyLabel: {
       response: '接口响应',
       websocket: 'WebSocket',

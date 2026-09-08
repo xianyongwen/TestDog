@@ -7,6 +7,9 @@
 import { describe, it, expect, vi } from 'vitest';
 import { buildGenTools, type GenToolContext } from '../src/services/generationToolHost';
 
+// 本组测试聚焦插件失败文案；目标已经通过动作前唯一性验证。
+vi.mock('../src/services/locatorVerifier', () => ({ semanticizeLocator: async () => ({ strategy: 'css', value: '#select' }) }));
+
 /** 最小 pwPage mock：locator/elementHandle 可用，evaluate 按参数形状分流（2 元=链解析，4 元=动作调用），其余抛错走 catch 降级。 */
 function makeCtx(chainMessage: string): GenToolContext {
   const loc = {

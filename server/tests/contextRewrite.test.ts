@@ -257,7 +257,7 @@ describe('runToolLoop onSuccess 与水位压缩（P1）', () => {
     // 快照默认只回编号表（瘦身），结构树由 page_tree 独立兜底并挂 tree 槽
     const snap = tools.find((t) => t.name === 'snapshot');
     expect(snap?.stateful).toBe('snapshot');
-    expect(snap?.supersedes).toEqual(['tree']);
+    expect(snap?.supersedes).toEqual(['tree', 'screenshot']);
     const tree = tools.find((t) => t.name === 'page_tree');
     expect(tree?.stateful).toBe('tree');
     expect(tree?.supersedes).toBeUndefined();

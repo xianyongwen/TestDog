@@ -49,8 +49,9 @@ export interface CssRecompute {
 
 // 头部拼接页内插件运行时框架：任何注入 CANDIDATE_SCRIPT 的会话自动具备插件注册表能力
 export const CANDIDATE_SCRIPT = PLUGIN_RUNTIME_SCRIPT + String.raw`(() => {
-  if (window.__ttCandidatesInstalled__) return;
-  window.__ttCandidatesInstalled__ = true;
+  if (window.__ttCandidatesInstalled__ === 3) return;
+  window.__ttCandidatesInstalled__ = 3;
+  for (const el of document.querySelectorAll('[data-tt-idx]')) el.removeAttribute('data-tt-idx');
 
   const textOf = (node) => (node.textContent || '').replace(/\s+/g, ' ').trim();
 
@@ -538,8 +539,8 @@ export const CANDIDATE_SCRIPT = PLUGIN_RUNTIME_SCRIPT + String.raw`(() => {
   // 待真网关 1080p 表格页读字基线实测后可调大（参数集中在此，便于调整）。
   // 组件库自定义复选框/单选（.el-checkbox 等）：真实 input 隐藏会被下方可见性过滤，不加则该控件永远没有编号，
   // 模型只能按相邻元素编号瞎猜（实测把编号 124 的所属部门下拉当成用户类型复选框点击）→ 编号落在可点击的包裹层上
-  var INTERACTIVE_SEL = 'a[href],button,input,select,textarea,[role="button"],[role="combobox"],[role="checkbox"],[role="radio"],[role="tab"],[role="link"],[role="textbox"],[role="option"],[role="menuitem"],[role="switch"],[contenteditable="true"],[tabindex]:not([tabindex="-1"]),.ant-select,.ant-picker,.el-select,.el-date-editor,.el-checkbox,.el-radio,.el-checkbox-button,.el-radio-button,.ant-checkbox-wrapper,.ant-radio-wrapper';
-  window.__ttIndexedEls__ = { byIndex: {}, lastUrl: '' };
+  var INTERACTIVE_SEL = 'a[href],button,input,select,textarea,[role="button"],[role="combobox"],[role="checkbox"],[role="radio"],[role="tab"],[role="link"],[role="textbox"],[role="option"],[role="menuitem"],[role="switch"],[contenteditable="true"],[tabindex]:not([tabindex="-1"]),.ant-select,.ant-select-item-option,.el-select-dropdown__item,.ant-picker,.el-select,.el-date-editor,.el-checkbox,.el-radio,.el-checkbox-button,.el-radio-button,.ant-checkbox-wrapper,.ant-radio-wrapper';
+  window.__ttIndexedEls__ = { byIndex: {}, ids: new WeakMap(), next: 0, documentId: Math.random().toString(36).slice(2), version: 0, signature: '', rows: [] };
 
   /** 元素 → 页内唯一 css 路径（id 优先，其余 nth-of-type 链）。 */
   window.__ttCssPath = function (el) {
@@ -559,34 +560,121 @@ export const CANDIDATE_SCRIPT = PLUGIN_RUNTIME_SCRIPT + String.raw`(() => {
     return 'body ' + parts.join(' > ');
   };
 
-  /** 收集可交互元素并分配编号（同页复用索引；输出平铺编号行，供快照文本与截图标注共用）。 */
+  function shortStateText(value, max) {
+    return String(value || '').replace(/\s+/g, ' ').trim().slice(0, max || 100);
+  }
+  function isShown(el) {
+    if (!el || !el.isConnected) return false;
+    const r = el.getBoundingClientRect();
+    if (r.width < 4 || r.height < 4) return false;
+    for (let n = el; n && n.nodeType === 1; n = n.parentElement) {
+      const st = getComputedStyle(n);
+      if (st.visibility === 'hidden' || st.display === 'none' || Number(st.opacity) === 0) return false;
+      // rc-select 虚拟列表把 aria option 放在零尺寸、overflow:hidden 的无障碍容器中。
+      // 它们可能有文本尺寸，但不是可点击的可见选项；采集实际的 option div。
+      if (n !== el) {
+        const box = n.getBoundingClientRect();
+        if (box.width < 4 && /hidden|clip/.test(st.overflowX) || box.height < 4 && /hidden|clip/.test(st.overflowY)) return false;
+      }
+    }
+    return true;
+  }
+  function controlState(el) {
+    const input = el.matches('input,select,textarea') ? el : el.querySelector('input,select,textarea');
+    const target = input || el;
+    const parts = [];
+    if (target.type === 'password') parts.push('filled=' + Boolean(target.value));
+    else if ('value' in target) parts.push('value=' + shortStateText(target.value));
+    if (target.type === 'checkbox' || target.type === 'radio') parts.push('checked=' + target.checked);
+    for (const name of ['checked', 'selected', 'expanded', 'invalid', 'required']) {
+      const val = el.getAttribute('aria-' + name);
+      if (val != null) parts.push(name + '=' + val);
+    }
+    if (target.tagName === 'SELECT') parts.push('selected=' + shortStateText(Array.from(target.selectedOptions).map(o => o.textContent).join(',')));
+    if (target.required) parts.push('required=true');
+    if (target.validity && !target.validity.valid) parts.push('invalid=true');
+    return parts.join(' ');
+  }
+
+  /** 文档内身份单调递增；SPA 路由改变不重置。byIndex 只保留当前可见存活节点。 */
   window.__ttCollectInteractive = function () {
     const state = window.__ttIndexedEls__;
-    const url = location.href.split('#')[0];
-    if (state.lastUrl !== url) { state.byIndex = {}; state.lastUrl = url; }
-    // 清理全页旧标：重渲染后新节点会重新分配编号，残留的 data-tt-idx 会造成属性重复（strict violation）
-    for (const n of document.querySelectorAll('[data-tt-idx]')) n.removeAttribute('data-tt-idx');
-    const lines = [];
-    let next = 0;
-    for (const k of Object.keys(state.byIndex)) next = Math.max(next, parseInt(k, 10));
+    const previous = state.byIndex;
+    const current = {};
+    const rows = [];
+    const styleCache = new WeakMap();
     const els = document.body ? document.body.querySelectorAll(INTERACTIVE_SEL) : [];
-    const styleCache = new WeakMap(); // 本轮收集内复用隐藏判定（visibleTextOf 逐元素 getComputedStyle 的开销收拢为每元素一次）
     for (const el of els) {
-      const r = el.getBoundingClientRect();
-      if (r.width < 4 || r.height < 4) continue;
-      const st = getComputedStyle(el);
-      if (st.visibility === 'hidden' || st.display === 'none' || Number(st.opacity) === 0) continue;
-      let idx = el.__ttIdx;
-      const isNew = idx == null;
-      if (idx == null) { idx = ++next; el.__ttIdx = idx; }
-      // 打属性标记：编号定位走 [data-tt-idx]（绝对唯一），避免 nth-of-type 路径在动态渲染下偏移
+      if (!isShown(el)) continue;
+      let idx = state.ids.get(el);
+      const isNew = !idx || !previous[idx];
+      if (!idx) { idx = ++state.next; state.ids.set(el, idx); }
       if (el.getAttribute('data-tt-idx') !== String(idx)) el.setAttribute('data-tt-idx', String(idx));
-      state.byIndex[idx] = el;
-      const label = (el.getAttribute('aria-label') || el.getAttribute('placeholder') || el.getAttribute('title') || visibleTextOf(el, styleCache)).replace(/\s+/g, ' ').slice(0, 48);
-      const dis = el.disabled || el.getAttribute('aria-disabled') === 'true' ? ' [disabled]' : '';
-      lines.push('[' + idx + ']' + (isNew ? '*' : '') + '<' + el.tagName.toLowerCase() + (label ? ' ' + label : '') + '>' + dis);
+      current[idx] = el;
+      const labels = el.labels ? Array.from(el.labels).map(l => visibleTextOf(l, styleCache)).join(' ') : '';
+      const labelled = (el.getAttribute('aria-labelledby') || '').split(/\s+/).map(id => document.getElementById(id)).filter(Boolean).map(l => visibleTextOf(l, styleCache)).join(' ');
+      const label = shortStateText(el.getAttribute('aria-label') || labelled || labels || el.getAttribute('placeholder') || el.getAttribute('title') || visibleTextOf(el, styleCache), 64);
+      const role = computeRole(el) || el.tagName.toLowerCase();
+      const value = controlState(el);
+      const disabled = el.disabled || el.getAttribute('aria-disabled') === 'true' || el.matches('.ant-select-item-option-disabled,.el-select-dropdown__item.is-disabled');
+      const container = el.closest('[role="dialog"],dialog,form,[role="row"],tr,fieldset');
+      const context = container ? shortStateText(container.getAttribute('aria-label') || container.getAttribute('aria-labelledby') && document.getElementById(container.getAttribute('aria-labelledby'))?.textContent || (container.matches('tr,[role="row"]') ? visibleTextOf(container, styleCache) : ''), 64) : '';
+      let notes = '';
+      try { notes = shortStateText(window.__ttPluginRegistry__?.annotateFor(el), 180); } catch (_) {}
+      rows.push({ id: String(idx), role, label, value, disabled: Boolean(disabled), context, notes, isNew });
     }
-    return lines;
+    for (const k of Object.keys(previous)) if (!current[k] && previous[k]?.isConnected) previous[k].removeAttribute('data-tt-idx');
+    state.byIndex = current;
+    state.rows = rows;
+    const signature = location.href + JSON.stringify(rows.map(({ isNew, ...row }) => row));
+    if (signature !== state.signature) { state.version++; state.signature = signature; }
+    return rows.map(row => '[' + row.id + ']' + (row.isNew ? '*' : '') + '<' + row.role + (row.label ? ' ' + row.label : '') + '>' + (row.value ? ' ' + row.value : '') + (row.disabled ? ' [disabled]' : '') + (row.context ? ' in=' + row.context : '') + (row.notes ? ' ' + row.notes : ''));
+  };
+
+  /** 服务器侧持有完整基线；给模型的快照有范围、分页和字符预算。 */
+  window.__ttSnapshot = function (options) {
+    options = options || {};
+    const lines = window.__ttCollectInteractive();
+    const state = window.__ttIndexedEls__;
+    const roots = Array.from(document.querySelectorAll('dialog[open],[role="dialog"],[role="alertdialog"],[role="listbox"],.el-dialog,.el-drawer,.ant-modal,.ant-drawer,.el-select-dropdown,.ant-select-dropdown,.el-picker-panel,.ant-picker-dropdown')).filter(isShown);
+    let root = null;
+    if (options.scope && !['auto', 'page', 'viewport'].includes(options.scope)) {
+      root = document.querySelector(options.scope);
+      if (!root) throw new Error('快照范围不存在：' + options.scope);
+    }
+    const activeRoots = roots.filter(el => !roots.some(other => other !== el && el.contains(other)));
+    const scope = options.scope || 'auto';
+    const query = String(options.query || '').toLowerCase();
+    const selected = state.rows.map((row, i) => ({ row, line: lines[i] })).filter(({row, line}) => {
+      const el = state.byIndex[row.id];
+      if (root && el !== root && !root.contains(el)) return false;
+      if (scope === 'auto' && activeRoots.length && !activeRoots.some(r => el === r || r.contains(el))) return false;
+      if (scope === 'viewport' || scope === 'auto' && !activeRoots.length) {
+        const r = el.getBoundingClientRect();
+        if (r.bottom <= 0 || r.top >= innerHeight || r.right <= 0 || r.left >= innerWidth) return false;
+      }
+      return !query || line.toLowerCase().includes(query);
+    });
+    const offset = Math.max(0, Math.floor(Number(options.offset) || 0));
+    const limit = Math.min(150, Math.max(1, Math.floor(Number(options.limit) || 80)));
+    const maxChars = Math.min(16000, Math.max(500, Number(options.maxChars) || 10000));
+    const output = [];
+    let size = 0;
+    for (const item of selected.slice(offset, offset + limit)) {
+      if (size + item.line.length > maxChars && output.length) break;
+      output.push(item.line); size += item.line.length + 1;
+    }
+    const values = Object.fromEntries(state.rows.map(r => [r.id, r.value]));
+    const structure = JSON.stringify(state.rows.map(r => [r.id, r.role, r.label, r.disabled, r.context, state.byIndex[r.id].getAttribute('aria-expanded')]));
+    const textRoot = root || (activeRoots.length ? activeRoots[activeRoots.length - 1] : document.body);
+    const alerts = Array.from(document.querySelectorAll('[role="alert"],.el-form-item__error,.ant-form-item-explain-error')).filter(isShown).map(el => shortStateText(el.innerText, 180)).slice(0, 8);
+    const pageText = shortStateText(document.body?.innerText, 12000);
+    return { version: state.documentId + ':' + state.version, documentId: state.documentId, url: location.href,
+      lines: output, total: selected.length, allCount: state.rows.length, offset,
+      nextOffset: offset + output.length < selected.length ? offset + output.length : null,
+      scope: root ? options.scope : scope === 'auto' && activeRoots.length ? 'active-overlay' : scope,
+      values, structure, pageText, alerts,
+      context: shortStateText(textRoot?.getAttribute('aria-label') || textRoot?.getAttribute('role') || '', 80) };
   };
 
   /** 给编号元素绘制标注框（截图前调用；粗边框 + 白底蓝字序号块，适配低分辨率重采样）。 */

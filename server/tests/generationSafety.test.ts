@@ -41,7 +41,7 @@ describe('生成动作与断言', () => {
     const { get, steps } = context({ path: '/success' });
     await get('assert').execute({ type: 'url', expected: '{{path}}', instruction: '验证 URL' });
     expect(steps[0].assertion.expected).toBe('{{path}}');
-    await expect(get('assert').execute({ type: 'url', expected: '/missing' })).rejects.toThrow('断言未通过');
+    await expect(get('assert').execute({ type: 'url', expected: '/missing', timeoutMs: 0 })).rejects.toThrow('断言未通过');
     await expect(get('assert').execute({ type: 'url', selector: '/success' })).rejects.toThrow('缺少 expected');
     expect(steps).toHaveLength(1);
   });

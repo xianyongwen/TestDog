@@ -11,6 +11,11 @@ export interface AgentToolResult {
   image?: string;
   recordedStep?: number;
   effect?: 'observed' | 'unknown';
+  progressed?: boolean;
+  stateFingerprint?: string;
+  resetFields?: string[];
+  observation?: string;
+  observationKind?: string;
 }
 
 export interface AgentTool {
@@ -19,7 +24,7 @@ export interface AgentTool {
   parameters: Record<string, unknown>;
   /**
    * 返回文本（必填）+ 可选截图（base64 jpeg，不含 data: 前缀）。
-   * 截图以紧随 tool 消息的 user 消息直连进入上下文（多模态按张固定计价，比「截图→子调用转文字描述」省一次 LLM 往返）。
+   * 截图直接进入上下文，避免额外的图像描述调用；费用依模型而定。
    */
   execute: (args: Record<string, unknown>) => Promise<string | AgentToolResult>;
   /**
@@ -51,7 +56,7 @@ const STUCK_ASSIST_AT = 6;
 /** 同签名累计达到该次数 → 终止循环（按累计而非窗口计，防止 assist 重置窗口后无限续空转）。 */
 const STUCK_ABORT_AT = 9;
 /** 参与空转检测的变更类工具；观察类（snapshot/wait/see/readText/assert）重复属正常行为。 */
-const STUCK_MUTATING = new Set(['goto', 'click', 'fill', 'press', 'check', 'select', 'component_action', 'act']);
+const STUCK_MUTATING = new Set(['goto', 'click', 'fill', 'press', 'check', 'select', 'component_action', 'act', 'batch_actions']);
 /** see（视觉观察）自上次进展（goto/落库新步骤）以来连续达到该次数 → 挂起 gen:assist 人工决策。 */
 const SEE_ASSIST_AT = 4;
 /** 联动死锁检测：select 类成功调用近窗内同对元素的相邻转移达该次数 → 挂起人工决策。 */
@@ -64,6 +69,8 @@ export function stuckSig(name: string, args: Record<string, unknown>): string | 
   if (!STUCK_MUTATING.has(name)) return null;
   const sel = String(args.selector ?? '').trim();
   if (name === 'goto') return `goto ${String(args.url ?? '')}`;
+  if (name === 'batch_actions') return `batch ${JSON.stringify(args.actions ?? [])}`;
+  if (name === 'check') return `check ${sel} ${args.checked ?? true}`;
   if (name === 'act') return `act ${String(args.instruction ?? '').trim()}`;
   if (name === 'component_action') return `component_action ${sel} ${String(args.action ?? '')} ${String(args.value ?? '')}`;
   if (name === 'fill' || name === 'select') return `${name} ${sel} ${String(args.value ?? '')}`;
@@ -142,6 +149,8 @@ export interface ToolLoopOpts {
    * 未传时 see 连击仍会累计，但任何变更类成功不重置（仅人工介入后重置）。
    */
   isProgress?: (name: string) => boolean;
+  /** 从实际脚本重建已完成事实，供历史压缩；不额外调用模型。 */
+  workingMemory?: () => string;
   /**
    * 可选：see 观察步骤的「模型回答」回传。截图回灌后，模型的作答在下一轮 completion 的 content 里
    * 滞后到达（执行序：see 结果+截图入上下文 → 下轮模型作答并决定下一步）；到达时按 see 的步骤序号回调，
@@ -176,7 +185,7 @@ const stuckWarnText = (count: number): string =>
 
 /** 观察空转兜底警告（onStuck 钩子缺失/异常时回灌，引导模型主动求助而非继续盲看）。 */
 const observeWarnText = (count: number): string =>
-  `\n⚠️ 系统提示：已连续 ${count} 次视觉观察仍无进展。不要继续盲目截图：请调用 ask_human 向用户求助（简述困惑点与已尝试的做法），或换一条路径完成目标。`;
+  `\n⚠️ 系统提示：已连续 ${count} 次观察仍无进展。不要继续盲目截图：请调用 ask_human 向用户求助（简述困惑点与已尝试的做法），或换一条路径完成目标。`;
 
 /** 联动死锁兜底警告（onStuck 钩子缺失/异常/超时回灌）：给出级联表单的正确策略而非继续交替重设。 */
 const linkFlipWarnText = (a: string, b: string, count: number): string =>
@@ -208,6 +217,19 @@ export async function runToolLoop(opts: ToolLoopOpts): Promise<ToolLoopResult> {
   // —— 单状态槽登记：tool_call_id → { kind, round } ——
   const statefulSlots = new Map<string, { kind: string; round: number }>();
   let round = 0;
+  // 续跑从已持久化的消息重建观测槽，包括动作附带的快照。
+  const historicalTools = new Map<string, string>();
+  for (const message of messages as any[]) {
+    if (message.role === 'assistant') for (const tc of message.tool_calls ?? []) historicalTools.set(tc.id, tc.function?.name);
+    if (message.role === 'tool') {
+      const kind = message.__ttStateKind || tools.find(t => t.name === historicalTools.get(message.tool_call_id))?.stateful;
+      if (kind) statefulSlots.set(message.tool_call_id, { kind, round: 0 });
+    }
+  }
+  let lastObservedFingerprint: string | undefined;
+  let unchangedObservations = 0;
+  const recentEvidence: string[] = [];
+
   // —— 空转保护状态：滑动窗口（近期签名）+ 同签名累计（防 assist 重置后无限续空转）+ assist 闩锁 ——
   let stuckHist: string[] = [];
   const stuckTotal = new Map<string, number>();
@@ -270,6 +292,21 @@ export async function runToolLoop(opts: ToolLoopOpts): Promise<ToolLoopResult> {
    * 按上一轮输入而非累计输入判断——累计值单调递增，会让水位在首次到达后每轮都触发/此前永不触发。
    */
   const compressIfNeeded = () => {
+    const textSize = messages.reduce((n, m) => n + (typeof m.content === 'string' ? m.content.length : 0), 0);
+    const rounds = messages.filter(m => m.role === 'assistant').length;
+    if (opts.workingMemory && (rounds > 18 || textSize > 48000 || lastRoundInput > 20000)) {
+      const starts = messages.map((m, i) => m.role === 'assistant' ? i : -1).filter(i => i >= 0);
+      const cutAt = starts[Math.max(0, starts.length - 4)];
+      if (cutAt != null && cutAt > 2) {
+        const memory = redactGenerationText(usageKey, opts.workingMemory());
+        const previous = (messages as any[]).find(m => m.__ttMemory)?.content ?? '';
+        const facts = recentEvidence.length ? recentEvidence.join('\n') : String(previous).slice(-2500);
+        messages.splice(2, cutAt - 2, { role: 'user', content: `【已执行事实；原始轨迹保留在日志】\n${memory}\n【近期证据与失败原因】\n${facts}\n未列为完成的目标仍需验证。`, __ttMemory: true } as any);
+        const live = new Set((messages as any[]).filter(m => m.role === 'tool').map(m => m.tool_call_id));
+        for (const id of statefulSlots.keys()) if (!live.has(id)) statefulSlots.delete(id);
+      }
+      return;
+    }
     if (lastRoundInput < CONTEXT_WATERMARK_TOKENS) return;
     let seen = 0;
     let cut = 2; // 至少保住 system 与首条 user
@@ -312,7 +349,7 @@ export async function runToolLoop(opts: ToolLoopOpts): Promise<ToolLoopResult> {
     // thinking/reasoning_effort 不在 openai v4 SDK 的类型里，网关透传，故整体放宽类型（同 preSplit）
     const req: Record<string, unknown> = {
       model,
-      messages,
+      messages: messages.map(m => Object.fromEntries(Object.entries(m).filter(([key]) => !key.startsWith('__tt')))),
       tools: tools.map((t) => ({
         type: 'function' as const,
         function: { name: t.name, description: t.description, parameters: t.parameters },
@@ -373,7 +410,9 @@ export async function runToolLoop(opts: ToolLoopOpts): Promise<ToolLoopResult> {
         args = {};
       }
       const tool = tools.find((t) => t.name === tc.function?.name);
-      const stateful = Boolean(tool?.stateful);
+      let stateful = Boolean(tool?.stateful);
+      let resultData: AgentToolResult | undefined;
+      let humanIntervened = false;
       let result: string;
       let resultImage: string | undefined;
       let toolOk = false; // 工具执行是否成功（观察空转保护：仅成功调用参与连击/重置）
@@ -399,6 +438,7 @@ export async function runToolLoop(opts: ToolLoopOpts): Promise<ToolLoopResult> {
           if (typeof r === 'string') {
             result = r;
           } else {
+            resultData = r;
             result = r.text;
             resultImage = r.image;
             if (r.status === 'failed') throw new Error(r.text);
@@ -416,20 +456,16 @@ export async function runToolLoop(opts: ToolLoopOpts): Promise<ToolLoopResult> {
               override = null;
             }
           }
+          humanIntervened = override != null;
           result = override ?? `错误：${err}`;
         }
       } else {
         result = `未知工具：${tc.function?.name}`;
       }
       // —— 空转保护：滑动窗口内同签名变更类操作反复出现时分级干预 ——
-      // 有进展的重复不算空转：引擎忠实落库（每个成功动作都新增步骤）后，循环造数「填+回车×N」
-      // 这类有意重复每次调用都落库新步骤，步数在涨即有推进；只有步数无增长的同签名操作
-      // （真死循环/假成功）才计入空转窗口。失败调用（toolOk=false）不落库，恒计入。
+      // 执行/记录和任务进展分离。宿主有实际状态信号时优先使用；兼容其他调用方的探针。
       const toolName = tc.function?.name ?? '';
-      // 进展判定一次求值、两处共用：isProgress 是带状态探针（内部比较并推进 lastStepCount），
-      // 同一轮里调用两次，第二次恒 false（进展已被第一次消费）——下方 seeStreak 的「落库重置」
-      // 分支因此从未生效，观察连击只认 goto（cmtqvusc6 案例：首次提交后的关键观察被误挂起）。
-      const progressed = toolOk && !finished ? Boolean(isProgress?.(toolName)) : false;
+      const progressed = !finished && resultData?.progressed != null ? resultData.progressed : toolOk && !finished ? Boolean(isProgress?.(toolName)) : false;
       const sig = stuckSig(toolName, args);
       if (sig && !finished && !progressed && !signal?.aborted) {
         stuckHist.push(sig);
@@ -450,6 +486,7 @@ export async function runToolLoop(opts: ToolLoopOpts): Promise<ToolLoopResult> {
             override = null; // 钩子异常按 null 处理，不阻断主循环
           }
           if (override != null) {
+            humanIntervened = true;
             result = override;
             stuckHist = stuckHist.filter((s) => s !== sig); // 用户已介入决策，给该签名新预算
             stuckAssistLatched.delete(sig);
@@ -460,28 +497,35 @@ export async function runToolLoop(opts: ToolLoopOpts): Promise<ToolLoopResult> {
           result += stuckWarnText(inWindow);
         }
       }
-      // —— 观察空转保护：see 自上次进展（goto/落库新步骤）以来连击达阈值 → 挂起人工决策 ——
+      // —— 观察空转保护：观察自上次实际进展以来连续停滞达阈值 → 挂起人工决策 ——
       // 仅计成功执行：失败的观察/动作不重置也不累计（失败本身会走 onFailure/同签名空转通道）
-      if (tool?.name === 'see' && !finished && toolOk && !signal?.aborted) {
+      const observationTool = ['see', 'snapshot', 'page_tree', 'readText', 'api'].includes(toolName);
+      const fingerprint = resultData?.stateFingerprint ?? (observationTool && toolName !== 'see' ? `${toolName}:${result}` : undefined);
+      if (fingerprint) {
+        if (fingerprint === lastObservedFingerprint) unchangedObservations++;
+        else { lastObservedFingerprint = fingerprint; unchangedObservations = 0; }
+      }
+      if (observationTool && !finished && toolOk && !signal?.aborted && (toolName === 'see' || unchangedObservations > 0)) {
         seeStreak++;
         if (seeStreak >= SEE_ASSIST_AT) {
           let override: string | null = null;
           try {
-            override = onStuck ? await onStuck(tool.name, args, seeStreak, 'observe') : null;
+            override = onStuck ? await onStuck(toolName, args, seeStreak, 'observe') : null;
           } catch {
             override = null; // 钩子异常按 null 处理，不阻断主循环
           }
-          if (override != null) result = override; // 人工决策作为替换结果回灌（与同签名空转同模式）
+          if (override != null) { result = override; humanIntervened = true; } // 人工决策作为替换结果回灌（与同签名空转同模式）
           else result += observeWarnText(seeStreak);
           seeStreak = 0; // 介入后给新一轮预算
         }
-      } else if (tool && toolOk && !finished && progressed) {
-        seeStreak = 0; // goto/落库新步骤 = 有进展，重置连击
+      } else if (tool && !finished && progressed) {
+        unchangedObservations = 0;
+        seeStreak = 0; // 实际状态推进，重置观察连击
       }
       // —— 联动死锁保护：select 类成功调用在两个元素间交替（选择其一另一个被页面回设）达阈值 → 挂起人工决策 ——
       // 仅计成功执行：失败的 select 不构成「选上又被联动打回」的翻转证据（失败本身走 onFailure/同签名空转通道）；
       // 与同签名重复通道不会同时达到挂起阈值（同签名占窗 6+ 时窗口余量不足以构成 4 次转移），不会连环弹窗。
-      if (!finished && toolOk && tool && !signal?.aborted && isSelectLike(toolName, args)) {
+      if (!finished && toolOk && tool && !signal?.aborted && isSelectLike(toolName, args) && (resultData?.resetFields == null || resultData.resetFields.length > 0)) {
         const sel = String(args.selector ?? '').trim();
         if (sel) {
           linkHist.push(sel);
@@ -496,11 +540,28 @@ export async function runToolLoop(opts: ToolLoopOpts): Promise<ToolLoopResult> {
             } catch {
               override = null; // 钩子异常按 null 处理，不阻断主循环
             }
-            if (override != null) result = override; // 人工决策作为替换结果回灌（同签名/观察空转同模式）
+            if (override != null) { result = override; humanIntervened = true; } // 人工决策作为替换结果回灌（同签名/观察空转同模式）
             else result += linkFlipWarnText(flip.a, flip.b, flip.transitions);
             linkHist = []; // 介入后清窗，给新一轮预算
           }
         }
+      }
+      if (humanIntervened && !signal?.aborted) {
+        // 人工处理可能已改动页面，不能继续附上介入之前的观测。
+        resultData = { ...resultData, text: result, observation: undefined, observationKind: undefined };
+        try {
+          const fresh = await tools.find(t => t.name === 'snapshot')?.execute({});
+          if (fresh != null) resultData = { ...resultData, text: result, observation: typeof fresh === 'string' ? fresh : fresh.text, observationKind: 'snapshot' };
+        } catch { result += '\n人工处理后请重新 snapshot 获取当前页面。'; }
+      }
+      if (!stateful && toolName !== 'finish') {
+        recentEvidence.push(`${toolName} ${JSON.stringify(args).slice(0, 250)} => ${result.slice(0, 550)}`);
+        if (recentEvidence.length > 8) recentEvidence.shift();
+      }
+      const stateKind = resultData?.observationKind ?? tool?.stateful;
+      if (resultData?.observation) {
+        result += `\n${resultData.observation}`;
+        stateful = true;
       }
       result = redactGenerationText(usageKey, result);
       const after = { ...getUsage(usageKey) };
@@ -509,15 +570,16 @@ export async function runToolLoop(opts: ToolLoopOpts): Promise<ToolLoopResult> {
       steps++;
       await onStep({ index: steps, name: tc.function?.name ?? '', args, result, usageDelta: delta });
       if ((tc.function?.name ?? '') === 'see') pendingSeeStep = steps;
-      if (tool?.stateful) {
+      if (stateKind) {
         // 新同槽结果入列前，降级历史同槽与被 supersede 的槽（本轮并行重复结果同样被降级，仅留最新）
-        demoteOldSlots([tool.stateful, ...(tool.supersedes ?? [])], tc.id);
-        statefulSlots.set(tc.id, { kind: tool.stateful, round });
+        demoteOldSlots([stateKind, ...(tool?.supersedes ?? []), ...(stateKind === 'snapshot' ? ['tree', 'screenshot'] : [])], tc.id);
+        statefulSlots.set(tc.id, { kind: stateKind, round });
       }
       messages.push({
         role: 'tool',
         tool_call_id: tc.id,
         content: compactResult(result, stateful),
+        ...(stateKind ? { __ttStateKind: stateKind } : {}),
       } as OpenAI.ChatCompletionMessageParam);
       if (resultImage) {
         // 截图直连：以 user 消息紧随工具结果（协议合法：全部 tool_call 应答前允许夹 user 消息）。

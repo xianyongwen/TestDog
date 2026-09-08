@@ -386,6 +386,8 @@ export default function StepsTable({ steps, onChange, extra, envVarKeys, pickSta
               }}
             />
           );
+        } else if (r.action === 'check') {
+          input = <Select size="small" value={String(r.checked ?? true)} options={[{ value: 'true', label: t('stepsTable.checked') }, { value: 'false', label: t('stepsTable.unchecked') }]} onChange={(checked) => update(i, { checked: checked === 'true' })} />;
         } else if (r.action === 'press') {
           varText = r.key;
           input = <Input size="small" placeholder={t('stepsTable.pressKey')} value={r.key} onChange={(e) => update(i, { key: e.target.value })} />;

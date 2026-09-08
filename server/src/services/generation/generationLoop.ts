@@ -1,3 +1,4 @@
+import { buildWorkingMemory } from './workingMemory';
 import type OpenAI from 'openai';
 import type { getConfig, ReasoningEffort } from '../../config';
 import { applyReviseOps, absorbProbeClick, revokeStepRange, type EmitOutcome, type ReviseOp, type TestStep } from '../../shared/testScript';
@@ -26,8 +27,8 @@ const GEN_OBSERVATION_TOOLS = new Set(['snapshot', 'page_tree', 'wait', 'readTex
 const GEN_LOOP_SYSTEM_PROMPT = `你是 Web 测试脚本生成 Agent：通过调用工具在真实浏览器里完成测试目标，每一步成功操作都会自动记录为脚本步骤。
 
 操作规范：
-1. 动手前先调用 snapshot 获取可交互元素编号表；页面发生变化（导航/弹层/新增内容）后必须重新 snapshot。仅需确认页面状态/查看视觉线索（toast/弹层/渲染问题）时，优先用 see（截图直达、更省）；图上看不清或找不到目标再回到 snapshot。
-2. 元素引用：工具的 selector 参数填 snapshot 编号表里的元素编号（如 "12"）；编号只在最新一次 snapshot 后有效。编号表里找不到目标、或需要页面层级结构时，才调用 page_tree 获取完整语义树（体积大，不要反复调用）；树内编号不能用作 selector。
+1. 首次动手前获取 snapshot。动作结果若已附最新快照，直接据此继续，不要重复观察。快照默认聚焦浮层/视口，找不到目标用 scope=page + query；字段状态和校验优先看文本，视觉问题再用 see。
+2. 独立字段可用 batch_actions 一次规划多个 fill/check/select，宿主串行执行并在变化时停止；按返回的已完成清单继续，不重做。联动字段、提交和弹窗切换单步处理。act 兜底一次只执行一个最匹配候选，复合目标根据新状态继续。取消勾选明确传 checked=false。元素引用：工具的 selector 参数填 snapshot 编号表里的元素编号（如 "12"）；使用编号时携带对应 snapshotVersion；旧版本会被拒绝。编号表里找不到目标、或需要页面层级结构时，才调用 page_tree 获取完整语义树（体积大，不要反复调用）；树内编号不能用作 selector。
 3. 每个动作工具的 instruction 必填：写一句自然语言描述（如「点击登录按钮」），它会被保存进脚本用于回放自愈。
 4. 组件库假控件（antd/element 的下拉、日期面板等）不是原生控件：不要对下拉触发器用 fill/select 原生方式；若可用工具中有 component_action（组件语义动作，如选择下拉选项、设置日期），优先使用它。
 5. 可输入控件（日期输入框等）直接用 fill 填值（如日期 2026-05-04），不要逐格点击。
@@ -94,7 +95,9 @@ async function runScriptReview(o: {
           ? ` url=${s.url}`
           : s.value != null
             ? ` value=${s.value}`
-            : s.key != null
+            : s.action === 'check'
+              ? ` checked=${s.checked ?? true}`
+              : s.key != null
               ? ` key=${s.key}`
               : s.assertion?.expected != null
                 ? ` expected=${s.assertion.expected}`
@@ -270,6 +273,7 @@ export async function runGenerationLoop(o: {
 
   const ctx: GenToolContext = {
     jobId,
+    signal: o.signal,
     page,
     stagehand: o.stagehand,
     pwPage,
@@ -334,6 +338,27 @@ export async function runGenerationLoop(o: {
   };
 
   const tools = buildGenTools(ctx, finishValidate, askHuman);
+  tools.push({ name: 'read_goal', description: '分页读取完整测试目标/附件和确认的大纲；初始内容被省略时先读取相关部分。',
+    parameters: { type: 'object', properties: { offset: { type: 'integer', minimum: 0 }, query: { type: 'string' } } }, stateful: 'goal',
+    execute: async (a) => {
+      const full = `${o.goalText}\n【参考大纲】\n${JSON.stringify(o.outline)}`;
+      const found = a.query ? full.toLowerCase().indexOf(String(a.query).toLowerCase()) : -1;
+      const offset = Math.max(0, found >= 0 ? found - 200 : Math.floor(Number(a.offset) || 0));
+      return `${offset}~${Math.min(full.length, offset + 10000)}/${full.length} 字符\n${full.slice(offset, offset + 10000)}`;
+    } });
+  tools.push({ name: 'read_script', description: '分页读取当前已保存脚本，序号与 revise 一致；修订前可核对。',
+    parameters: { type: 'object', properties: { offset: { type: 'integer', minimum: 0 } } }, stateful: 'script',
+    execute: async (a) => {
+      const offset = Math.max(0, Math.floor(Number(a.offset) || 0));
+      const items: string[] = [];
+      let size = 0;
+      for (let i = offset; i < o.steps.length && items.length < 20; i++) {
+        const line = `${i + 1}. ${JSON.stringify(o.steps[i])}`;
+        if (size + line.length > 12000 && items.length) break;
+        items.push(line); size += line.length;
+      }
+      return `${items.join('\n')}\n当前 ${offset + items.length}/${o.steps.length} 步；offset=${offset + items.length} 读取后续`;
+    } });
 
   const outlineText = o.outline.length
     ? o.outline.map((s, i) => `${i + 1}. [${s.kind === 'assert' ? '断言' : (s.action ?? '操作')}] ${s.instruction}`).join('\n')
@@ -349,6 +374,26 @@ export async function runGenerationLoop(o: {
       content: `【测试目标】\n${o.goalText}\n\n【参考大纲（软约束：按实际情况执行，允许合理偏离；不要照抄大纲文本当作操作）】\n${outlineText}`,
     },
   ];
+  // 原始目标仍由 read_goal 完整提供，初始提示不携带无限长附件。
+  if (messages[1]?.role === 'user' && typeof messages[1].content === 'string' && messages[1].content.length > 16000) {
+    messages[1].content = messages[1].content.slice(0, 12000) + '\n【后续目标/附件已省略，请先使用 read_goal 分页读取完整要求】';
+  }
+  if (o.resumeMessages) {
+    // 暂停期间页面可能已被人工修改；首次续跑模型调用前刷新旧观测。
+    const ids = new Set<string>();
+    for (const m of messages as any[]) if (m.role === 'assistant') for (const tc of m.tool_calls ?? []) {
+      if (['snapshot', 'see', 'page_tree', 'api', 'readText'].includes(tc.function?.name)) ids.add(tc.id);
+    }
+    for (const m of messages as any[]) {
+      if (m.role === 'tool' && (ids.has(m.tool_call_id) || m.__ttStateKind) || m.role === 'user' && m.__ttSlotKind) m.content = '（暂停前观测已过期，请以续跑时的新状态为准）';
+    }
+    try {
+      const snapshot = await tools.find(t => t.name === 'snapshot')!.execute({});
+      messages.push({ role: 'user', content: `【续跑当前页面】\n${typeof snapshot === 'string' ? snapshot : snapshot.text}`, __ttSlotKind: 'snapshot', __ttSlotRound: 0 } as any);
+    } catch {
+      messages.push({ role: 'user', content: '续跑观测尚不可用，请先获取 snapshot，禁止使用暂停前的编号。' });
+    }
+  }
   messages.splice(0, messages.length, ...redactGenerationData(jobId, messages));
 
   // 连续失败计数：变更类工具连续异常达阈值即挂起 gen:assist 请求人工决策；
@@ -411,7 +456,7 @@ export async function runGenerationLoop(o: {
   ): Promise<string | null> => {
     const context =
       kind === 'observe'
-        ? `连续 ${count} 次视觉观察无进展`
+        ? `连续 ${count} 次观察无进展`
         : kind === 'linkage'
           ? `疑似联动字段的组合已交替重试 ${count} 轮`
           : `相同操作已重复 ${count} 次无进展`;
@@ -420,7 +465,7 @@ export async function runGenerationLoop(o: {
       kind: 'tool',
       instruction:
         kind === 'observe'
-          ? `观察空转保护：已连续 ${count} 次视觉观察（see）仍无进展，疑似找不到目标入口`
+          ? `观察空转保护：已连续 ${count} 次观察仍无进展，疑似找不到目标入口`
           : kind === 'linkage'
             ? `联动死锁保护：${detail ?? '两个下拉字段'}已交替成功选择 ${count} 轮，选择其一后另一个被页面回设，疑似联动字段（当前组合不被页面接受）`
             : `空转保护：工具「${name}」相同操作已重复 ${count} 次无进展`,
@@ -428,18 +473,6 @@ export async function runGenerationLoop(o: {
     });
     if (o.isCancelled()) return null;
     return assistFollowup(decision, context);
-  };
-
-  // 观察空转的进展探针：仅「goto 导航」或「落库新脚本步骤」算进展、重置 see 连击——
-  // 变更类工具假成功（点击返回成功但页面无变化、未落库新步骤）不算，避免「连击被假进展反复清零」。
-  let lastStepCount = ctx.stepCount();
-  const isProgress = (name: string): boolean => {
-    const cur = ctx.stepCount();
-    if (cur > lastStepCount) {
-      lastStepCount = cur;
-      return true;
-    }
-    return name === 'goto';
   };
 
   const loop = await runToolLoop({
@@ -457,9 +490,9 @@ export async function runGenerationLoop(o: {
     onFailure,
     onSuccess,
     onStuck,
-    isProgress,
+    workingMemory: () => buildWorkingMemory(o.steps, o.goalText),
     onStep: ({ index, name, args, result, usageDelta: ud }) => {
-      const label = ({ snapshot: '快照', page_tree: '结构树', goto: '导航', click: '点击', fill: '填写', press: '按键', check: '勾选', select: '选择', wait: '等待', readText: '读取文本', assert: '断言', act: 'AI 兜底', see: '视觉观察', api: '网络请求', component_action: '组件动作', ask_human: '人工求助', finish: '完成' } as any)[name] ?? name;
+      const label = ({ snapshot: '快照', page_tree: '结构树', goto: '导航', click: '点击', fill: '填写', press: '按键', check: '勾选', select: '选择', wait: '等待', readText: '读取文本', assert: '断言', act: 'AI 兜底', see: '视觉观察', api: '网络请求', component_action: '组件动作', batch_actions: '批量填写', read_goal: '读取目标', read_script: '读取脚本', ask_human: '人工求助', finish: '完成' } as any)[name] ?? name;
       let detail = '';
       try {
         detail = JSON.stringify(args ?? {}).slice(0, 160);

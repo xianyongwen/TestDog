@@ -622,6 +622,8 @@ const enUS = {
   },
 
   stepsTable: {
+    checked: 'Checked',
+    unchecked: 'Unchecked',
     strategyLabel: {
       response: 'API Response',
       websocket: 'WebSocket',

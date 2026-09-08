@@ -1,3 +1,4 @@
+import { executeLocatorAction, waitForBrowserAssertion } from './browserExecution';
 import { chromium, type Page, type ConsoleMessage, type Response, type WebSocket } from 'playwright';
 import path from 'node:path';
 import { prisma } from '../db';
@@ -516,19 +517,11 @@ async function executeStep(page: Page, step: TestStep, networkEntries: NetworkEn
       await page.goto(step.url);
       break;
     case 'click':
-      await (await resolveStepLocator(page, step)).click({ timeout: 10000 });
-      break;
     case 'fill':
-      await (await resolveStepLocator(page, step)).fill(step.value ?? '', { timeout: 10000 });
-      break;
     case 'press':
-      await (await resolveStepLocator(page, step)).press(step.key ?? 'Enter', { timeout: 10000 });
-      break;
     case 'check':
-      await (await resolveStepLocator(page, step)).check({ timeout: 10000 });
-      break;
     case 'select':
-      await (await resolveStepLocator(page, step)).selectOption(step.value ?? '', { timeout: 10000 });
+      await executeLocatorAction(await resolveStepLocator(page, step), step, 10000);
       break;
     case 'assert':
       await runAssertion(page, step, networkEntries, wsEntries);
@@ -625,38 +618,10 @@ async function runAssertion(page: Page, step: TestStep, networkEntries: NetworkE
     await runWebsocketAssertion(step.locator.value, a, wsEntries);
     return;
   }
-  if (a.type === 'url') {
-    const url = page.url();
-    if (a.expected && !url.includes(a.expected)) throw new Error(`URL 断言失败：当前 ${url}，期望含「${a.expected}」`);
-    return;
-  }
-  // hidden 断言在生成期目标已消失时以「无定位器」记录：元素不存在即视为通过
+  // 无定位器的历史 hidden 断言保持兼容。
   if (a.type === 'hidden' && !step.locator) return;
-  // text 断言生成期按「页面 body 含文本」校验且不落 locator（生成端 emit 仅 visible+selector 带 locator）。
-  // 回放侧对无 locator 的 text 断言按 body 全页包含校验，轮询等待列表刷新等异步渲染；
-  // 否则 buildLocator 必抛「步骤缺少定位器」，确定性回放被架空、每条必烧一次自愈。
-  if (a.type === 'text' && !step.locator) {
-    const expected = a.expected ?? '';
-    if (!expected) return; // 与元素级口径一致：无期望值不比较
-    for (let i = 0; i < 50; i++) {
-      const body = (await page.locator('body').textContent()) ?? '';
-      if (body.includes(expected)) return;
-      await new Promise((r) => setTimeout(r, 200)); // 共 ~10s，与元素级 10s 等待预算对齐
-    }
-    throw new Error(`文本断言失败：页面未包含「${expected}」`);
-  }
-  const loc = buildLocator(page, step.locator);
-  if (a.type === 'visible') {
-    await loc.waitFor({ state: 'visible', timeout: 10000 });
-  } else if (a.type === 'hidden') {
-    // hidden：元素不可见（display:none / visibility:hidden / opacity:0）或不存在于 DOM。等同 Playwright `toBeHidden()`。
-    // 不需要 expected；只校验元素当前处于不可见/不存在状态。
-    await loc.waitFor({ state: 'hidden', timeout: 10000 });
-  } else if (a.type === 'text') {
-    await loc.waitFor({ state: 'visible', timeout: 10000 });
-    const text = (await loc.textContent()) ?? '';
-    if (a.expected && !text.includes(a.expected)) throw new Error(`文本断言失败：实际「${text}」，期望含「${a.expected}」`);
-  }
+  const loc = step.locator && a.type !== 'url' ? buildLocator(page, step.locator) : undefined;
+  await waitForBrowserAssertion({ page, locator: loc, type: a.type, expected: a.expected, timeoutMs: 10000 });
 }
 
 /**
