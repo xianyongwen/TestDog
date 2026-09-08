@@ -1,6 +1,6 @@
 # Settings
 
-All configuration lives under **Settings**, grouped in collapsible panels, taking effect immediately.
+All configuration lives under **Settings**, grouped in collapsible panels, and takes effect after clicking the save button below.
 
 <video class="doc-video" src="/videos/settings.mp4" autoplay muted loop controls playsinline></video>
 <p class="doc-video-caption">Settings: Language, Appearance, AI Gateway, Browser, Prompt, Data Retention</p>

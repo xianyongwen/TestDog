@@ -1,6 +1,6 @@
 # 设置
 
-所有配置集中在「设置」页，按折叠面板分组，修改即生效。
+所有配置集中在「设置」页，按折叠面板分组，点击下方保存按钮后生效。
 
 <video class="doc-video" src="/videos/settings.mp4" autoplay muted loop controls playsinline></video>
 <p class="doc-video-caption">设置页：语言、外观、AI 网关配置、浏览器配置、提示词配置、数据保留</p>
