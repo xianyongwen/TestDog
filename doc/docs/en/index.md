@@ -10,6 +10,9 @@ hero:
     alt: TestDog
   actions:
     - theme: brand
+      text: Download Latest
+      link: /en/download
+    - theme: alt
       text: Get Started
       link: /en/guide/getting-started
     - theme: alt

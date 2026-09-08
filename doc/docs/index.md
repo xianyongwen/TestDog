@@ -10,6 +10,9 @@ hero:
     alt: TestDog
   actions:
     - theme: brand
+      text: 下载最新版
+      link: /download
+    - theme: alt
       text: 快速开始
       link: /guide/getting-started
     - theme: alt

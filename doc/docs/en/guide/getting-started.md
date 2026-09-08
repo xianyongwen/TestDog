@@ -4,6 +4,8 @@ From installation to your first passing case in about 10 minutes.
 
 ## 1. Install
 
+[Download the latest installer](/en/download) for your operating system and chip.
+
 - **macOS**: open the `.dmg` and drag TestDog into **Applications**.
 - **Windows**: run the NSIS installer and follow the wizard.
 

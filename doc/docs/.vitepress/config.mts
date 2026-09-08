@@ -2,6 +2,7 @@ import { defineConfig } from 'vitepress'
 
 // 中 / 英共享的导航结构（en 侧路径加 /en 前缀）
 const nav = (p = '') => [
+  { text: '下载', link: `${p}/download` },
   { text: '指南', link: `${p}/guide/what-is-testdog`, activeMatch: `${p}/(guide|menus)/` },
   { text: '常见问题', link: `${p}/guide/faq` }
 ]
@@ -10,6 +11,7 @@ const sidebar = (p = '') => [
   {
     text: '开始',
     items: [
+      { text: '下载安装', link: `${p}/download` },
       { text: '简介', link: `${p}/guide/what-is-testdog` },
       { text: '快速开始', link: `${p}/guide/getting-started` }
     ]
@@ -57,6 +59,7 @@ const enSidebar = (p = '') => [
   {
     text: 'Start',
     items: [
+      { text: 'Download', link: `${p}/download` },
       { text: 'Introduction', link: `${p}/guide/what-is-testdog` },
       { text: 'Getting Started', link: `${p}/guide/getting-started` }
     ]
@@ -92,6 +95,7 @@ const enSidebar = (p = '') => [
 ]
 
 const enNav = (p = '') => [
+  { text: 'Download', link: `${p}/download` },
   { text: 'Guide', link: `${p}/guide/what-is-testdog`, activeMatch: `${p}/(guide|menus)/` },
   { text: 'FAQ', link: `${p}/guide/faq` }
 ]
