@@ -22,7 +22,7 @@
     return null;
   }
 
-  async function selectOption(el, want) {
+  async function selectOption(el, want, index) {
     const editor = el.closest('.el-select') || el;
     const input = editor.querySelector('input') || editor;
     // 弹层已开则复用（重复点击会先收起，导致等待弹层超时）
@@ -31,26 +31,38 @@
       input.click();
       dropdown = await window.__ttPickWait(itemDropdown, 5000);
     }
-    let target = null;
-    for (const it of dropdown.querySelectorAll('.el-select-dropdown__item')) {
-      if ((it.textContent || '').trim() === want && !it.classList.contains('hidden')) { target = it; break; }
+    if (index != null) {
+      const scroller = dropdown.querySelector('.el-select-dropdown__wrap');
+      if (scroller && scroller.scrollTop) { scroller.scrollTop = 0; scroller.dispatchEvent(new Event('scroll')); await sleep(150); }
     }
+    let target = null;
+    let availableIndex = 0;
+    for (const it of dropdown.querySelectorAll('.el-select-dropdown__item')) {
+      const r = it.getBoundingClientRect();
+      if ((index != null || (it.textContent || '').trim() === want) && !it.classList.contains('hidden')
+        && !it.classList.contains('is-disabled') && it.getAttribute('aria-disabled') !== 'true'
+        && r.width > 0 && r.height > 0 && getComputedStyle(it).visibility !== 'hidden') {
+        if (index == null || availableIndex++ === index) { target = it; break; }
+      }
+    }
+    if (index != null && target) want = (target.textContent || '').trim();
     if (!target) {
       const all = Array.from(dropdown.querySelectorAll('.el-select-dropdown__item'))
         .slice(0, 10)
         .map((it) => (it.textContent || '').trim())
         .filter(Boolean);
-      throw new Error(`下拉选项未找到：${want}（当前可选：${all.join(' / ') || '无'}）。请从当前可选列表中选取，或修正选项文本。`);
+      throw new Error(`下拉选项未找到：${index != null ? "index=" + index : want}（当前可选：${all.join(' / ') || '无'}）。请从当前可选列表中选取，或修正选项文本。`);
     }
+    if (!want) throw new Error('选项文本为空，无法保存可回放的选择动作');
     target.click();
     await sleep(150);
     // 多选模式（选中项以 el-tag 展示）选中后弹层不自动收起：再点一次输入框收起（单选 el 无 el-tag，不受影响）
     if (editor.querySelector('.el-tag')) {
       input.click();
       await sleep(150);
-      return `已选择下拉选项：${want}（多选模式已收起弹层）`;
+      return index != null ? { status: 'success', message: `已选择下拉选项：${want}（多选模式已收起弹层）`, resolvedValue: want } : `已选择下拉选项：${want}（多选模式已收起弹层）`;
     }
-    return `已选择下拉选项：${want}`;
+    return index != null ? { status: 'success', message: `已选择下拉选项：${want}`, resolvedValue: want } : `已选择下拉选项：${want}`;
   }
 
   return {
@@ -81,13 +93,14 @@
     actions: {
       // select：统一选择动作。分发器按优先级候选：插件链（本插件，preset 序）→ 原生 selectOption 兜底
       select: {
-        doc: '在 Element（element-ui / element-plus）下拉中选择选项（自动打开弹层并点击文本匹配项）。args.value=选项可见文本',
+        doc: '在 Element（element-ui / element-plus）下拉中选择选项（自动打开弹层并点击文本匹配项）。args.value=选项可见文本；或 args.index（0 起）选择当前可见且未禁用的第 N 项',
         preferFill: false,
         async fn(el, args) {
           const want = String(args?.value || '').trim();
-          if (!want) throw new Error('下拉选择缺少 args.value（选项文本）');
+          if (!want && args?.index == null) throw new Error('下拉选择缺少 args.value（选项文本），按序选择请传 args.index（0 起）');
+          if (args?.index != null && (!Number.isInteger(args.index) || args.index < 0)) throw new Error('args.index 必须为非负整数（0 起）');
           if (!el.closest('.el-select')) throw new Error('目标元素不属于 Element 下拉（.el-select）');
-          return await selectOption(el, want);
+          return await selectOption(el, want, args?.index);
         },
         // 页内后验：选中标签（element-plus 回显 label）或 input.value（element-ui）与期望一致
         verify(el, args) {

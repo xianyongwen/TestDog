@@ -13,10 +13,10 @@ vi.mock('../src/services/locatorVerifier', () => ({ semanticizeLocator: async ()
 /** 最小 pwPage mock：locator/elementHandle 可用，evaluate 按参数形状分流（2 元=链解析，4 元=动作调用），其余抛错走 catch 降级。 */
 function makeCtx(chainMessage: string): GenToolContext {
   const loc = {
-    elementHandle: async () => ({}),
-    selectOption: async () => {
+    elementHandle: vi.fn(async () => ({ evaluate: async () => false })),
+    selectOption: vi.fn(async () => {
       throw new Error('Element is not a <select> element');
-    },
+    }),
   };
   const evaluate = vi.fn(async (_fn: unknown, args?: unknown[]) => {
     const a = Array.isArray(args) ? args : [];
@@ -61,6 +61,37 @@ async function runComponentAction(chainMessage: string): Promise<string> {
 }
 
 describe('component_action 全链失败回灌文案', () => {
+  it('缺少选择参数在调用插件和原生交互前拒绝，并提供按序选择的恢复参数', async () => {
+    const ctx = makeCtx('不应调用');
+    const result: any = await buildGenTools(ctx).find(t => t.name === 'component_action')!.execute({ action: 'select', selector: '46', instruction: '选择第一个客户' });
+    expect(result.status).toBe('failed');
+    expect(result.text).toContain('args:{index:0}');
+    expect(result.text).not.toContain('全链失败');
+    expect(ctx.pwPage.locator().elementHandle).not.toHaveBeenCalled();
+    expect(ctx.emit).not.toHaveBeenCalled();
+  });
+
+  it.each([-1, 1.5, '1', true])('非法 index=%s 不执行选择', async index => {
+    const ctx = makeCtx('不应调用');
+    const result: any = await buildGenTools(ctx).find(t => t.name === 'component_action')!.execute({ action: 'select', selector: '46', args: { index }, instruction: '选择客户' });
+    expect(result.text).toContain('非负整数');
+    expect(ctx.pwPage.locator().elementHandle).not.toHaveBeenCalled();
+  });
+
+  it('value 与 index 冲突时不执行', async () => {
+    const ctx = makeCtx('不应调用');
+    const result: any = await buildGenTools(ctx).find(t => t.name === 'component_action')!.execute({ action: 'select', selector: '46', value: '客户', args: { index: 0 }, instruction: '选择客户' });
+    expect(result.text).toContain('二选一');
+    expect(ctx.emit).not.toHaveBeenCalled();
+  });
+
+  it('非原生下拉的插件失败后，不调用 selectOption', async () => {
+    const ctx = makeCtx('下拉选项未找到：x（当前可选：y）');
+    const result: any = await buildGenTools(ctx).find(t => t.name === 'component_action')!.execute({ action: 'select', selector: '46', value: 'x', instruction: '选择客户' });
+    expect(ctx.pwPage.locator().selectOption).not.toHaveBeenCalled();
+    expect(result.text).toContain('已跳过原生 selectOption');
+  });
+
   it('链上错误带「当前可选：」→ 首选建议修正 value 重试同一动作，不引导两段式', async () => {
     const r = await runComponentAction('下拉选项未找到：普通用户（当前可选：南海政数普通用户 / 南海政数管理）。请从当前可选列表中选取，或修正选项文本。');
     expect(r).toContain('当前可选：南海政数普通用户');

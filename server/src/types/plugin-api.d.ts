@@ -65,6 +65,8 @@ export interface PluginCandidate {
 
 /** 动作结果三态协议：string 返回视为 success（向后兼容），throw 视为 failed。 */
 export interface PluginActionResult {
+  /** 按序选择等动作解析出的实际值；运行时用其做后验，生成器保存为确定的回放参数。 */
+  resolvedValue?: string;
   status: 'success' | 'failed' | 'uncertain';
   message: string;
 }

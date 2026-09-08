@@ -157,12 +157,14 @@ describe('tree-select 系内置插件（select 动作树形兜底）', () => {
     await page.close();
   }, 120000);
 
-  it('element-plus el-tree-select：折叠态由 el-select 先试命中（树节点内嵌 li 常驻 DOM，点击隐藏 li 亦选中）', async () => {
+  it('element-plus el-tree-select：跳过隐藏选项后由树形插件展开并选中', async () => {
     const page = await fixturePage('element-plus.html');
     await collapseDevNode(page, 'element');
     const r = await runChain(page, 'div.block:nth-of-type(2) .el-select', '前端组');
     expect(r.chainIds).toEqual(['el-select', 'el-tree-select']);
-    expect(r.winner).toBe('el-select');
+    expect(r.attempted).toEqual(['el-select', 'el-tree-select']);
+    expect(r.winner).toBe('el-tree-select');
+    expect(r.status).toBe('success');
     expect(await displayOf(page)).toContain('前端组');
     await page.close();
   }, 120000);

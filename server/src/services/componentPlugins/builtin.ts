@@ -53,7 +53,7 @@ function loadSource(name: string): string {
  * 新框架插件复用同名词表时改这里（或按域拆新共享常量），不要只改自己的 actionsMeta。
  */
 const SELECT_ACTION_DOC =
-  '在下拉中选择选项（自动打开弹层并点击文本/标题匹配项，支持 Ant Design、Element、Vant 与 MUI；原生 <select> 由分发器原生交互层兜底 selectOption；树形选择器（TreeSelect/树形下拉）同样用本动作，value 传目标节点可见文本，树形弹层由 tree-select 系列内置插件兜底闭环；级联选择器（Cascader）用本动作时 value 传完整路径「A / B / C」逐级展开点选；Vant 下拉菜单与滚轮选择弹层、MUI Select 与 Autocomplete 同样用本动作）。args.value=选项可见文本或完整路径';
+  '在下拉中选择选项（自动打开弹层并点击文本/标题匹配项，支持 Ant Design、Element、Vant 与 MUI；原生 <select> 由分发器原生交互层兜底 selectOption；树形选择器（TreeSelect/树形下拉）同样用本动作，value 传目标节点可见文本，树形弹层由 tree-select 系列内置插件兜底闭环；级联选择器（Cascader）用本动作时 value 传完整路径「A / B / C」逐级展开点选；Vant 下拉菜单与滚轮选择弹层、MUI Select 与 Autocomplete 同样用本动作）。args.value=选项可见文本或完整路径；Ant Design、Element 普通下拉和原生 select 也支持 args.index（非负整数，0=第一项、1=第二项），按当前可见且未禁用选项排序选择，与 value 二选一；选项未知时不要省略选择参数';
 
 const SET_DATE_ACTION_DOC =
   '设置组件库日期选择器（fill 优先，失败走面板翻页与日期格点击；日期时间选择器自动点击确认/确定按钮提交，支持 Ant Design 与 Element；Vant 日期滚轮/日历面板为只读触发器，直接走弹层点选+确认）。args.value=YYYY-MM-DD（日期时间选择器自动补 00:00:00，也可显式带 HH:mm(:ss)）';
@@ -67,14 +67,14 @@ const SET_VALUE_ACTION_DOC =
 export const BUILTIN_PLUGIN_DEFS: BuiltinPluginDef[] = [
   {
     name: 'ant-select',
-    version: '1.2.0',
+    version: '1.3.0',
     description: 'Ant Design 下拉选择适配（兼容 antd v5/v6 触发器 DOM）：select 动作（原生 <select> 由分发器原生层兜底）、combobox 语义候选与「勿 fill」标注（内置）。弹层已开且归属本控件时复用，他人残留先收起再打开；多选模式选中后自动收起弹层',
     entryFile: loadSource('ant-select'),
     actionsMeta: [{ name: 'select', doc: SELECT_ACTION_DOC, preferFill: false }],
   },
   {
     name: 'el-select',
-    version: '1.0.0',
+    version: '1.1.0',
     description: 'Element（element-ui / element-plus）下拉选择适配：select 动作（原生 <select> 由分发器原生层兜底）、combobox 语义候选与「勿 fill」标注（内置）。弹层已开时复用；多选模式选中后自动收起弹层',
     entryFile: loadSource('el-select'),
     actionsMeta: [{ name: 'select', doc: SELECT_ACTION_DOC, preferFill: false }],

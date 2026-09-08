@@ -136,6 +136,7 @@ export const PLUGIN_RUNTIME_SCRIPT = String.raw`(() => {
         if (raw && typeof raw === 'object' && typeof raw.status === 'string') {
           const st = raw.status === 'success' || raw.status === 'failed' ? raw.status : 'uncertain';
           out = { status: st, message: raw.message == null ? '' : String(raw.message) };
+          if (typeof raw.resolvedValue === 'string') out.resolvedValue = raw.resolvedValue;
         } else {
           out = { status: 'success', message: raw == null ? '' : String(raw) };
         }
@@ -144,7 +145,8 @@ export const PLUGIN_RUNTIME_SCRIPT = String.raw`(() => {
       }
       if (out.status === 'success' && def && typeof def === 'object' && typeof def.verify === 'function') {
         try {
-          const ok = await def.verify(el, args, window.__ttPw);
+          const verifyArgs = typeof out.resolvedValue === 'string' ? { ...args, value: out.resolvedValue } : args;
+          const ok = await def.verify(el, verifyArgs, window.__ttPw);
           if (!ok) out = { status: 'failed', message: (out.message ? out.message + '；' : '') + '动作后验未通过（终态与预期不符）' };
         } catch (ve) {
           out = { status: 'uncertain', message: (out.message ? out.message + '；' : '') + '后验执行异常：' + String((ve && ve.message) || ve) };

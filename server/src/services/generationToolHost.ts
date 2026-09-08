@@ -495,7 +495,7 @@ export function buildGenTools(
       .join('\n');
     tools.push({
       name: 'component_action',
-      description: `组件库语义动作：对组件库假控件（antd/element 的下拉、日期选择器等非原生控件）执行注册的语义动作，平台自动按优先级匹配组件库插件完成（失败自动降级：下一插件 → 原生交互）。动作自身会打开/收起弹层等临时 UI：直接对目标控件调用即可，无需先点击它打开（如先点开下拉）；不确定选项/值是否存在也可直接调用，失败结果会列出当前可选项。args.action=动作名（限下方词表）+ args.selector（目标元素编号或定位表达式）+ args.value（主要参数：选项文本/日期）+ args.instruction（必填）。\n可用动作词表：\n${vocabDesc}`,
+      description: `组件库语义动作：对组件库假控件（antd/element 的下拉、日期选择器等非原生控件）执行注册的语义动作，平台自动按优先级匹配组件库插件完成（失败自动降级：下一插件 → 原生交互）。动作自身会打开/收起弹层等临时 UI：直接对目标控件调用即可，无需先点击它打开（如先点开下拉）；不确定选项/值是否存在也可直接调用，失败结果会列出当前可选项。args.action=动作名（限下方词表）+ args.selector（目标元素编号或定位表达式）+ args.value（主要参数：选项文本/日期；select 可改传 args.index，0 起，与 value 二选一）+ args.instruction（必填）。\n可用动作词表：\n${vocabDesc}`,
       parameters: componentActionParameters(ctx.pluginActions.map((v) => v.name)),
       execute: (a) => runComponentAction(ctx, a),
     });
@@ -779,6 +779,23 @@ async function runComponentAction(ctx: GenToolContext, a: Record<string, unknown
     // 词表校验：未知动作直接回灌提示（含可用清单），不执行
     return { status: 'failed', text: `错误：未注册的语义动作「${action}」。可用动作：${ctx.pluginActions.map((v) => v.name).join('、') || '（无）'}。` };
   }
+  const extraArgs = (a.args && typeof a.args === 'object' ? { ...a.args } : {}) as Record<string, unknown>;
+  const providedValue = a.value ?? extraArgs.value;
+  const indexed = action === 'select' && extraArgs.index != null;
+  if (action === 'select') {
+    if (indexed && (!Number.isInteger(extraArgs.index) || Number(extraArgs.index) < 0)) {
+      return { status: 'failed', text: 'select 参数错误：args.index 必须为非负整数（0=第一项，1=第二项）。本步未执行。' };
+    }
+    if (indexed && providedValue != null) {
+      return { status: 'failed', text: 'select 参数冲突：value 与 args.index 只能二选一。本步未执行，请修正参数后重试本动作。' };
+    }
+    if (!indexed && (typeof providedValue !== 'string' || !providedValue.trim())) {
+      return { status: 'failed', text: 'select 缺少 value（选项文本）。若目标是第一项，请保持 action、selector 不变，补上 args:{index:0} 重试；若已知名称，请补上 value。instruction 仅用于描述，不会自动解析为选项。本步未执行，无需先点击展开或使用 act。' };
+    }
+  }
+  let rawValue = providedValue != null ? String(providedValue) : undefined;
+  const value = sub(ctx, rawValue);
+  delete extraArgs.value;
   const loc = await resolveLocator(ctx, selector, a.snapshotVersion);
   const handle = await loc.elementHandle({ timeout: 8000 }).catch(() => null);
   if (!handle) return { status: 'failed', text: `错误：未找到目标元素（${selector}）。请重新 snapshot 确认编号后重试。` };
@@ -786,9 +803,6 @@ async function runComponentAction(ctx: GenToolContext, a: Record<string, unknown
   // 无可靠定位器时不执行，避免操作完成却无法保存。
   const semPre = await semanticizeLocator(ctx.pwPage, semanticSource(sub(ctx, selector) ?? selector), { mode: 'playwright', noRawFallback: true }).catch(() => null);
   if (!semPre) return { status: 'failed', text: '无法在操作前生成可靠定位器，本步未执行。请重新 snapshot 定位。' };
-  const rawValue = a.value != null ? String(a.value) : undefined;
-  const value = sub(ctx, rawValue);
-  const extraArgs = (a.args && typeof a.args === 'object' ? a.args : {}) as Record<string, unknown>;
   const actionArgs: Record<string, unknown> = { ...extraArgs, ...(value != null ? { value } : {}) };
   const beforeHash = await shotHash(ctx.pwPage).catch(() => null);
 
@@ -831,9 +845,16 @@ async function runComponentAction(ctx: GenToolContext, a: Record<string, unknown
   let chainMessage = '';
   for (const hit of chain) {
     attempted.push(hit.id);
-    const result = await invokeInPage(ctx, hit.id, action, handle, actionArgs).catch((e) => ({ status: 'failed' as const, message: String(e) }));
-    if (result.status === 'success') return await finishOk(hit.id, result.message || `已由插件 ${hit.id} 完成`);
-    if (result.status === 'uncertain') {
+    const result: PluginActionResult = await invokeInPage(ctx, hit.id, action, handle, actionArgs).catch((e) => ({ status: 'failed' as const, message: String(e) }));
+    if (result.status === 'success') {
+      if (indexed) {
+        if (!result.resolvedValue?.trim()) return { status: 'uncertain', text: '插件未返回按序选择的实际文本，无法保存可回放步骤。请确认页面状态并请求人工协助，不要重复执行。' };
+        rawValue = result.resolvedValue;
+        delete extraArgs.index;
+      }
+      return await finishOk(hit.id, result.message || `已由插件 ${hit.id} 完成`);
+    }
+    if (result.status === 'uncertain' && !indexed) {
       await new Promise((r) => setTimeout(r, 300));
       const afterHash = await shotHash(ctx.pwPage).catch(() => null);
       if (beforeHash && afterHash && effectChanged(beforeHash, afterHash)) {
@@ -849,7 +870,22 @@ async function runComponentAction(ctx: GenToolContext, a: Record<string, unknown
   let nativeMessage = '';
   try {
     if (action === 'select') {
-      await loc.selectOption(String(value ?? ''));
+      const native = await handle.evaluate((el: Element) => el.tagName === 'SELECT');
+      if (!native) throw new Error('已跳过原生 selectOption：目标不是原生 <select>，请修正选择参数或检查插件适配');
+      if (indexed) {
+        const option = await handle.evaluate((el: HTMLSelectElement, requestedIndex: number) => {
+          const indices = Array.from(el.options).map((o, index) => ({ o, index })).filter(({ o }) => !o.disabled && !o.closest('optgroup[disabled]') && !o.hidden && getComputedStyle(o).display !== 'none' && getComputedStyle(o).visibility !== 'hidden' && o.value !== '');
+          const option = indices[requestedIndex];
+          return option ? { index: option.index, value: option.o.value } : null;
+        }, Number(extraArgs.index));
+        if (!option) throw new Error('args.index 超出可选范围（已排除禁用、隐藏和空值占位项），请修正索引后重试本动作');
+        await loc.selectOption({ index: option.index });
+        rawValue = option.value;
+        actionArgs.value = option.value;
+        delete extraArgs.index;
+      } else {
+        await loc.selectOption(String(value ?? ''));
+      }
     } else if (value != null) {
       await loc.fill(String(value ?? ''));
     } else {
@@ -876,7 +912,11 @@ async function runComponentAction(ctx: GenToolContext, a: Record<string, unknown
   // 链上错误已带真实可选值清单（select 系插件「当前可选：」/ tree-select 系插件「当前可见：」）时，首选建议是
   // 修正 value 重试同一语义动作——这比换路径（两段式/act）路径更短，且成功后落库的是稳健的语义动作步骤。
   // 日期禁用类诊断同理：值本身格式合法但被应用规则（disabledDate）拒绝，换路径无解，只能换值。
-  const guide = /（当前(可选|可见)：/.test(chainMessage)
+  const guide = indexed
+    ? '请修正 args.index，或从当前可选清单取具体文本作为 value 并移除 args.index 后重试本动作；不要重复相同参数或改用 act。'
+    : /缺少.*value/.test(chainMessage)
+    ? '该插件需要具体选项文本；请补上 value 并移除 args.index 后重试本动作，不要重复缺参调用。'
+    : /（当前(可选|可见)：/.test(chainMessage)
     ? '请从上方「当前可选/当前可见」清单中取正确文本，仅修正 args.value 重试本动作（其余参数不变），不要改用两段式点击或 act。'
     : /禁用/.test(chainMessage)
       ? '该值格式合法但被应用规则禁用（如日期不可早于今天），请仅修正 args.value 为可用值（如未来日期）重试本动作（其余参数不变）。'

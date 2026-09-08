@@ -69,7 +69,7 @@
     }
   }
 
-  async function selectOption(el, want) {
+  async function selectOption(el, want, index) {
     const editor = el.closest('.ant-select') || el.closest('.ant-select-selector') || el;
     const selectorEl = editor.querySelector('.ant-select-selector') || editor;
     // 弹层已开且归属本控件则复用（重复 mousedown 会先收起，导致等待弹层超时）；
@@ -84,19 +84,29 @@
       selectorEl.click();
       dropdown = await window.__ttPickWait(itemDropdown, 5000);
     }
-    let target = dropdown.querySelector(`.ant-select-item-option[title="${want.replace(/"/g, '\\"')}"]`);
-    if (!target) {
-      for (const it of dropdown.querySelectorAll('.ant-select-item-option')) {
-        if ((it.textContent || '').trim() === want) { target = it; break; }
-      }
+    const selectable = (it) => {
+      const r = it.getBoundingClientRect();
+      return r.width > 0 && r.height > 0 && getComputedStyle(it).visibility !== 'hidden'
+        && !it.classList.contains('ant-select-item-option-disabled') && it.getAttribute('aria-disabled') !== 'true';
+    };
+    const options = Array.from(dropdown.querySelectorAll('.ant-select-item-option')).filter(selectable);
+    // 虚拟列表恢复滚动位置时先回顶部，避免把当前视窗首项误当作列表第一项。
+    if (index != null) {
+      const scroller = dropdown.querySelector('.rc-virtual-list-holder');
+      if (scroller && scroller.scrollTop) { scroller.scrollTop = 0; scroller.dispatchEvent(new Event('scroll')); await sleep(150); }
     }
+    let target = index != null
+      ? Array.from(dropdown.querySelectorAll('.ant-select-item-option')).filter(selectable)[index]
+      : options.find(it => it.getAttribute('title') === want || (it.textContent || '').trim() === want);
+    if (index != null && target) want = (target.textContent || '').trim();
     if (!target) {
       const all = Array.from(dropdown.querySelectorAll('.ant-select-item-option'))
         .slice(0, 10)
         .map((it) => (it.textContent || '').trim())
         .filter(Boolean);
-      throw new Error(`下拉选项未找到：${want}（当前可选：${all.join(' / ') || '无'}）。请从当前可选列表中选取，或修正选项文本。`);
+      throw new Error(`下拉选项未找到：${index != null ? "index=" + index : want}（当前可选：${all.join(' / ') || '无'}）。请从当前可选列表中选取，或修正选项文本。`);
     }
+    if (!want) throw new Error('选项文本为空，无法保存可回放的选择动作');
     target.click();
     await sleep(150);
     // 多选模式选中后弹层不自动收起：再点一次触发器收起，避免遮挡后续表单操作（下次调用会重新展开）
@@ -104,9 +114,9 @@
       selectorEl.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
       selectorEl.click();
       await sleep(150);
-      return `已选择下拉选项：${want}（多选模式已收起弹层）`;
+      return index != null ? { status: 'success', message: `已选择下拉选项：${want}（多选模式已收起弹层）`, resolvedValue: want } : `已选择下拉选项：${want}（多选模式已收起弹层）`;
     }
-    return `已选择下拉选项：${want}`;
+    return index != null ? { status: 'success', message: `已选择下拉选项：${want}`, resolvedValue: want } : `已选择下拉选项：${want}`;
   }
 
   return {
@@ -139,17 +149,18 @@
     actions: {
       // select：统一选择动作。分发器按优先级候选：插件链（本插件，preset 序）→ 原生 selectOption 兜底
       select: {
-        doc: '在 Ant Design 下拉中选择选项（自动打开弹层并点击文本/标题匹配项）。args.value=选项可见文本',
+        doc: '在 Ant Design 下拉中选择选项（自动打开弹层并点击文本/标题匹配项）。args.value=选项可见文本；或 args.index（0 起）选择当前可见且未禁用的第 N 项',
         preferFill: false,
         async fn(el, args) {
           const want = String(args?.value || '').trim();
-          if (!want) throw new Error('下拉选择缺少 args.value（选项文本）');
+          if (!want && args?.index == null) throw new Error('下拉选择缺少 args.value（选项文本），按序选择请传 args.index（0 起）');
+          if (args?.index != null && (!Number.isInteger(args.index) || args.index < 0)) throw new Error('args.index 必须为非负整数（0 起）');
           if (!el.closest('.ant-select')) throw new Error('目标元素不属于 Ant Design 下拉（.ant-select）');
           // 误派保护：树形/级联触发器同为 .ant-select，快速失败交给专职插件的 select 动作
           // （省去打开弹层后发现无选项而等待超时的 5s 链路损耗）
           if (el.closest('.ant-cascader')) throw new Error('目标是 Ant Design 级联选择器（.ant-cascader），由 ant-cascader 插件的 select 动作处理');
           if (el.closest('.ant-tree-select')) throw new Error('目标是 Ant Design 树形选择器（.ant-tree-select），由 ant-tree-select 插件的 select 动作处理');
-          return await selectOption(el, want);
+          return await selectOption(el, want, args?.index);
         },
         // 页内后验：选中标签与期望一致（单选/多选的选中项均为 .ant-select-selection-item；
         // v6 重构为 .ant-select-content，选中态含 -has-value，文本直挂 content div）
