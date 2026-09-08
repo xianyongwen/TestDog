@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Layout, Menu, ConfigProvider, Button } from 'antd';
+import { Layout, Menu, ConfigProvider, Button, Tooltip, message } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import enUS from 'antd/locale/en_US';
 import dayjs from 'dayjs';
@@ -14,6 +14,8 @@ import {
   ApiOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
+  QuestionCircleOutlined,
+  ArrowUpOutlined,
 } from '@ant-design/icons';
 import i18n, { getCurrentLanguage, type AppLanguage } from './i18n';
 import { useThemeMode, useFontSizeScale, getThemeConfig } from './theme';
@@ -26,6 +28,8 @@ import Runs from './pages/Runs';
 import Settings from './pages/Settings';
 import GenerationRecords from './pages/GenerationRecords';
 import Plugins from './pages/Plugins';
+import appLogo from '../src-tauri/icons/128x128.png';
+import { version as appVersion } from '../package.json';
 
 const { Sider, Content } = Layout;
 
@@ -71,30 +75,60 @@ function Shell() {
         collapsed={collapsed}
         onCollapse={setCollapsed}
         trigger={null}
-        className="m-3 rounded-2xl"
+        className="app-sidebar m-3 rounded-2xl"
       >
-        <div
-          className={`flex items-center gap-2 whitespace-nowrap overflow-hidden py-[18px] pr-4 text-ink text-base font-semibold ${
-            collapsed ? 'justify-center pl-0' : 'pl-4'
-          }`}
-        >
-          {/* 折叠按钮放侧栏顶部（Finder 风格），替代 antd 底部默认 trigger */}
+        <div className="sidebar-header">
+          <div className="sidebar-brand">
+            <img className="sidebar-logo" src={appLogo} alt={collapsed ? t('app.title') : ''} />
+            {!collapsed && <span className="text-ink text-base font-semibold">{t('app.title')}</span>}
+          </div>
           <Button
+            className="sidebar-toggle"
             type="text"
             size="small"
-            aria-label="toggle sidebar"
+            aria-label={t(collapsed ? 'app.expandSidebar' : 'app.collapseSidebar')}
+            title={t(collapsed ? 'app.expandSidebar' : 'app.collapseSidebar')}
+            aria-expanded={!collapsed}
             icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
             onClick={() => setCollapsed(!collapsed)}
           />
-          {!collapsed && <span>{t('app.title')}</span>}
         </div>
-        <Menu
-          mode="inline"
-          selectedKeys={[selected]}
-          items={menuItems}
-          onClick={({ key }) => nav(`/${key}`)}
-          inlineCollapsed={collapsed}
-        />
+        <nav className="sidebar-nav" aria-label={t('app.title')}>
+          <Menu
+            mode="inline"
+            selectedKeys={[selected]}
+            items={menuItems}
+            onClick={({ key }) => nav(`/${key}`)}
+            inlineCollapsed={collapsed}
+          />
+        </nav>
+        <Tooltip title={collapsed ? t('app.helpDocs') : undefined} placement="right">
+          <a
+            className="sidebar-help"
+            href="https://softwing.top/testdog-doc/"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={t('app.helpDocs')}
+            onClick={(event) => {
+              if (window.__TAURI__) {
+                event.preventDefault();
+                void window.__TAURI__.core.invoke('open_help_docs').catch(() => {
+                  message.error(t('app.helpOpenFailed'));
+                });
+              }
+            }}
+          >
+            <QuestionCircleOutlined />
+            {!collapsed && <>
+              <span className="sidebar-help-label">{t('app.helpDocs')}</span>
+              <ArrowUpOutlined className="sidebar-help-external" />
+            </>}
+          </a>
+        </Tooltip>
+        <div className="sidebar-footer" title={`${t('common.version')} ${appVersion}`}>
+          {!collapsed && <span>{t('common.version')}</span>}
+          <span className="sidebar-version">v{appVersion}</span>
+        </div>
       </Sider>
       <Layout>
         <Content className="overflow-auto">

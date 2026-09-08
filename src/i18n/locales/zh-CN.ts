@@ -55,6 +55,10 @@ const zhCN = {
 
   app: {
     title: 'TestDog',
+    collapseSidebar: '折叠侧边栏',
+    expandSidebar: '展开侧边栏',
+    helpDocs: '帮助文档',
+    helpOpenFailed: '无法打开浏览器，请手动访问 https://softwing.top/testdog-doc/',
     menu: {
       projects: '项目管理',
       runs: '运行记录',

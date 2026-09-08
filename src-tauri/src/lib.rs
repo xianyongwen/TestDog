@@ -14,6 +14,30 @@ struct ServerChild(Mutex<Option<Child>>);
 
 const BACKEND_PORT: u16 = 4123;
 
+/// 只打开固定的帮助地址，不接受前端传入的 URL 或命令。
+#[tauri::command]
+async fn open_help_docs() -> Result<(), String> {
+    let url = "https://softwing.top/testdog-doc/";
+    #[cfg(target_os = "macos")]
+    let mut command = Command::new("open");
+    #[cfg(target_os = "windows")]
+    let mut command = {
+        let mut command = Command::new("rundll32.exe");
+        command.arg("url.dll,FileProtocolHandler");
+        command.creation_flags(0x08000000);
+        command
+    };
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    let mut command = Command::new("xdg-open");
+
+    let status = command.arg(url).status().map_err(|error| error.to_string())?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(format!("Could not open help documentation: {status}"))
+    }
+}
+
 /// 轮询后端端口直到可连接（或超时）。
 fn wait_for_backend(timeout: Duration) -> bool {
     let addr = format!("127.0.0.1:{}", BACKEND_PORT);
@@ -36,6 +60,7 @@ fn ensure_executable(path: &std::path::Path) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .invoke_handler(tauri::generate_handler![open_help_docs])
         .setup(|app| {
             #[cfg(debug_assertions)]
             {

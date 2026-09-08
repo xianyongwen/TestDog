@@ -208,6 +208,127 @@
     }
   }
 
+  .app-sidebar {
+    .ant-layout-sider-children {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      min-height: 0;
+    }
+
+    .sidebar-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 18px 14px 16px;
+      flex-shrink: 0;
+    }
+
+    .sidebar-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      white-space: nowrap;
+    }
+
+    .sidebar-logo {
+      width: 30px;
+      height: 30px;
+      flex-shrink: 0;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+    }
+
+    .sidebar-toggle {
+      flex-shrink: 0;
+      color: var(--tk-text-primary);
+    }
+
+    .sidebar-nav {
+      flex: 1;
+      min-height: 0;
+      overflow: auto;
+    }
+
+    .sidebar-help {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-shrink: 0;
+      min-height: 40px;
+      margin: 12px 8px 0;
+      padding: 0 16px;
+      border-radius: 10px;
+      color: var(--tk-text-primary);
+      font-size: var(--tk-font-body);
+      transition: background-color 0.3s, color 0.3s;
+
+      &:hover {
+        color: var(--tk-text-nav-hover);
+        background: var(--tk-bg-nav-hover);
+
+        .sidebar-help-external {
+          color: inherit;
+        }
+      }
+
+      &:focus-visible {
+        outline: 2px solid var(--tk-text-secondary);
+        outline-offset: -2px;
+      }
+    }
+
+    .sidebar-help-label {
+      flex: 1;
+      white-space: nowrap;
+    }
+
+    .sidebar-help-external {
+      transform: rotate(45deg);
+      color: var(--tk-text-secondary);
+      font-size: var(--tk-font-small);
+    }
+
+    .sidebar-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      flex-shrink: 0;
+      margin: 12px 16px 0;
+      padding: 14px 0 16px;
+      border-top: 1px solid var(--tk-border-sidebar);
+      color: var(--tk-text-secondary);
+      font-size: var(--tk-font-small);
+    }
+
+    .sidebar-version {
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+    }
+
+    &.ant-layout-sider-collapsed {
+      .sidebar-header {
+        flex-direction: column;
+        padding: 18px 0 12px;
+        gap: 12px;
+      }
+
+      .sidebar-footer {
+        justify-content: center;
+        margin-inline: 6px;
+      }
+
+      .sidebar-help {
+        justify-content: center;
+        padding-inline: 0;
+      }
+    }
+  }
+
   // 导航选中项：蓝→紫渐变胶囊 + 描边/投影（设计稿 nav-item.active）。
   // antd Menu 的 itemSelectedBg 只支持单色，渐变胶囊在这里用 token 覆盖
   //（components 层优先级高于 antd 层）；折叠态弹出菜单渲染在 portal 里，

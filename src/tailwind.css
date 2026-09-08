@@ -68,6 +68,9 @@
   /* 侧栏导航选中态：渐变胶囊 + 描边/投影（设计稿 nav-item.active，
      style.scss 的 .ant-menu-item-selected 覆盖使用） */
   --tk-bg-nav-active: linear-gradient(90deg, rgba(255, 255, 255, 0.72), rgba(210, 229, 255, 0.72));
+  /* 菜单项和底部帮助入口共用悬停样式。 */
+  --tk-bg-nav-hover: rgba(255, 255, 255, 0.46);
+  --tk-text-nav-hover: rgba(38, 50, 65, 0.88);
   --tk-nav-active-shadow:
     inset 0 0 0 1px rgba(255, 255, 255, 0.45),
     0 4px 14px rgba(62, 122, 205, 0.08);
@@ -133,6 +136,8 @@
   --tk-success: #72e39a;
 
   --tk-bg-nav-active: linear-gradient(90deg, rgba(75, 139, 255, 0.25), rgba(125, 96, 255, 0.2));
+  --tk-bg-nav-hover: rgba(255, 255, 255, 0.055);
+  --tk-text-nav-hover: #ffffff;
   --tk-nav-active-shadow:
     inset 0 0 0 1px rgba(122, 170, 255, 0.14),
     0 4px 18px rgba(31, 87, 170, 0.14);

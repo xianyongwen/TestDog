@@ -55,6 +55,10 @@ const enUS = {
 
   app: {
     title: 'TestDog',
+    collapseSidebar: 'Collapse sidebar',
+    expandSidebar: 'Expand sidebar',
+    helpDocs: 'Help documentation',
+    helpOpenFailed: 'Could not open the browser. Please visit https://softwing.top/testdog-doc/',
     menu: {
       projects: 'Projects',
       runs: 'Run Records',

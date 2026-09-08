@@ -10,6 +10,7 @@
     "beforeBuildCommand": "npm run build && node scripts/prepare-sidecar.mjs"
   },
   "app": {
+    "withGlobalTauri": true,
     "windows": [
       {
         "title": "TestDog",
