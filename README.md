@@ -94,7 +94,7 @@ OPENAI_MODEL=deepseek-v4-flash-vision-exp
 - **回放运行**：任一脚本版本一键运行，Playwright 确定性回放（零 LLM 成本）；支持 UI 断言（可见/隐藏/文本/URL）、接口断言（状态码/响应体/JSON 字段）、WebSocket 断言（发送/接收消息）；选择器失效自动 AI 自愈，可一键采纳回写原脚本；失败步骤自动截图并采集 console/network；结果导出 JSON / Excel；支持项目内用例**批量无头运行**。
 - **插件系统**：内置组件插件按「框架 × 能力域」拆分——下拉 `select`、树选择、级联、日期 `set_date`、时间 `set_time`、滑块 `set_value`，覆盖 **Ant Design / Element（element-ui · element-plus）/ Vant / MUI**（原生 `<select>` 由分发器原生交互层兜底 selectOption）；动作遵循三态结果协议 + 页内后验校验终态，拦截「点了但没选上」的假成功；支持上传自定义插件（.js/.zip），「预设」按顺序编排注入（动作词表 + 页内脚本随生成/回放注入），内置插件源码即单文件页内脚本（`sources/*.js`），可直接阅读、修改并作为开发范例。
 - **生成记录**：每次生成留步骤级日志（工具调用、视觉观察、求助决策）与 token usage 记账（步骤明细、缓存命中），按保留天数启动时自动清理。
-- **其他**：`.testcase` 文件单条 / 批量导入导出；用例列表拖拽排序、批量设置默认脚本版本、批量运行后导出**测试报告**（Excel，含逐运行步骤明细 / console / network / token）；三个技能包与测试友好代码规则下载（供 Claude Code 等编程 agent 使用：`generate-testcase` 生成可导入用例、`tt-component-plugin` 以 DOM 片段驱动开发组件插件、`tt-plugin-from-source` 从项目源码生成组件插件）；系统变量注入唯一测试数据（随机手机号/邮箱/身份证等）；中英双语界面。
+- **其他**：`.testcase` 文件单条 / 批量导入导出；用例列表拖拽排序、批量设置默认脚本版本、批量运行后导出**测试报告**（Excel，含逐运行步骤明细 / console / network / token）；两个技能包与测试友好代码规则下载（供 Claude Code 等编程 agent 使用：`generate-testcase` 生成可导入用例、`tt-plugin-from-source` 从项目源码生成组件插件）；系统变量注入唯一测试数据（随机手机号/邮箱/身份证等）；中英双语界面。
 
 ## 技术要点
 
