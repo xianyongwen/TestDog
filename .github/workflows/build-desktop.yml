@@ -1,0 +1,123 @@
+name: Build desktop installers
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build ${{ matrix.platform }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-arm64
+            os: macos-15
+          - platform: macos-x64
+            os: macos-15-intel
+          - platform: windows-x64
+            os: windows-2022
+    env:
+      # Prisma's config requires this even for generate. Packaging creates a
+      # separate empty template with an explicit URL; no production DB is used.
+      DATABASE_URL: file:./ci.db
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+      CARGO_INCREMENTAL: '0'
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            server/package-lock.json
+
+      - name: Set up Rust
+        shell: bash
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+
+      - name: Cache Rust dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            src-tauri/target
+            !src-tauri/target/release/bundle
+          key: rust-${{ matrix.platform }}-${{ hashFiles('src-tauri/Cargo.lock') }}-${{ github.sha }}
+          restore-keys: |
+            rust-${{ matrix.platform }}-${{ hashFiles('src-tauri/Cargo.lock') }}-
+            rust-${{ matrix.platform }}-
+
+      - name: Install frontend dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Install backend dependencies
+        working-directory: server
+        run: npm ci --no-audit --no-fund
+
+      - name: Build macOS app with ad-hoc signing
+        if: runner.os == 'macOS'
+        # Build the app first: a compiler/signing failure must stop the job.
+        # The existing headless DMG helper then avoids Finder/volume-mount issues.
+        run: npx tauri build --bundles app --config src-tauri/tauri.ci.conf.json
+
+      - name: Verify macOS signature and create DMG
+        if: runner.os == 'macOS'
+        run: |
+          codesign --verify --deep --strict src-tauri/target/release/bundle/macos/TestDog.app
+          node scripts/build-dmg.mjs
+          hdiutil verify src-tauri/target/release/bundle/dmg/*.dmg
+
+      - name: Build Windows installer
+        if: runner.os == 'Windows'
+        run: npm run dist
+
+      - name: Verify bundled Node and native SQLite module
+        shell: bash
+        run: |
+          node_binary=./src-tauri/resources/node
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            node_binary=./src-tauri/resources/node.exe
+          fi
+          "$node_binary" -e "const Database = require('./src-tauri/resources/server/node_modules/better-sqlite3'); const db = new Database(':memory:'); if (db.prepare('SELECT 1 AS ok').get().ok !== 1) process.exit(1); db.close(); console.log('Bundled Node + SQLite OK:', process.platform, process.arch);"
+
+      - name: Upload macOS installer
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: TestDog-${{ matrix.platform }}-${{ github.run_number }}
+          path: src-tauri/target/release/bundle/dmg/*.dmg
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+
+      - name: Upload Windows installer
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: TestDog-${{ matrix.platform }}-${{ github.run_number }}
+          path: src-tauri/target/release/bundle/nsis/*-setup.exe
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0

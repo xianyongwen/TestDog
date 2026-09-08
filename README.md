@@ -117,6 +117,20 @@ npm run dist        # scripts/dist.mjs：macOS 出 .app/.dmg，Windows 出 NSIS 
 2. macOS：`tauri build` 出 .app/.dmg（`build-dmg.mjs` 去重/兜底）；Windows：NSIS 安装包（打包时 TEMP 重定向到项目盘，规避系统盘空间不足的 makensis 报错）。
 3. 生产库由 `app.db.template` 首次复制生成；升级安装不覆盖旧库，启动时 `server/src/migrate.ts` 幂等迁移自动补列。
 
+### GitHub Actions 打包
+
+工作流：`.github/workflows/build-desktop.yml`，产出 macOS Apple Silicon、macOS Intel 的 `.dmg`（内含 `.app`）以及 Windows x64 的 NSIS `.exe` 安装包。每个平台原生构建，确保内置 Node 和 `better-sqlite3` 架构一致。
+
+1. 将工作流提交并推送到 GitHub 默认分支。
+2. 在仓库 **Actions → Build desktop installers → Run workflow** 手动运行；推送 `v*` 标签（例如 `v0.1.2`）也会触发。普通 push / PR 不触发打包。
+3. 运行成功后，在该次运行页面的 **Artifacts** 下载对应平台的压缩包，解压获得安装包。产物保留 **7 天**，不自动创建或发布 GitHub Release。
+
+无需配置 Apple 账号、付费证书或 Secrets。macOS 使用 `src-tauri/tauri.ci.conf.json` 覆盖为 ad-hoc 签名，本地 `xywMacAppSign` 配置保持不变；未经过 Apple 公证，下载后 macOS 可能要求在“系统设置 → 隐私与安全性”中手动允许打开。Windows 安装包未签名，也可能显示未知发布者提示。
+
+CI 使用 Node.js 22 和 Rust stable，自动安装前后端依赖并重新生成 Prisma 客户端、后端及空数据库模板，不使用本地 `.env` 或业务数据库。构建包含现有 sidecar 自检、内置 Node / SQLite 原生模块验证，以及 macOS 签名和 DMG 校验。安装包版本来自项目配置，标签名不会自动修改版本。
+
+为控制用量，仅在手动运行或发版本标签时构建，启用 npm / Rust 缓存，每个构建任务最多运行 60 分钟；同一分支或标签的新运行会取消尚未完成的旧运行。私有仓库仍受账户 Actions 免费额度及计费设置约束。
+
 ## 文档与贡献
 
 - **帮助文档**：<https://softwing.top/testdog-doc/> （源码位于 `doc/`，VitePress 中英双语；本地预览 `npm --prefix doc install && npm --prefix doc run dev`）

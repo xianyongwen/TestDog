@@ -117,6 +117,20 @@ npm run dist        # scripts/dist.mjs: macOS .app/.dmg, Windows NSIS installer
 2. macOS: `tauri build` produces .app/.dmg (`build-dmg.mjs` deduplicates/falls back); Windows: NSIS installer (TEMP is redirected to the project drive during packaging to avoid makensis failures from low system-disk space).
 3. The production DB is created by copying `app.db.template` on first run; upgrades never overwrite the old DB — the idempotent migration in `server/src/migrate.ts` auto-patches columns at startup.
 
+### GitHub Actions packaging
+
+The workflow `.github/workflows/build-desktop.yml` builds macOS Apple Silicon and Intel `.dmg` files (containing the `.app`), plus a Windows x64 NSIS `.exe` installer. Each architecture builds natively so the bundled Node runtime and `better-sqlite3` match.
+
+1. Commit and push the workflow to the GitHub default branch.
+2. Open **Actions → Build desktop installers → Run workflow**, or push a `v*` tag such as `v0.1.2`. Ordinary pushes and pull requests do not trigger packaging.
+3. Download the platform archive from the run's **Artifacts** section and extract the installer. Artifacts expire after **7 days**. The workflow does not create or publish a GitHub Release.
+
+No Apple account, paid certificate, or Secrets are required. CI uses `src-tauri/tauri.ci.conf.json` for ad-hoc signing while preserving the local `xywMacAppSign` setting. The macOS app is not notarized and may require manually allowing it in **System Settings → Privacy & Security**. The unsigned Windows installer may also show an unknown-publisher warning.
+
+CI uses Node.js 22 and Rust stable, installs frontend/backend dependencies, and regenerates Prisma, the backend, and an empty database template without local `.env` files or business data. Checks cover the existing sidecar smoke tests, bundled Node / native SQLite compatibility, and macOS signature / DMG verification. Installer versions come from project configuration; tags do not update them automatically.
+
+To control usage, builds run only manually or on version tags, use npm / Rust caches, and time out after 60 minutes per job. A new run on the same branch or tag cancels the previous unfinished run. Private repositories remain subject to the account's Actions allowance and billing settings.
+
 ## Docs & Contributing
 
 - **Help docs**: <https://softwing.top/testdog-doc/> (sources in `doc/`, VitePress, bilingual zh/en; preview locally with `npm --prefix doc install && npm --prefix doc run dev`)
