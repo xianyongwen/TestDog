@@ -1,3 +1,4 @@
+import type { TestIntent } from '@shared/testIntent';
 import { useEffect, useRef, useState, useCallback, type ReactNode } from 'react';
 import { Button, Form, Input, Modal, Space, Tag, App, Select, Tooltip, type ButtonProps } from 'antd';
 import { ArrowLeftOutlined, PlusOutlined, DeleteOutlined, PlayCircleOutlined, EditOutlined, ImportOutlined, FolderOpenOutlined, ExportOutlined } from '@ant-design/icons';
@@ -35,7 +36,7 @@ interface CaseFull {
   title: string;
   description?: string;
   naturalLanguage?: string;
-  scripts: { id: string; version: number; steps: TestStep[]; rawCode?: string }[];
+  scripts: { intent?: TestIntent; id: string; version: number; steps: TestStep[]; rawCode?: string }[];
 }
 
 const caseStatusColor = (s: string) =>
@@ -498,6 +499,7 @@ export default function ProjectCases() {
           description: tc.description ?? '',
           naturalLanguage: tc.naturalLanguage ?? '',
           steps: latest.steps,
+          intent: latest.intent,
           rawCode: latest.rawCode ?? '',
         };
         const base = sanitizeName(tc.title) || t('projectCases.unnamedCase');

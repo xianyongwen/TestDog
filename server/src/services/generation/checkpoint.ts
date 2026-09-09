@@ -1,3 +1,5 @@
+import type { TestIntent } from '../../shared/testIntent';
+import type { AssertionEvidence } from './intentCoverage';
 import type OpenAI from 'openai';
 import { prisma } from '../../db';
 import type { TestStep } from '../../shared/testScript';
@@ -10,6 +12,8 @@ export interface GenerationCheckpoint {
   steps: TestStep[];
   goalText: string;
   outline: PlanStep[];
+  intent?: TestIntent;
+  evidence?: AssertionEvidence[];
   substitution: SubstitutionState;
 }
 

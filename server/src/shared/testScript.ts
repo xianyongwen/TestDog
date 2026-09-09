@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { browserAssertionTypes, testIntentSchema } from './testIntent';
 
 /**
  * 定位器：模块①（Stagehand act 解析出的 selector）与模块②（codegen 录制）统一结构。
@@ -29,6 +30,7 @@ export type Locator = z.infer<typeof locatorSchema>;
 
 /** 单个测试步骤。同时携带「原始指令」与「解析出的具体执行目标」。 */
 export const testStepSchema = z.object({
+  criterionId: z.string().optional(), // 对应已确认的验收目标
   instruction: z.string().optional(), // 模块①：LLM 拆出的自然语言子指令；模块②：人类可读描述
   kind: z.enum(['navigate', 'action', 'assert', 'wait']).default('action'),
   action: z.enum(['goto', 'click', 'fill', 'press', 'check', 'select', 'assert', 'wait', 'raw', 'plugin']),
@@ -51,7 +53,7 @@ export const testStepSchema = z.object({
   checked: z.boolean().optional(), // 旧脚本缺省 true；false 明确取消勾选
   assertion: z
     .object({
-      type: z.enum(['visible', 'hidden', 'text', 'url', 'response_status', 'response_body', 'response_json', 'ws_sent', 'ws_received']),
+      type: z.enum([...browserAssertionTypes, 'response_status', 'response_body', 'response_json', 'ws_sent', 'ws_received']),
       expected: z.string().optional(),
       jsonPath: z.string().optional(), // type='response_json' 时的字段点分路径，如 data.id
     })
@@ -63,6 +65,7 @@ export type TestStep = z.infer<typeof testStepSchema>;
 
 export const testScriptSchema = z.object({
   name: z.string(),
+  intent: testIntentSchema.optional(),
   steps: z.array(testStepSchema),
 });
 export type TestScript = z.infer<typeof testScriptSchema>;

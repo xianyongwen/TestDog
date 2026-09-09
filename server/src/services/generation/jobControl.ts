@@ -2,12 +2,13 @@ import { registerCancel, unregisterCancel } from '../../ws/hub';
 import { closeSession } from '../stagehandManager';
 import { clearUsage, type TokenUsage } from '../tokenUsage';
 import { pub } from './logBridge';
-import type { AssistDecision, PlanStep } from './types';
+import { testIntentSchema, type TestIntent } from '../../shared/testIntent';
+import type { AssistDecision, PlanStep, ConfirmedPlan } from './types';
 import { clearCheckpoint } from './checkpoint';
-import { clearGenerationEnvironment } from './privacy';
+import { clearGenerationEnvironment, redactGenerationData } from './privacy';
 
 type Wait =
-  | { type: 'plan'; resolve: (v: PlanStep[] | null) => void }
+  | { type: 'plan'; intent?: TestIntent; resolve: (v: ConfirmedPlan | null) => void }
   | { type: 'assist'; resolve: (v: AssistDecision | null) => void };
 
 const PLAN_TIMEOUT_MS = 5 * 60_000;
@@ -90,10 +91,22 @@ export function cancelSessionGc(jobId: string): void {
 }
 
 /** 路由调用：用户确认/修改计划后继续执行。返回 false 表示该 job 不在等待计划确认状态。 */
-export function confirmPlan(jobId: string, steps: PlanStep[]): boolean {
+export function confirmPlan(jobId: string, steps: PlanStep[], intent?: TestIntent): boolean | string {
   const w = waits.get(jobId);
   if (!w || w.type !== 'plan') return false;
-  resolveWait(jobId, steps);
+  steps = redactGenerationData(jobId, steps);
+  const selected = redactGenerationData(jobId, intent ?? w.intent);
+  if (selected) {
+    const parsed = testIntentSchema.safeParse(selected);
+    if (!parsed.success) return `测试意图无效：${parsed.error.issues.map(i => i.message).join('；')}`;
+    for (const criterion of parsed.data.criteria.filter(c => c.required)) {
+      if (!steps.some(s => s.kind === 'assert' && s.criterionId === criterion.id && s.assertion?.type === criterion.assertion.type && s.assertion?.expected === criterion.assertion.expected))
+        return `必验目标 ${criterion.id} 缺少对应的计划断言，或类型/预期不一致。请同时修改验收目标与计划。`;
+    }
+    if (steps.some(s => s.criterionId && !parsed.data.criteria.some(c => c.id === s.criterionId))) return '计划引用了不存在的验收目标';
+    if (steps.at(-1)?.kind !== 'assert') return '计划末步必须是断言';
+    resolveWait(jobId, { steps, intent: parsed.data });
+  } else resolveWait(jobId, { steps });
   return true;
 }
 
@@ -126,10 +139,10 @@ export function askUser(
 }
 
 /** 广播计划并挂起等待用户确认/修改（超时返回 null）。 */
-export async function awaitPlanConfirm(jobId: string, plan: PlanStep[], usage: TokenUsage): Promise<PlanStep[] | null> {
-  pub({ type: 'gen:plan', jobId, steps: plan, usage });
-  return new Promise<PlanStep[] | null>((resolve) => {
-    setWait(jobId, { type: 'plan', resolve }, PLAN_TIMEOUT_MS);
+export async function awaitPlanConfirm(jobId: string, plan: PlanStep[], usage: TokenUsage, intent?: TestIntent): Promise<ConfirmedPlan | null> {
+  pub({ type: 'gen:plan', jobId, steps: plan, intent, usage });
+  return new Promise<ConfirmedPlan | null>((resolve) => {
+    setWait(jobId, { type: 'plan', resolve, intent }, PLAN_TIMEOUT_MS);
   });
 }
 

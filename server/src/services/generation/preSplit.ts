@@ -1,3 +1,4 @@
+import { testIntentSchema, type TestIntent } from '../../shared/testIntent';
 import type OpenAI from 'openai';
 import { redactGenerationText } from './privacy';
 import type { ReasoningEffort } from '../../config';
@@ -7,6 +8,18 @@ import { appendStep, STEP_TYPE } from '../generationLogService';
 import { enabledActionVocabulary } from '../pluginStore';
 import { safeJsonParse, stripFences } from './util';
 import type { PlanStep, SplitImage } from './types';
+
+/** 始终附加协议（含自定义拆分提示词），避免旧模板静默跳过验收目标。 */
+export const INTENT_OUTPUT_PROMPT = `
+【测试意图与输出协议（覆盖旧版 steps-only 示例）】
+输出 JSON：{"intent":{"version":1,"scenario":"positive|negative|mixed","objective":"测试目标","preconditions":["必要前置条件"],"data":[{"name":"字段名","value":"测试值或 {{变量}}","policy":"fixed|generated"}],"criteria":[{"id":"C1","description":"验收结果","target":"具体元素/记录/字段范围；使用本次唯一值锚定","source":"用户需求原文或验收依据；推断项明确写待确认","required":true,"assertion":{"type":"text_exact","expected":"完整期望值"}}],"cleanup":[]},"steps":[...]}。
+- intent 是待用户确认的验收约定。只覆盖用户要求，不擅自扩大测试范围；未知业务规则写待确认，不从页面当前表现推定正确结果。
+- criteria 至少一个 required=true；每个必验目标都对应一个计划断言，断言步骤携带 criterionId，类型和 expected 与目标完全一致。
+- 支持的浏览器断言：visible/hidden/text(包含)/text_exact(规范化空白后全文相等)/value(输入值精确相等)/checked/unchecked/enabled/disabled/count(匹配节点数，expected 为非负整数字符串)/url(包含)/url_exact(相等)。value/text_exact 可期望空字符串。不要计划生成器不能执行的接口或 WS 断言。
+- 优先验证指定记录及字段的持久业务结果，不能只检查全页通用前缀或成功 toast；不虚构接口路径，HTTP 200 不能代替业务验收。只有需求涉及持久化时才补刷新验证。
+- 用户指定数据 policy=fixed；仅用户允许自由生成的测试数据用 generated 和系统变量。负向测试的非法/重复值必须保留，预期拒绝也是正确结果，不能改值追求提交成功。
+- preconditions/cleanup 只描述有依据的要求；需要执行的准备/清理动作写入 steps，最终仍保留结果断言。没有清理要求时 cleanup=[]。
+`;
 
 /** 插件动作词表 → 预拆分 prompt 的【组件语义动作】段（空词表返回空串，不拼段落）。 */
 function semanticActionSection(vocab: { name: string; doc?: string; preferFill?: boolean }[]): string {
@@ -42,10 +55,10 @@ export async function preSplit(
   jobId: string,
   images: SplitImage[] = [],
   signal?: AbortSignal,
-): Promise<{ steps: PlanStep[] | null; usage: TokenUsage }> {
+): Promise<{ steps: PlanStep[] | null; intent?: TestIntent; usage: TokenUsage }> {
   // reasoning_effort 不在 openai v4 SDK 的类型里，网关透传，故整体放宽类型
   const fullUser = redactGenerationText(jobId, `${envVarHint ? envVarHint + '\n\n' : ''}${userContent}`);
-  systemContent = redactGenerationText(jobId, systemContent);
+  systemContent = redactGenerationText(jobId, systemContent + INTENT_OUTPUT_PROMPT);
   const userMsgContent: unknown = images.length
     ? [
         { type: 'text', text: fullUser },
@@ -75,7 +88,7 @@ export async function preSplit(
   const text = redactGenerationText(jobId, res.choices?.[0]?.message?.content ?? '');
   // 网关的真实 usage 由 createGatewayClient 在底层入账，这里用差分拿到本次调用消耗
   const usage = usageDelta(before, getUsage(jobId));
-  const parsed = safeJsonParse(stripFences(text)) as { steps?: any[] } | undefined;
+  const parsed = safeJsonParse(stripFences(text)) as { steps?: any[]; intent?: unknown } | undefined;
   const steps = Array.isArray(parsed?.steps) ? parsed.steps : null;
   if (logId) {
     appendStep(logId, {
@@ -87,12 +100,16 @@ export async function preSplit(
     });
   }
   if (!steps) return { steps: null, usage };
+  const intent = testIntentSchema.safeParse(parsed?.intent);
+  if (!intent.success) throw new Error(`测试意图格式不完整：${intent.error.issues.map(i => i.message).join("；")}`);
   return {
+    intent: intent.data,
     steps: steps
       .map((s: any): PlanStep | null => {
         const instruction = String(s?.instruction ?? '').trim();
         if (!instruction) return null;
         return {
+          criterionId: typeof s?.criterionId === 'string' ? s.criterionId : undefined,
           kind: s?.kind === 'assert' ? 'assert' : 'action',
           instruction,
           action: s?.action,

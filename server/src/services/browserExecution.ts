@@ -1,3 +1,4 @@
+import { browserAssertionSchema } from '../shared/testIntent';
 import type { TestStep } from '../shared/testScript';
 
 export type LocatorAction = 'click' | 'fill' | 'press' | 'check' | 'select';
@@ -43,31 +44,43 @@ export function observedAction(action: any): { action: LocatorAction; selector: 
 }
 
 export async function waitForBrowserAssertion(o: {
-  page: any; locator?: any; type: string; expected?: string; timeoutMs?: number; signal?: AbortSignal;
+  page: any; locator?: any; scope?: any; type: string; expected?: string; timeoutMs?: number; signal?: AbortSignal;
 }): Promise<void> {
-  if (!['visible', 'hidden', 'text', 'url'].includes(o.type)) throw new Error(`未知断言类型：${o.type}`);
-  if ((o.type === 'text' || o.type === 'url') && !o.expected) throw new Error(`${o.type === 'url' ? 'URL' : '文本'} 断言缺少 expected`);
-  if ((o.type === 'visible' || o.type === 'hidden') && !o.locator) throw new Error('可见性断言缺少定位器');
+  const parsed = browserAssertionSchema.safeParse({ type: o.type, expected: o.expected });
+  if (!parsed.success) throw new Error(parsed.error.issues.map(i => i.message).join('；'));
+  if (!['text', 'url', 'url_exact'].includes(o.type) && !o.locator) throw new Error('断言缺少定位器');
   const end = Date.now() + Math.min(30000, Math.max(0, o.timeoutMs ?? 10000));
   let actual = '';
   do {
     if (o.signal?.aborted) throw new Error('断言已中止');
     try {
+      if (o.scope && await o.scope.count() !== 1) { actual = '作用域不存在或不唯一'; throw new Error(actual); }
       let ok = false;
-      if (o.type === 'url') { actual = String(await o.page.url()); ok = actual.includes(o.expected!); }
-      else if (o.type === 'text') {
+      if (o.type === 'url' || o.type === 'url_exact') { actual = String(await o.page.url()); ok = o.type === 'url_exact' ? actual === o.expected : actual.includes(o.expected!); }
+      else if (o.type === 'text' || o.type === 'text_exact') {
         const loc = o.locator ?? o.page.locator('body');
         // innerText 排除隐藏 DOM；有定位器时要求该区域本身可见。
         actual = await loc.innerText({ timeout: Math.max(1, Math.min(200, end - Date.now())) });
-        ok = (!o.locator || await loc.isVisible()) && actual.includes(o.expected!);
+        ok = (!o.locator || await loc.isVisible()) && (o.type === 'text_exact' ? actual.replace(/\s+/g, ' ').trim() === o.expected!.replace(/\s+/g, ' ').trim() : actual.includes(o.expected!));
+      } else if (o.type === 'count') {
+        actual = String(await o.locator.count()); ok = actual === o.expected;
+      } else if (o.type === 'value') {
+        actual = await o.locator.inputValue({ timeout: Math.max(1, Math.min(200, end - Date.now())) });
+        ok = actual === o.expected;
+      } else if (o.type === 'checked' || o.type === 'unchecked') {
+        actual = String(await o.locator.isChecked({ timeout: Math.max(1, Math.min(200, end - Date.now())) }));
+        ok = actual === String(o.type === 'checked');
+      } else if (o.type === 'enabled' || o.type === 'disabled') {
+        actual = String(await o.locator.isEnabled({ timeout: Math.max(1, Math.min(200, end - Date.now())) }));
+        ok = actual === String(o.type === 'enabled');
       } else {
         const visible = await o.locator.isVisible();
         ok = o.type === 'visible' ? visible : !visible;
       }
       if (ok) return;
-    } catch { /* 等待挂载或异步导航；所有轮询共用总预算 */ }
+    } catch { /* 包含多匹配严格模式错误，不能当成 hidden/unchecked 成功；共用总预算 */ }
     if (Date.now() >= end) break;
     await new Promise(resolve => setTimeout(resolve, Math.min(100, end - Date.now())));
   } while (true);
-  throw new Error(`断言未通过（${o.type}）：期望 ${o.expected ?? o.type}，实际 ${actual.slice(0, 160) || '不满足'}`);
+  throw new Error(`断言未通过（${o.type}）：期望 ${o.expected ?? o.type}，实际 ${o.type === 'value' ? '字段值不匹配' : actual.slice(0, 160) || '不满足'}`);
 }

@@ -1,3 +1,4 @@
+import type { TestIntent } from '../../shared/testIntent';
 import type { TestStep } from '../../shared/testScript';
 
 export interface GenerateParams {
@@ -38,6 +39,7 @@ export interface SplitImage {
 
 /** 预拆分计划的步骤（前后端共享结构）。 */
 export interface PlanStep {
+  criterionId?: string;
   kind: 'action' | 'assert';
   instruction: string; // 自然语言，必填；act/observe 定位与回放自愈都靠它
   /** 动作名：原生动作 goto/wait/click/fill/press/select/check，或插件注册的语义动作（如 select/set_date）。开放字符串，执行期按词表校验。 */
@@ -63,3 +65,5 @@ export interface CapturedEvent {
   value?: string;
   key?: string;
 }
+
+export interface ConfirmedPlan { steps: PlanStep[]; intent?: TestIntent }

@@ -76,6 +76,7 @@ model TestScript {
   testCaseId String
   version    Int         @default(1)
   steps      Json
+  intent     Json?
   rawCode    String?
   createdAt  DateTime    @default(now())
   testCase   TestCase    @relation(fields: [testCaseId], references: [id], onDelete: Cascade)

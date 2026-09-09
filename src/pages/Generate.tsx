@@ -1,3 +1,5 @@
+import { browserAssertionTypes, testIntentSchema, type TestIntent } from '@shared/testIntent';
+import TestIntentEditor from '../components/TestIntentEditor';
 import { useEffect, useRef, useState } from 'react';
 import { Button, Card, Input, InputNumber, Radio, Space, App, Alert, Select, Tag, Modal, Tooltip } from 'antd';
 import { ArrowLeftOutlined, ThunderboltOutlined, SaveOutlined, PlusOutlined, DeleteOutlined, HolderOutlined, InfoCircleOutlined, FullscreenOutlined, FullscreenExitOutlined, PaperClipOutlined, LoadingOutlined, PlayCircleOutlined, PauseOutlined, CloseCircleOutlined, RollbackOutlined, RobotOutlined, UnorderedListOutlined } from '@ant-design/icons';
@@ -20,6 +22,7 @@ import CacheRatePie from '../components/CacheRatePie';
 interface CaseInfo { id: string; title: string; project: { id: string; name: string; baseUrl?: string; envVars?: { key: string }[]; loginConfigs?: { id: string; name: string; isDefault: boolean }[] } }
 
 interface PlanStep {
+  criterionId?: string;
   id?: string; // 前端拖拽排序用
   kind: 'action' | 'assert';
   instruction: string;
@@ -55,16 +58,7 @@ function SortablePlanRow({ id, index, children }: { id: string; index: number; c
   );
 }
 
-const ASSERT_TYPES = (t: TFunction) => [
-  { value: 'visible', label: t('generate.assertTypes.visible') },
-  { value: 'hidden', label: t('generate.assertTypes.hidden') },
-  { value: 'text', label: t('generate.assertTypes.text') },
-  { value: 'url', label: t('generate.assertTypes.url') },
-  { value: 'response_status', label: t('generate.assertTypes.response_status') },
-  { value: 'response_body', label: t('generate.assertTypes.response_body') },
-  { value: 'response_json', label: t('generate.assertTypes.response_json') },
-  { value: 'ws_received', label: t('generate.assertTypes.ws_received') },
-];
+const ASSERT_TYPES = (t: TFunction) => browserAssertionTypes.map(type => ({ value: type, label: t(`generate.assertTypes.${type}`) }));
 
 export default function Generate() {
   const { caseId } = useParams();
@@ -85,6 +79,8 @@ export default function Generate() {
   /** 轨迹头部实时累积的 token 消耗：gen:tool/gen:plan 为单次调用增量（累加），gen:done/gen:error 直接对齐任务累计。 */
   const [liveUsage, setLiveUsage] = useState<TokenUsage | null>(null);
   const [attachments, setAttachments] = useState<AttachmentItem[]>([]);
+  const [intent, setIntent] = useState<TestIntent>();
+  const [confirmedIntent, setConfirmedIntent] = useState<TestIntent>();
   const [plan, setPlan] = useState<PlanStep[] | null>(null);
   /** 计划确认后进入执行的步骤（只读预览用，区别于逐步生成的实际脚本步骤）。 */
   const [confirmedPlan, setConfirmedPlan] = useState<PlanStep[] | null>(null);
@@ -160,7 +156,11 @@ export default function Generate() {
         const parts = [String(st.actionDetail ?? ''), String(st.result ?? '')].filter(Boolean);
         accLiveUsage(u);
         setLogs((p) => [...p, { color: 'blue', title: <span>{t('generate.tool')} <Tag>{st.actionLabel ?? ''}</Tag></span>, desc: parts.length ? parts.join(' · ') : undefined, usage: u ? { total: u.totalTokens, cached: u.cachedTokens, input: u.inputTokens } : undefined }]);
+      } else if (msg.type === 'gen:coverage') {
+        const covered = (msg.coverage ?? []) as { id: string; required: boolean; passed: boolean }[];
+        setLogs(p => [...p, { color: 'blue', title: t('generate.intent.coverage'), desc: covered.map(c => `${c.id}: ${t(c.passed ? 'generate.intent.passed' : 'generate.intent.pending')}`).join(' · ') }]);
       } else if (msg.type === 'gen:plan') {
+        setIntent(msg.intent as TestIntent | undefined);
         setPlan(((msg.steps as PlanStep[]) ?? []).map((s, i) => ({ ...s, id: s.id ?? `p${i}` })));
         const u = msg.usage as TokenUsage | undefined;
         accLiveUsage(u);
@@ -210,6 +210,7 @@ export default function Generate() {
         setSteps((prev) => [...prev.slice(0, base), ...(((msg.steps as TestStep[]) ?? []) as TestStep[])]);
         setLogs((p) => [...p, { color: 'orange', title: t('generate.stepsRevised', { count: ((msg.ops as unknown[]) ?? []).length }) }]);
       } else if (msg.type === 'gen:done') {
+        setConfirmedIntent((msg.script as { intent?: TestIntent } | undefined)?.intent);
         setBusy(false);
         setDone(true);
         setEndState('done');
@@ -293,6 +294,8 @@ export default function Generate() {
     setLiveUsage(null);
     setPlan(null);
     setConfirmedPlan(null);
+    setConfirmedIntent(undefined);
+    setIntent(undefined);
     setAssist(null);
     setManualHint(false);
     setRedescText('');
@@ -372,17 +375,22 @@ export default function Generate() {
 
   const confirmRun = async () => {
     if (!jobIdRef.current || !plan) return;
+    if (intent) {
+      const parsed = testIntentSchema.safeParse(intent);
+      if (!parsed.success) { message.warning(parsed.error.issues.map(i => i.message).join('；')); return; }
+    }
     const valid = plan.filter((p) => p.instruction.trim());
     if (!valid.length) {
       message.warning(t('generate.planEmpty'));
       return;
     }
-    const res = await http.post<{ ok?: boolean; error?: string }>(`/api/generate/${jobIdRef.current}/confirm`, { steps: valid });
+    const res = await http.post<{ ok?: boolean; error?: string }>(`/api/generate/${jobIdRef.current}/confirm`, { steps: valid, intent });
     if (res.error) {
       message.error(res.error);
       return;
     }
     setConfirmedPlan(valid);
+    setConfirmedIntent(intent);
     setPlan(null);
     setBusy(true);
   };
@@ -427,6 +435,8 @@ export default function Generate() {
 
   const updatePlan = (i: number, patch: Partial<PlanStep>) => {
     setPlan((p) => (p ? p.map((s, idx) => (idx === i ? { ...s, ...patch } : s)) : p));
+    const id = patch.criterionId ?? plan?.[i]?.criterionId;
+    if (id && patch.assertion) setIntent(current => current ? { ...current, criteria: current.criteria.map(c => c.id === id ? { ...c, assertion: { ...c.assertion, ...patch.assertion } as typeof c.assertion } : c) } : current);
   };
   const addPlanStep = () =>
     setPlan((p) => (p ? [...p, { id: crypto.randomUUID(), kind: 'action', instruction: '', action: 'click' }] : p));
@@ -447,7 +457,7 @@ export default function Generate() {
 
   const save = async () => {
     if (!caseId || !steps.length) return;
-    await http.post(`/api/test-cases/${caseId}/scripts`, { steps });
+    await http.post(`/api/test-cases/${caseId}/scripts`, { steps, intent: confirmedIntent });
     message.success(t('generate.savedNewVersion'));
     nav(`/cases/${caseId}`);
   };
@@ -752,6 +762,13 @@ export default function Generate() {
       >
         {plan && (
           <div className="max-h-[60vh] overflow-y-auto">
+            {intent && <TestIntentEditor value={intent} onChange={next => {
+              setIntent(next);
+              setPlan(current => current?.map(step => {
+                const criterion = next.criteria.find(c => c.id === step.criterionId);
+                return criterion && step.kind === 'assert' ? { ...step, assertion: criterion.assertion } : step;
+              }) ?? null);
+            }} />}
             <DndContext sensors={planSensors} onDragEnd={onPlanDragEnd}>
               <SortableContext items={plan.map((s) => s.id as string)} strategy={verticalListSortingStrategy}>
                 {plan.map((p, i) => (
@@ -780,6 +797,9 @@ export default function Generate() {
                     )}
                     {p.kind === 'assert' && (
                       <>
+                        {intent && <Select allowClear placeholder={t('generate.intent.criterion')} value={p.criterionId} style={{ width: 100 }}
+                          options={intent.criteria.map(c => ({ value: c.id, label: c.id }))}
+                          onChange={criterionId => { const criterion = intent.criteria.find(c => c.id === criterionId); updatePlan(i, { criterionId, ...(criterion ? { assertion: criterion.assertion } : {}) }); }} />}
                         <Select
                           value={p.assertion?.type ?? 'visible'}
                           className="!w-[140px]"
@@ -817,6 +837,7 @@ export default function Generate() {
         onCancel={() => setPreviewOpen(false)}
       >
         <div className="flex max-h-[60vh] flex-col gap-2 overflow-y-auto">
+          {confirmedIntent && <TestIntentEditor value={confirmedIntent} />}
           {(confirmedPlan ?? []).map((p, i) => {
             let detail: string | undefined;
             if (p.kind === 'assert') {

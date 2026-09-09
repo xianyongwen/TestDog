@@ -6,7 +6,7 @@ export function buildWorkingMemory(steps: TestStep[], goal: string): string {
   let chars = 0;
   for (let i = steps.length - 1; i >= 0; i--) {
     const s = steps[i];
-    const item = { step: i + 1, action: s.action, instruction: s.instruction?.slice(0, 160),
+    const item = { criterionId: s.criterionId, assertionType: s.assertion?.type, step: i + 1, action: s.action, instruction: s.instruction?.slice(0, 160),
       value: s.value?.slice(0, 160), checked: s.checked, key: s.key, expected: s.assertion?.expected?.slice(0, 160),
       locator: s.locator ? `${s.locator.strategy}:${s.locator.value}`.slice(0, 180) : undefined };
     const size = JSON.stringify(item).length;

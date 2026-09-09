@@ -1,5 +1,7 @@
+import type { TestIntent } from '@shared/testIntent';
+import TestIntentEditor from '../components/TestIntentEditor';
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { Button, Card, Descriptions, Dropdown, Image, Popconfirm, Space, Switch, Tabs, Tag, App, Select } from 'antd';
+import { Button, Card, Descriptions, Dropdown, Image, Popconfirm, Space, Switch, Tabs, Tag, App, Select, Modal } from 'antd';
 import SortableTable from '../components/SortableTable';
 import { ArrowLeftOutlined, ThunderboltOutlined, VideoCameraOutlined, PlayCircleOutlined, StopOutlined, SaveOutlined, DeleteOutlined, DownloadOutlined, CheckOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
@@ -15,7 +17,7 @@ import { fmtToken, type TokenUsage } from '../utils/token';
 import CacheRatePie from '../components/CacheRatePie';
 import { exportRunJSON, exportRunExcel } from '../utils/exportRun';
 
-interface Script { id: string; version: number; steps: TestStep[]; rawCode?: string; createdAt: string }
+interface Script { intent?: TestIntent; id: string; version: number; steps: TestStep[]; rawCode?: string; createdAt: string }
 interface StepResult { stepIndex: number; action: string; status: string; message?: string; durationMs?: number; healed: boolean; healedLocator?: { strategy: string; value: string; role?: string; name?: string } | null; screenshot?: string; consoleLog?: string; networkLog?: string }
 interface Run { id: string; status: string; startedAt?: string; finishedAt?: string; logs?: string; stepResults?: StepResult[]; scriptId?: string; meta?: { usage?: TokenUsage; stepUsages?: Record<number, TokenUsage> } | null }
 interface CaseDetail {
@@ -32,6 +34,7 @@ export default function TestCaseDetail() {
   const [searchParams] = useSearchParams();
   const { message } = App.useApp();
   const [data, setData] = useState<CaseDetail | null>(null);
+  const [intentOpen, setIntentOpen] = useState(false);
   const [selScriptId, setSelScriptId] = useState<string | null>(null);
   const [editSteps, setEditSteps] = useState<TestStep[]>([]);
   const [selRunId, setSelRunId] = useState<string | null>(null);
@@ -176,7 +179,7 @@ export default function TestCaseDetail() {
 
   const saveAsVersion = async () => {
     if (!caseId) return;
-    await http.post(`/api/test-cases/${caseId}/scripts`, { steps: editSteps });
+    await http.post(`/api/test-cases/${caseId}/scripts`, { steps: editSteps, intent: selScript?.intent });
     message.success(t('caseDetail.savedNewVersion'));
     load();
   };
@@ -198,6 +201,7 @@ export default function TestCaseDetail() {
       description: data?.description ?? '',
       naturalLanguage: data?.naturalLanguage ?? '',
       steps: editSteps,
+      intent: selScript.intent,
       rawCode: selScript.rawCode ?? '',
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
@@ -371,8 +375,12 @@ export default function TestCaseDetail() {
                         <Button icon={<SaveOutlined />} onClick={save}>{t('common.save')}</Button>
                         <Button icon={<SaveOutlined />} onClick={saveAsVersion}>{t('caseDetail.saveAsVersion')}</Button>
                         <Button type="primary" icon={<PlayCircleOutlined />} onClick={() => runSteps(editSteps, selScript.id)}>{t('common.run')}</Button>
+                        {selScript.intent && <Button onClick={() => setIntentOpen(true)}>{t('generate.intent.title')}</Button>}
                         <Button icon={<DownloadOutlined />} onClick={exportScript}>{t('common.export')}</Button>
                       </Space>
+                      <Modal open={intentOpen && !!selScript.intent} title={t('generate.intent.title')} onCancel={() => setIntentOpen(false)} footer={null} width={800}>
+                        <div className="max-h-[65vh] overflow-y-auto">{selScript.intent && <TestIntentEditor value={selScript.intent} />}</div>
+                      </Modal>
                       <StepsTable fill steps={editSteps} onChange={setEditSteps} envVarKeys={data.project.envVars?.map((v) => v.key)} pickStartUrl={data.project.baseUrl} pickLoginConfigId={loginConfigId} pickLoginConfigs={data.project.loginConfigs} pickProjectId={data.project.id} projectId={data.project.id} />
                     </>
                   ) : (

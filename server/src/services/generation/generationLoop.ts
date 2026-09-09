@@ -1,3 +1,5 @@
+import type { TestIntent } from '../../shared/testIntent';
+import { completionError, coverageStatus, evidenceSignature, type AssertionEvidence } from './intentCoverage';
 import { buildWorkingMemory } from './workingMemory';
 import type OpenAI from 'openai';
 import type { getConfig, ReasoningEffort } from '../../config';
@@ -34,18 +36,18 @@ const GEN_LOOP_SYSTEM_PROMPT = `你是 Web 测试脚本生成 Agent：通过调�
 5. 可输入控件（日期输入框等）直接用 fill 填值（如日期 2026-05-04），不要逐格点击。
 6. wait 工具用于等待弹层动画/加载结束（多帧稳定判定），不要盲目连续点击。
 7. 遇到错误不要重复同一操作：先 snapshot 查看当前状态，换路径或调整参数；连续失败会请求人工协助。已成功执行的步骤都会自动记录为脚本步骤，不要重做——重复登录/重复提交只会产生冗余步骤、还可能破坏当前页面状态。
-8. 级联/联动下拉：若选择某字段后另一个字段的值被页面清空/回设，说明两者是联动字段、所选组合不被页面接受——先选父字段（如部门），再打开子字段下拉、从当前可选列表里选择匹配的子项（如该部门下的账号）；若选完子项父字段仍被打回，换子字段当前可选列表里的其他选项，或调用 ask_human 说明联动现象请用户确认目标组合；不要交替反复重设两个互相打回的字段。
+8. 级联/联动下拉：若选择某字段后另一个字段的值被页面清空/回设，可能存在联动、异步加载或产品缺陷，不能据此认定组合无效。先检查校验信息和需求——先选父字段（如部门），再打开子字段下拉、从当前可选列表里选择匹配的子项（如该部门下的账号）；若选完子项父字段仍被打回，换子字段当前可选列表里的其他选项，或调用 ask_human 说明联动现象请用户确认目标组合；不要交替反复重设两个互相打回的字段。
 9. 感到困惑时不要反复试错，立即调用 ask_human 主动向用户求助（挂起生成、等待人工决策）。以下情况视为困惑：换过不同方式仍无法达成目标、页面状态与预期不符且看不出原因、编号表和结构树里都找不到目标元素、或下一步只能是重复之前已做过的操作。args.question 简述困惑点与已尝试的做法，用户会据此给出补充说明、AI 修正、手动完成或跳过。系统也会在多次视觉观察仍无进展时自动挂起请求人工协助——与其反复截图盲找，不如尽早求助。
-10. 提交类操作（点击 确定/提交/保存/发布）后若弹窗未关闭、页面无变化或结果异常：调用 api 工具查看最近的接口请求/响应（状态码与响应体），以接口为真值与页面实际表现交叉核对，再决定下一步，不要盲目重复点击。分流只看一条标准——失败原因是否被页面明确告知、且可归因于输入：
-  · 可归因（页面有明确错误提示/红字校验，且接口同样报错、指向可修正的输入问题）→ 按参数问题换值重试（revise 配合见规则 13）。
-  · 不可归因，或页面表现与接口真值互相矛盾——疑似被测页面 Bug：调用 ask_human 求助（question 写明「疑似被测页面 Bug」，附上查证到的接口真实响应与页面实际表现），不要盲目重试，也不要为迁就 Bug 修改测试目标。矛盾形态不限于以下例子：
+10. 提交类操作（点击 确定/提交/保存/发布）后若弹窗未关闭、页面无变化或结果异常：调用 api 工具查看最近的接口请求/响应（状态码与响应体），将接口响应与页面实际表现作为证据，对照已确认需求交叉核对（HTTP 200 不等于业务正确），再决定下一步，不要盲目重复点击。分流只看一条标准——失败原因是否被页面明确告知、且可归因于输入：
+  · 可归因（页面有明确错误提示/红字校验，且接口同样报错、指向可修正的输入问题）→ 先对照测试意图；负向测试验证预期拒绝，fixed 数据不得更改；仅正向测试允许调整 generated 数据时才换值重试（revise 配合见规则 13）。
+  · 不可归因，或页面表现与接口结果互相矛盾——疑似被测页面 Bug：调用 ask_human 求助（question 写明「疑似被测页面 Bug」，附上查证到的接口响应与页面实际表现），不要盲目重试，也不要为迁就 Bug 修改测试目标。矛盾形态不限于以下例子：
     - 接口报错但 UI 装作成功：弹窗/表单照常关闭，无任何错误提示（UI 吞掉失败）；
     - 接口成功但页面未呈现结果：列表无新条目、数据未变化；
     - 页面报错但接口实际成功：出现错误提示或状态回滚，而接口响应正常、数据已生效；
     - 无声失败：成功/失败提示皆无，接口也无对应请求（点击未触发任何调用）或响应无法判断成败。
-11. 完成测试意图后，至少添加一条 assert 断言（末步必须是断言），然后调用 finish。
+11. 每个必验目标都必须由实际通过的 assert 覆盖（携带 criterionId，严格沿用确认的类型/预期/目标范围）；末步必须是断言，再调用 finish。不能用整页通用文案代替指定记录结果。失败保留证据并求助，不得弱化断言。
 12. 环境变量以 {{key}} 占位符引用（fill 的 value 里直接写 {{key}}），不要写死真实值。
-13. 修正后重做提交时，若旧提交/填写操作已落库为脚本步骤，配合调用 revise 清理，回放脚本应保留完整、可验证的成功流程，仅清理有明确证据的失败重试冗余，不以步骤最少为目标。两类场景：① 提交失败原因是参数问题（如手机号重复、名称已存在、值不合法）需换值重试——先实际执行修正动作并验证成功，再 revise 同步已验证的新值、删除有明确证据的旧值提交/重填冗余链；② 点击提交后弹窗未关、被必填校验拦截（提交未生效）——补填缺失字段重新提交，成功后调用 revise 删除先前落空的旧提交步。不要留下「注定失败的提交 + 重填」的冗余链路。所有成功执行的操作都会如实落库（含有意重复，如循环造数的多次填写同一输入框）——落库步骤与浏览器实际执行一一对应，不要重复执行已成功且已落库的操作；失败重试产生的冗余链请用 revise 清理，finish 时系统还会做一次全局脚本审查兜底。`;
+13. 以下清理仅适用于意外失败重试；负向测试中的错误输入、失败提交、拒绝断言均为必要步骤，必须保留。修正后重做提交时，若旧提交/填写操作已落库为脚本步骤，配合调用 revise 清理，回放脚本应保留完整、可验证的成功流程，仅清理有明确证据的失败重试冗余，不以步骤最少为目标。两类场景：① 提交失败原因是参数问题（如手机号重复、名称已存在、值不合法）需换值重试——先实际执行修正动作并验证成功，再 revise 同步已验证的新值、删除有明确证据的旧值提交/重填冗余链；② 点击提交后弹窗未关、被必填校验拦截（提交未生效）——补填缺失字段重新提交，成功后调用 revise 删除先前落空的旧提交步。不要留下「注定失败的提交 + 重填」的冗余链路。所有成功执行的操作都会如实落库（含有意重复，如循环造数的多次填写同一输入框）——落库步骤与浏览器实际执行一一对应，不要重复执行已成功且已落库的操作；失败重试产生的冗余链请用 revise 清理，finish 时系统还会做一次全局脚本审查兜底。`;
 
 /** 断言失败签名：type + expected + selector 定位同一「判断」；instruction 文本不参与（避免措辞变化绕过累计）。 */
 function assertFailSig(args: Record<string, unknown>): string {
@@ -102,7 +104,7 @@ async function runScriptReview(o: {
               : s.assertion?.expected != null
                 ? ` expected=${s.assertion.expected}`
                 : '';
-      return `${i + 1}. [${label}]${loc}${param} ${s.instruction}`;
+      return `${i + 1}. [${label}]${s.criterionId ? ` criterionId=${s.criterionId}` : ''}${loc}${param} ${s.instruction}`;
     })
     .join('\n');
   try {
@@ -114,6 +116,7 @@ async function runScriptReview(o: {
           role: 'system',
           content:
             '你是回放测试脚本的审查员。已落步骤与浏览器实际执行一一对应。请找出「失败重试/被后续操作替代」的冗余步骤并清理，保持已验证流程的行为等价，仅清理有明确证据的失败重试冗余，不以步骤最少为目标：\n' +
+            '- 保留：负向测试中的非法/重复输入、失败提交和错误提示断言，它们是测试目标，不是重试冗余；\n' +
             '- 删除：已确认未生效且已被成功重试替代的操作链；不得仅因 URL、元素或值相同就删除重复操作，重复导航可能承担刷新作用；\n' +
             '- 保留：有意的重复操作（循环造数、逐行填写、反复切换等，即使元素与值完全相同）；\n' +
             '- 断言一般保留；唯一可删例外：两条断言互为冗余（同一定位、期望值一方是另一方的前缀/子集，如泛化 text=客户_ 与精确 text=客户_1788703830578 并存，不论谁前谁后），只删其中一条、保留另一条；无论删否，应用全部 ops 后脚本末步必须是断言——若末步断言不属于冗余对，任何删除都不得触及它；\n' +
@@ -184,6 +187,8 @@ export async function runGenerationLoop(o: {
   baseSteps?: TestStep[];
   /** 用户确认的大纲（软约束：参考路线，可据实际偏离）。 */
   outline: PlanStep[];
+  intent?: TestIntent;
+  evidence?: AssertionEvidence[];
   /** 大纲断言序号基数：续跑（resumeLoop）时 outline 为完整原大纲、baseSteps 已含此前断言，需按其数量对齐第 k 个落库断言 ↔ 大纲第 k 个断言；常规续跑的大纲只覆盖剩余流程，不传（0）。 */
   outlineAssertBase?: number;
   projectId?: string | null;
@@ -196,6 +201,11 @@ export async function runGenerationLoop(o: {
   onCheckpoint?: (messages: OpenAI.ChatCompletionMessageParam[]) => void;
 }): Promise<{ ok: boolean; finishMessage?: string; messages: OpenAI.ChatCompletionMessageParam[] }> {
   const { jobId, pwPage, page, client, cfg } = o;
+  const evidence = o.evidence ?? [];
+  const allSteps = () => [...(o.baseSteps ?? []), ...o.steps];
+  const coverage = () => o.intent ? coverageStatus(o.intent, allSteps(), evidence) : [];
+  const compactCoverage = () => coverage().map(({ id, required, passed }) => ({ id, required, passed }));
+
 
   // 插件编排（preset 唯一入口）：成员脚本已注入会话；此处取动作词表构建统一语义动作工具（与预拆分 prompt 词表同源）
   const pluginActions = await enabledActionVocabulary(o.projectId ?? null);
@@ -273,6 +283,15 @@ export async function runGenerationLoop(o: {
 
   const ctx: GenToolContext = {
     jobId,
+    intent: o.intent,
+    onAssertionPassed: (step) => {
+      const criterion = o.intent?.criteria.find(c => c.id === step.criterionId);
+      if (!criterion) return;
+      const steps = allSteps();
+      const signature = evidenceSignature(steps, steps.length - 1, criterion);
+      if (!evidence.some(e => e.signature === signature)) evidence.push({ criterionId: criterion.id, signature, verifiedAt: new Date().toISOString() });
+      pub({ type: 'gen:coverage', jobId, coverage: coverage() });
+    },
     signal: o.signal,
     page,
     stagehand: o.stagehand,
@@ -299,6 +318,7 @@ export async function runGenerationLoop(o: {
   /** 决策回灌统一出口：manual 走手动捕获（等待用户操作、落库、反馈），其余走 assistResultText。 */
   const assistFollowup = async (decision: AssistDecision | null, context: string): Promise<string | null> => {
     if (decision?.decision === 'manual') return manualCapture(context);
+    if (decision?.decision === 'skip' && o.intent) return '用户要求跳过当前操作，请继续其余目标；若涉及必验项，该项保持未验证，不能报告完整完成。';
     return assistResultText(decision, context);
   };
 
@@ -313,12 +333,13 @@ export async function runGenerationLoop(o: {
 
   // finish 校验：脚本末步必须是断言，随后做全局脚本审查（LLM 语义去重兜底）
   const finishValidate = async (): Promise<string | null> => {
-    const last = o.steps[o.steps.length - 1];
-    if (!last || last.kind !== 'assert') {
-      return '脚本必须以断言步骤结尾（验证测试结果）。请先调用 assert 工具添加断言，再调用 finish。';
-    }
+    const error = completionError(o.intent, allSteps(), evidence);
+    if (error) return error;
     await reviewScriptSteps();
-    return null;
+    // 审查可删改步骤，必须再次核对证据，不能靠审查前的通过状态放行。
+    const reviewedError = completionError(o.intent, allSteps(), evidence);
+    pub({ type: 'gen:coverage', jobId, coverage: coverage() });
+    return reviewedError;
   };
 
   // 主动求助（ask_human 工具）：模型困惑时挂起 gen:assist 等人决策（与 onStuck 同通道），决策结果作为工具结果回灌
@@ -338,10 +359,17 @@ export async function runGenerationLoop(o: {
   };
 
   const tools = buildGenTools(ctx, finishValidate, askHuman);
+  tools.push({ name: 'read_coverage', description: '分页读取已确认验收目标、预期及证据覆盖；offset 为字符偏移。不调用模型、不操作页面。',
+    parameters: { type: 'object', properties: { offset: { type: 'integer', minimum: 0 } } }, stateful: 'coverage',
+    execute: async (a) => {
+      const full = JSON.stringify({ coverage: compactCoverage(), criteria: o.intent?.criteria ?? [] });
+      const offset = Math.max(0, Math.floor(Number(a.offset) || 0));
+      return `${offset}~${Math.min(full.length, offset + 10000)}/${full.length} 字符\n${full.slice(offset, offset + 10000)}`;
+    } });
   tools.push({ name: 'read_goal', description: '分页读取完整测试目标/附件和确认的大纲；初始内容被省略时先读取相关部分。',
     parameters: { type: 'object', properties: { offset: { type: 'integer', minimum: 0 }, query: { type: 'string' } } }, stateful: 'goal',
     execute: async (a) => {
-      const full = `${o.goalText}\n【参考大纲】\n${JSON.stringify(o.outline)}`;
+      const full = `${o.goalText}\n【已确认测试意图】\n${JSON.stringify(o.intent ?? null)}\n【当前验收覆盖】\n${JSON.stringify(coverage())}\n【参考大纲】\n${JSON.stringify(o.outline)}`;
       const found = a.query ? full.toLowerCase().indexOf(String(a.query).toLowerCase()) : -1;
       const offset = Math.max(0, found >= 0 ? found - 200 : Math.floor(Number(a.offset) || 0));
       return `${offset}~${Math.min(full.length, offset + 10000)}/${full.length} 字符\n${full.slice(offset, offset + 10000)}`;
@@ -378,6 +406,8 @@ export async function runGenerationLoop(o: {
   if (messages[1]?.role === 'user' && typeof messages[1].content === 'string' && messages[1].content.length > 16000) {
     messages[1].content = messages[1].content.slice(0, 12000) + '\n【后续目标/附件已省略，请先使用 read_goal 分页读取完整要求】';
   }
+  const intentText = JSON.stringify(o.intent ?? null);
+  if (o.intent) messages.push({ role: 'user', content: `【已确认测试意图：执行路线可调整，验收预期不得擅自更改】\n${intentText.slice(0, 12000)}${intentText.length > 12000 ? '\n【后续约定已省略，执行前用 read_goal / read_coverage 读取完整要求】' : ''}\n【当前覆盖】${JSON.stringify(compactCoverage())}\n对每个验收目标调用 assert 时携带 criterionId，严格使用该目标的 type/expected，并定位 target 范围。负向测试保留错误输入及验证拒绝的步骤；fixed 数据不可擅自替换。结束前用 read_coverage 检查遗漏。` });
   if (o.resumeMessages) {
     // 暂停期间页面可能已被人工修改；首次续跑模型调用前刷新旧观测。
     const ids = new Set<string>();
@@ -490,9 +520,9 @@ export async function runGenerationLoop(o: {
     onFailure,
     onSuccess,
     onStuck,
-    workingMemory: () => buildWorkingMemory(o.steps, o.goalText),
+    workingMemory: () => buildWorkingMemory(o.steps, o.goalText) + '\n【验收覆盖】' + JSON.stringify(compactCoverage()) + '\n用 read_coverage 读取完整验收预期；不允许弱化断言。',
     onStep: ({ index, name, args, result, usageDelta: ud }) => {
-      const label = ({ snapshot: '快照', page_tree: '结构树', goto: '导航', click: '点击', fill: '填写', press: '按键', check: '勾选', select: '选择', wait: '等待', readText: '读取文本', assert: '断言', act: 'AI 兜底', see: '视觉观察', api: '网络请求', component_action: '组件动作', batch_actions: '批量填写', read_goal: '读取目标', read_script: '读取脚本', ask_human: '人工求助', finish: '完成' } as any)[name] ?? name;
+      const label = ({ snapshot: '快照', page_tree: '结构树', goto: '导航', click: '点击', fill: '填写', press: '按键', check: '勾选', select: '选择', wait: '等待', readText: '读取文本', assert: '断言', act: 'AI 兜底', see: '视觉观察', api: '网络请求', component_action: '组件动作', batch_actions: '批量填写', read_goal: '读取目标', read_script: '读取脚本', read_coverage: '验收覆盖', ask_human: '人工求助', finish: '完成' } as any)[name] ?? name;
       let detail = '';
       try {
         detail = JSON.stringify(args ?? {}).slice(0, 160);

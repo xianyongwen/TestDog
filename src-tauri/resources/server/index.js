@@ -56,7 +56,7 @@ var config = {
   "clientVersion": "7.8.0",
   "engineVersion": "3c6e192761c0362d496ed980de936e2f3cebcd3a",
   "activeProvider": "sqlite",
-  "inlineSchema": '// Prisma 7 schema\uFF08SQLite\uFF09\u3002URL \u5728 prisma.config.ts \u63D0\u4F9B\uFF0C\u6B64\u5904\u4E0D\u518D\u542B url\u3002\n// SQLite \u65E0\u539F\u751F\u679A\u4E3E -> \u72B6\u6001/\u7C7B\u578B\u7528 String + \u5E94\u7528\u5C42\u5E38\u91CF\uFF1B\u6570\u7EC4\u7528 Json\u3002\n\ngenerator client {\n  provider = "prisma-client"\n  output   = "../generated/prisma"\n}\n\ndatasource db {\n  provider = "sqlite"\n}\n\nmodel Project {\n  id           String        @id @default(cuid())\n  name         String\n  baseUrl      String?\n  /// \u9879\u76EE\u9009\u7528\u7684\u7EC4\u4EF6\u63D2\u4EF6\u9884\u8BBE\uFF08\u7EC4\u5408\u5373\u5F00\u5173\uFF09\uFF1B\u5220\u9664\u9884\u8BBE\u65F6\u7F6E\u7A7A\uFF0C\u56DE\u843D\u5168\u90E8\u63D2\u4EF6\u6309 builtin\u2192upload \u6CE8\u5165\u3002\n  presetId     String?\n  preset       PluginPreset? @relation(fields: [presetId], references: [id], onDelete: SetNull)\n  /// \u9879\u76EE\u7EA7\u6D4F\u89C8\u5668\u7A97\u53E3\u5C3A\u5BF8 {width, height}\uFF08\u8FD0\u884C/\u751F\u6210\u811A\u672C\u542F\u52A8\u6D4F\u89C8\u5668\u65F6\u751F\u6548\uFF09\uFF1Bnull = \u9ED8\u8BA4 1920\xD71080\u3002\n  viewport     Json?\n  createdAt    DateTime      @default(now())\n  updatedAt    DateTime      @updatedAt\n  testCases    TestCase[]\n  envVars      EnvVar[]\n  loginConfigs LoginConfig[]\n}\n\n/// \u9879\u76EE\u7EA7\u73AF\u5883\u53D8\u91CF\uFF1A\u811A\u672C\u4E2D {{key}} \u5360\u4F4D\u7B26\u5728\u8FD0\u884C\u65F6\u66FF\u6362\u4E3A\u5176 value\u3002\nmodel EnvVar {\n  id        String   @id @default(cuid())\n  projectId String\n  key       String\n  value     String\n  createdAt DateTime @default(now())\n  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)\n\n  @@unique([projectId, key])\n  @@index([projectId])\n}\n\n/// \u9879\u76EE\u7EA7\u767B\u5F55\u914D\u7F6E\uFF1A\u5F55\u5236\u767B\u5F55\u540E\u7684\u6D4F\u89C8\u5668\u72B6\u6001\uFF08Cookie + localStorage\uFF09\uFF0C\u8FD0\u884C\u811A\u672C\u65F6\u6309\u9009\u5B9A\u914D\u7F6E\u4EE5\u5DF2\u767B\u5F55\u72B6\u6001\u542F\u52A8\u6D4F\u89C8\u5668\u3002\nmodel LoginConfig {\n  id           String   @id @default(cuid())\n  projectId    String\n  name         String\n  storageState Json\n  isDefault    Boolean  @default(false)\n  createdAt    DateTime @default(now())\n  updatedAt    DateTime @updatedAt\n  project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)\n\n  @@index([projectId])\n}\n\nmodel TestCase {\n  id              String          @id @default(cuid())\n  projectId       String\n  title           String\n  description     String?\n  naturalLanguage String?\n  status          String          @default("DRAFT")\n  sortOrder       Int             @default(0)\n  /// \u6279\u91CF\u8FD0\u884C\u9ED8\u8BA4\u4F7F\u7528\u7684\u811A\u672C\u7248\u672C\uFF08\u7528\u4F8B\u5217\u8868\u300C\u6279\u91CF\u7248\u672C\u300D\u5217\u9009\u62E9\u540E\u4FDD\u5B58\uFF1B\u672A\u8BBE\u7F6E\u65F6\u53D6\u6700\u65B0\uFF09\u3002\n  defaultScriptId String?\n  defaultScript   TestScript?     @relation("DefaultScript", fields: [defaultScriptId], references: [id], onDelete: SetNull)\n  createdAt       DateTime        @default(now())\n  updatedAt       DateTime        @updatedAt\n  project         Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)\n  scripts         TestScript[]\n  runs            TestRun[]\n  generationLogs  GenerationLog[]\n\n  @@index([projectId])\n}\n\nmodel TestScript {\n  id         String     @id @default(cuid())\n  testCaseId String\n  version    Int        @default(1)\n  steps      Json\n  rawCode    String?\n  createdAt  DateTime   @default(now())\n  testCase   TestCase   @relation(fields: [testCaseId], references: [id], onDelete: Cascade)\n  /// \u88AB\u5404\u7528\u4F8B\u9009\u4E3A\u6279\u91CF\u9ED8\u8BA4\u7248\u672C\u7684\u5F15\u7528\uFF08\u53CD\u5411\uFF09\u3002\n  defaultFor TestCase[] @relation("DefaultScript")\n  runs       TestRun[]\n\n  @@unique([testCaseId, version])\n  @@index([testCaseId])\n}\n\nmodel TestRun {\n  id          String       @id @default(cuid())\n  testCaseId  String\n  scriptId    String?\n  status      String       @default("PENDING")\n  startedAt   DateTime?\n  finishedAt  DateTime?\n  logs        String?\n  meta        Json?\n  createdAt   DateTime     @default(now())\n  testCase    TestCase     @relation(fields: [testCaseId], references: [id], onDelete: Cascade)\n  script      TestScript?  @relation(fields: [scriptId], references: [id], onDelete: SetNull)\n  stepResults StepResult[]\n\n  @@index([testCaseId])\n}\n\nmodel StepResult {\n  id            String   @id @default(cuid())\n  runId         String\n  stepIndex     Int\n  action        String\n  status        String   @default("PENDING")\n  message       String?\n  durationMs    Int?\n  screenshot    String?\n  consoleLog    String?\n  networkLog    String?\n  healed        Boolean  @default(false)\n  /// \u81EA\u6108\u627E\u5230\u7684\u65B0\u5B9A\u4F4D\u5668\uFF08act/observe \u8FD4\u56DE\u7684 selector \u8F6C Locator\uFF09\u3002\u91C7\u7EB3\u65F6\u8986\u76D6\u56DE\u539F\u811A\u672C\u3002\n  healedLocator Json?\n  createdAt     DateTime @default(now())\n  run           TestRun  @relation(fields: [runId], references: [id], onDelete: Cascade)\n\n  @@index([runId])\n}\n\n/// \u751F\u6210\u811A\u672C\u6D41\u7A0B\u7684\u4E00\u6B21\u4F1A\u8BDD\uFF1A\u5173\u8054 jobId\uFF0C\u8BB0\u5F55\u7528\u6237\u8F93\u5165/\u6700\u7EC8\u72B6\u6001/\u603B token \u7528\u91CF\u4E0E\u6700\u7EC8\u6B65\u9AA4\u3002\nmodel GenerationLog {\n  id          String           @id @default(cuid())\n  jobId       String           @unique\n  projectId   String?\n  testCaseId  String?\n  status      String           @default("RUNNING") // RUNNING | DONE | ERROR | CANCELLED | PAUSED\n  nl          String\n  startUrl    String?\n  finishedAt  DateTime?\n  totalUsage  Json?\n  scriptSteps Json?\n  error       String?\n  /// \u6682\u505C\u65F6\u7684\u5FAA\u73AF\u72B6\u6001\u5FEB\u7167\uFF08messages + \u5927\u7EB2 + \u76EE\u6807\u6587\u672C\uFF09\uFF0C\u4F9B\u300C\u7EE7\u7EED\u751F\u6210\u300D\u8BFB\u56DE\u7EED\u8DD1\u3002\n  loopState   Json?\n  createdAt   DateTime         @default(now())\n  updatedAt   DateTime         @updatedAt\n  steps       GenerationStep[]\n  testCase    TestCase?        @relation(fields: [testCaseId], references: [id], onDelete: SetNull)\n\n  @@index([testCaseId])\n  @@index([projectId])\n  @@index([createdAt])\n}\n\n/// \u751F\u6210\u811A\u672C\u6D41\u7A0B\u4E2D\u7684\u4E00\u4E2A\u4E8B\u4EF6\u6216 LLM \u8C03\u7528\uFF1Aplan/aifix/vision/tool/status/assist/revoke \u7B49\u3002\nmodel GenerationStep {\n  id        String        @id @default(cuid())\n  logId     String\n  type      String // user_input | plan | aifix | vision | tool | status | plan_confirmed | revoke | assist | done | error\n  stepIndex Int?\n  message   String?\n  system    String? // LLM system prompt\n  user      String? // LLM user content\n  assistant String? // LLM assistant content\n  tool      String? // \u5DE5\u5177\u540D\uFF08observe/act/aiFix \u7B49\uFF09\n  args      Json? // \u8C03\u7528\u53C2\u6570\n  result    String? // \u5DE5\u5177\u7ED3\u679C\uFF08\u622A\u65AD\uFF09\n  error     String? // \u9519\u8BEF\u4FE1\u606F\n  usage     Json? // \u672C\u6B65 TokenUsage\n  createdAt DateTime      @default(now())\n  log       GenerationLog @relation(fields: [logId], references: [id], onDelete: Cascade)\n\n  @@index([logId, createdAt])\n}\n\n/// \u7EC4\u4EF6\u9002\u914D\u63D2\u4EF6\uFF1A\u9875\u5185\u811A\u672C\uFF08detect/candidates/annotate/actions \u56DB\u63D2\u69FD\uFF09\uFF0C\u6CE8\u5165\u88AB\u6D4B\u9875\u9762\u3002\n/// \u6CE8\u5165\u8303\u56F4\u7531 PluginPreset \u7F16\u6392\uFF08\u7EC4\u5408\u5373\u5F00\u5173\uFF09\uFF0C\u672C\u8868\u4E0D\u8BBE\u542F\u7528\u5F00\u5173\u3002\nmodel Plugin {\n  id          String             @id @default(cuid())\n  name        String             @unique\n  version     String             @default("1.0.0")\n  description String?\n  kind        String             @default("inpage")\n  /// \u5165\u53E3 js \u6E90\u7801\uFF08\u88F8 .js \u76F4\u4F20\u6216 zip \u89E3\u5305\u6240\u5F97\uFF09\u3002\n  entryFile   String\n  source      String             @default("upload") // builtin | upload\n  builtin     Boolean            @default(false)\n  /// \u52A8\u4F5C\u5143\u6570\u636E [{name, doc, preferFill}]\uFF1A\u5185\u7F6E\u63D2\u4EF6\u968F\u5B9A\u4E49\u7EF4\u62A4\uFF1B\u7528\u6237\u63D2\u4EF6\u5728\u8BD5\u8FD0\u884C\u540E\u56DE\u5199\u3002\n  actions     Json?\n  createdAt   DateTime           @default(now())\n  updatedAt   DateTime           @updatedAt\n  presets     PluginPresetItem[]\n\n  @@index([source])\n}\n\n/// \u63D2\u4EF6\u9884\u8BBE\uFF1A\u4E00\u7EC4\u6709\u5E8F\u63D2\u4EF6\uFF08\u6210\u5458\u987A\u5E8F\u5373\u6CE8\u5165\u4F18\u5148\u7EA7\uFF09\uFF1B\u6BCF\u4E2A\u9879\u76EE\u5173\u8054\u4E00\u4E2A preset\u3002\nmodel PluginPreset {\n  id          String             @id @default(cuid())\n  name        String             @unique\n  description String?\n  builtin     Boolean            @default(false)\n  createdAt   DateTime           @default(now())\n  updatedAt   DateTime           @updatedAt\n  items       PluginPresetItem[]\n  projects    Project[]\n}\n\nmodel PluginPresetItem {\n  id       String       @id @default(cuid())\n  presetId String\n  pluginId String\n  /// \u6CE8\u5165\u987A\u5E8F\u4E3A\u5347\u5E8F\uFF08\u8D8A\u5C0F\u8D8A\u5148\u6CE8\u5165\uFF09\uFF1B\u7F16\u8F91\u62BD\u5C49\u5C55\u793A\u7684\u987A\u5E8F\u6570\u5B57\u4E0E\u4E4B\u76F8\u53CD\uFF08\u8D8A\u5927\u8D8A\u4F18\u5148\uFF09\u3002\n  priority Int\n  preset   PluginPreset @relation(fields: [presetId], references: [id], onDelete: Cascade)\n  plugin   Plugin       @relation(fields: [pluginId], references: [id], onDelete: Cascade)\n\n  @@unique([presetId, pluginId])\n  @@index([presetId, priority])\n}\n',
+  "inlineSchema": '// Prisma 7 schema\uFF08SQLite\uFF09\u3002URL \u5728 prisma.config.ts \u63D0\u4F9B\uFF0C\u6B64\u5904\u4E0D\u518D\u542B url\u3002\n// SQLite \u65E0\u539F\u751F\u679A\u4E3E -> \u72B6\u6001/\u7C7B\u578B\u7528 String + \u5E94\u7528\u5C42\u5E38\u91CF\uFF1B\u6570\u7EC4\u7528 Json\u3002\n\ngenerator client {\n  provider = "prisma-client"\n  output   = "../generated/prisma"\n}\n\ndatasource db {\n  provider = "sqlite"\n}\n\nmodel Project {\n  id           String        @id @default(cuid())\n  name         String\n  baseUrl      String?\n  /// \u9879\u76EE\u9009\u7528\u7684\u7EC4\u4EF6\u63D2\u4EF6\u9884\u8BBE\uFF08\u7EC4\u5408\u5373\u5F00\u5173\uFF09\uFF1B\u5220\u9664\u9884\u8BBE\u65F6\u7F6E\u7A7A\uFF0C\u56DE\u843D\u5168\u90E8\u63D2\u4EF6\u6309 builtin\u2192upload \u6CE8\u5165\u3002\n  presetId     String?\n  preset       PluginPreset? @relation(fields: [presetId], references: [id], onDelete: SetNull)\n  /// \u9879\u76EE\u7EA7\u6D4F\u89C8\u5668\u7A97\u53E3\u5C3A\u5BF8 {width, height}\uFF08\u8FD0\u884C/\u751F\u6210\u811A\u672C\u542F\u52A8\u6D4F\u89C8\u5668\u65F6\u751F\u6548\uFF09\uFF1Bnull = \u9ED8\u8BA4 1920\xD71080\u3002\n  viewport     Json?\n  createdAt    DateTime      @default(now())\n  updatedAt    DateTime      @updatedAt\n  testCases    TestCase[]\n  envVars      EnvVar[]\n  loginConfigs LoginConfig[]\n}\n\n/// \u9879\u76EE\u7EA7\u73AF\u5883\u53D8\u91CF\uFF1A\u811A\u672C\u4E2D {{key}} \u5360\u4F4D\u7B26\u5728\u8FD0\u884C\u65F6\u66FF\u6362\u4E3A\u5176 value\u3002\nmodel EnvVar {\n  id        String   @id @default(cuid())\n  projectId String\n  key       String\n  value     String\n  createdAt DateTime @default(now())\n  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)\n\n  @@unique([projectId, key])\n  @@index([projectId])\n}\n\n/// \u9879\u76EE\u7EA7\u767B\u5F55\u914D\u7F6E\uFF1A\u5F55\u5236\u767B\u5F55\u540E\u7684\u6D4F\u89C8\u5668\u72B6\u6001\uFF08Cookie + localStorage\uFF09\uFF0C\u8FD0\u884C\u811A\u672C\u65F6\u6309\u9009\u5B9A\u914D\u7F6E\u4EE5\u5DF2\u767B\u5F55\u72B6\u6001\u542F\u52A8\u6D4F\u89C8\u5668\u3002\nmodel LoginConfig {\n  id           String   @id @default(cuid())\n  projectId    String\n  name         String\n  storageState Json\n  isDefault    Boolean  @default(false)\n  createdAt    DateTime @default(now())\n  updatedAt    DateTime @updatedAt\n  project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)\n\n  @@index([projectId])\n}\n\nmodel TestCase {\n  id              String          @id @default(cuid())\n  projectId       String\n  title           String\n  description     String?\n  naturalLanguage String?\n  status          String          @default("DRAFT")\n  sortOrder       Int             @default(0)\n  /// \u6279\u91CF\u8FD0\u884C\u9ED8\u8BA4\u4F7F\u7528\u7684\u811A\u672C\u7248\u672C\uFF08\u7528\u4F8B\u5217\u8868\u300C\u6279\u91CF\u7248\u672C\u300D\u5217\u9009\u62E9\u540E\u4FDD\u5B58\uFF1B\u672A\u8BBE\u7F6E\u65F6\u53D6\u6700\u65B0\uFF09\u3002\n  defaultScriptId String?\n  defaultScript   TestScript?     @relation("DefaultScript", fields: [defaultScriptId], references: [id], onDelete: SetNull)\n  createdAt       DateTime        @default(now())\n  updatedAt       DateTime        @updatedAt\n  project         Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)\n  scripts         TestScript[]\n  runs            TestRun[]\n  generationLogs  GenerationLog[]\n\n  @@index([projectId])\n}\n\nmodel TestScript {\n  id         String     @id @default(cuid())\n  testCaseId String\n  version    Int        @default(1)\n  steps      Json\n  intent     Json?\n  rawCode    String?\n  createdAt  DateTime   @default(now())\n  testCase   TestCase   @relation(fields: [testCaseId], references: [id], onDelete: Cascade)\n  /// \u88AB\u5404\u7528\u4F8B\u9009\u4E3A\u6279\u91CF\u9ED8\u8BA4\u7248\u672C\u7684\u5F15\u7528\uFF08\u53CD\u5411\uFF09\u3002\n  defaultFor TestCase[] @relation("DefaultScript")\n  runs       TestRun[]\n\n  @@unique([testCaseId, version])\n  @@index([testCaseId])\n}\n\nmodel TestRun {\n  id          String       @id @default(cuid())\n  testCaseId  String\n  scriptId    String?\n  status      String       @default("PENDING")\n  startedAt   DateTime?\n  finishedAt  DateTime?\n  logs        String?\n  meta        Json?\n  createdAt   DateTime     @default(now())\n  testCase    TestCase     @relation(fields: [testCaseId], references: [id], onDelete: Cascade)\n  script      TestScript?  @relation(fields: [scriptId], references: [id], onDelete: SetNull)\n  stepResults StepResult[]\n\n  @@index([testCaseId])\n}\n\nmodel StepResult {\n  id            String   @id @default(cuid())\n  runId         String\n  stepIndex     Int\n  action        String\n  status        String   @default("PENDING")\n  message       String?\n  durationMs    Int?\n  screenshot    String?\n  consoleLog    String?\n  networkLog    String?\n  healed        Boolean  @default(false)\n  /// \u81EA\u6108\u627E\u5230\u7684\u65B0\u5B9A\u4F4D\u5668\uFF08act/observe \u8FD4\u56DE\u7684 selector \u8F6C Locator\uFF09\u3002\u91C7\u7EB3\u65F6\u8986\u76D6\u56DE\u539F\u811A\u672C\u3002\n  healedLocator Json?\n  createdAt     DateTime @default(now())\n  run           TestRun  @relation(fields: [runId], references: [id], onDelete: Cascade)\n\n  @@index([runId])\n}\n\n/// \u751F\u6210\u811A\u672C\u6D41\u7A0B\u7684\u4E00\u6B21\u4F1A\u8BDD\uFF1A\u5173\u8054 jobId\uFF0C\u8BB0\u5F55\u7528\u6237\u8F93\u5165/\u6700\u7EC8\u72B6\u6001/\u603B token \u7528\u91CF\u4E0E\u6700\u7EC8\u6B65\u9AA4\u3002\nmodel GenerationLog {\n  id          String           @id @default(cuid())\n  jobId       String           @unique\n  projectId   String?\n  testCaseId  String?\n  status      String           @default("RUNNING") // RUNNING | DONE | ERROR | CANCELLED | PAUSED\n  nl          String\n  startUrl    String?\n  finishedAt  DateTime?\n  totalUsage  Json?\n  scriptSteps Json?\n  error       String?\n  /// \u6682\u505C\u65F6\u7684\u5FAA\u73AF\u72B6\u6001\u5FEB\u7167\uFF08messages + \u5927\u7EB2 + \u76EE\u6807\u6587\u672C\uFF09\uFF0C\u4F9B\u300C\u7EE7\u7EED\u751F\u6210\u300D\u8BFB\u56DE\u7EED\u8DD1\u3002\n  loopState   Json?\n  createdAt   DateTime         @default(now())\n  updatedAt   DateTime         @updatedAt\n  steps       GenerationStep[]\n  testCase    TestCase?        @relation(fields: [testCaseId], references: [id], onDelete: SetNull)\n\n  @@index([testCaseId])\n  @@index([projectId])\n  @@index([createdAt])\n}\n\n/// \u751F\u6210\u811A\u672C\u6D41\u7A0B\u4E2D\u7684\u4E00\u4E2A\u4E8B\u4EF6\u6216 LLM \u8C03\u7528\uFF1Aplan/aifix/vision/tool/status/assist/revoke \u7B49\u3002\nmodel GenerationStep {\n  id        String        @id @default(cuid())\n  logId     String\n  type      String // user_input | plan | aifix | vision | tool | status | plan_confirmed | revoke | assist | done | error\n  stepIndex Int?\n  message   String?\n  system    String? // LLM system prompt\n  user      String? // LLM user content\n  assistant String? // LLM assistant content\n  tool      String? // \u5DE5\u5177\u540D\uFF08observe/act/aiFix \u7B49\uFF09\n  args      Json? // \u8C03\u7528\u53C2\u6570\n  result    String? // \u5DE5\u5177\u7ED3\u679C\uFF08\u622A\u65AD\uFF09\n  error     String? // \u9519\u8BEF\u4FE1\u606F\n  usage     Json? // \u672C\u6B65 TokenUsage\n  createdAt DateTime      @default(now())\n  log       GenerationLog @relation(fields: [logId], references: [id], onDelete: Cascade)\n\n  @@index([logId, createdAt])\n}\n\n/// \u7EC4\u4EF6\u9002\u914D\u63D2\u4EF6\uFF1A\u9875\u5185\u811A\u672C\uFF08detect/candidates/annotate/actions \u56DB\u63D2\u69FD\uFF09\uFF0C\u6CE8\u5165\u88AB\u6D4B\u9875\u9762\u3002\n/// \u6CE8\u5165\u8303\u56F4\u7531 PluginPreset \u7F16\u6392\uFF08\u7EC4\u5408\u5373\u5F00\u5173\uFF09\uFF0C\u672C\u8868\u4E0D\u8BBE\u542F\u7528\u5F00\u5173\u3002\nmodel Plugin {\n  id          String             @id @default(cuid())\n  name        String             @unique\n  version     String             @default("1.0.0")\n  description String?\n  kind        String             @default("inpage")\n  /// \u5165\u53E3 js \u6E90\u7801\uFF08\u88F8 .js \u76F4\u4F20\u6216 zip \u89E3\u5305\u6240\u5F97\uFF09\u3002\n  entryFile   String\n  source      String             @default("upload") // builtin | upload\n  builtin     Boolean            @default(false)\n  /// \u52A8\u4F5C\u5143\u6570\u636E [{name, doc, preferFill}]\uFF1A\u5185\u7F6E\u63D2\u4EF6\u968F\u5B9A\u4E49\u7EF4\u62A4\uFF1B\u7528\u6237\u63D2\u4EF6\u5728\u8BD5\u8FD0\u884C\u540E\u56DE\u5199\u3002\n  actions     Json?\n  createdAt   DateTime           @default(now())\n  updatedAt   DateTime           @updatedAt\n  presets     PluginPresetItem[]\n\n  @@index([source])\n}\n\n/// \u63D2\u4EF6\u9884\u8BBE\uFF1A\u4E00\u7EC4\u6709\u5E8F\u63D2\u4EF6\uFF08\u6210\u5458\u987A\u5E8F\u5373\u6CE8\u5165\u4F18\u5148\u7EA7\uFF09\uFF1B\u6BCF\u4E2A\u9879\u76EE\u5173\u8054\u4E00\u4E2A preset\u3002\nmodel PluginPreset {\n  id          String             @id @default(cuid())\n  name        String             @unique\n  description String?\n  builtin     Boolean            @default(false)\n  createdAt   DateTime           @default(now())\n  updatedAt   DateTime           @updatedAt\n  items       PluginPresetItem[]\n  projects    Project[]\n}\n\nmodel PluginPresetItem {\n  id       String       @id @default(cuid())\n  presetId String\n  pluginId String\n  /// \u6CE8\u5165\u987A\u5E8F\u4E3A\u5347\u5E8F\uFF08\u8D8A\u5C0F\u8D8A\u5148\u6CE8\u5165\uFF09\uFF1B\u7F16\u8F91\u62BD\u5C49\u5C55\u793A\u7684\u987A\u5E8F\u6570\u5B57\u4E0E\u4E4B\u76F8\u53CD\uFF08\u8D8A\u5927\u8D8A\u4F18\u5148\uFF09\u3002\n  priority Int\n  preset   PluginPreset @relation(fields: [presetId], references: [id], onDelete: Cascade)\n  plugin   Plugin       @relation(fields: [pluginId], references: [id], onDelete: Cascade)\n\n  @@unique([presetId, pluginId])\n  @@index([presetId, priority])\n}\n',
   "runtimeDataModel": {
     "models": {},
     "enums": {},
@@ -67,10 +67,10 @@ var config = {
     "graph": ""
   }
 };
-config.runtimeDataModel = JSON.parse('{"models":{"Project":{"fields":[{"name":"id","kind":"scalar","type":"String"},{"name":"name","kind":"scalar","type":"String"},{"name":"baseUrl","kind":"scalar","type":"String"},{"name":"presetId","kind":"scalar","type":"String"},{"name":"preset","kind":"object","type":"PluginPreset","relationName":"PluginPresetToProject"},{"name":"viewport","kind":"scalar","type":"Json"},{"name":"createdAt","kind":"scalar","type":"DateTime"},{"name":"updatedAt","kind":"scalar","type":"DateTime"},{"name":"testCases","kind":"object","type":"TestCase","relationName":"ProjectToTestCase"},{"name":"envVars","kind":"object","type":"EnvVar","relationName":"EnvVarToProject"},{"name":"loginConfigs","kind":"object","type":"LoginConfig","relationName":"LoginConfigToProject"}],"dbName":null},"EnvVar":{"fields":[{"name":"id","kind":"scalar","type":"String"},{"name":"projectId","kind":"scalar","type":"String"},{"name":"key","kind":"scalar","type":"String"},{"name":"value","kind":"scalar","type":"String"},{"name":"createdAt","kind":"scalar","type":"DateTime"},{"name":"project","kind":"object","type":"Project","relationName":"EnvVarToProject"}],"dbName":null},"LoginConfig":{"fields":[{"name":"id","kind":"scalar","type":"String"},{"name":"projectId","kind":"scalar","type":"String"},{"name":"name","kind":"scalar","type":"String"},{"name":"storageState","kind":"scalar","type":"Json"},{"name":"isDefault","kind":"scalar","type":"Boolean"},{"name":"createdAt","kind":"scalar","type":"DateTime"},{"name":"updatedAt","kind":"scalar","type":"DateTime"},{"name":"project","kind":"object","type":"Project","relationName":"LoginConfigToProject"}],"dbName":null},"TestCase":{"fields":[{"name":"id","kind":"scalar","type":"String"},{"name":"projectId","kind":"scalar","type":"String"},{"name":"title","kind":"scalar","type":"String"},{"name":"description","kind":"scalar","type":"String"},{"name":"naturalLanguage","kind":"scalar","type":"String"},{"name":"status","kind":"scalar","type":"String"},{"name":"sortOrder","kind":"scalar","type":"Int"},{"name":"defaultScriptId","kind":"scalar","type":"String"},{"name":"defaultScript","kind":"object","type":"TestScript","relationName":"DefaultScript"},{"name":"createdAt","kind":"scalar","type":"DateTime"},{"name":"updatedAt","kind":"scalar","type":"DateTime"},{"name":"project","kind":"object","type":"Project","relationName":"ProjectToTestCase"},{"name":"scripts","kind":"object","type":"TestScript","relationName":"TestCaseToTestScript"},{"name":"runs","kind":"object","type":"TestRun","relationName":"TestCaseToTestRun"},{"name":"generationLogs","kind":"object","type":"GenerationLog","relationName":"GenerationLogToTestCase"}],"dbName":null},"TestScript":{"fields":[{"name":"id","kind":"scalar","type":"String"},{"name":"testCaseId","kind":"scalar","type":"String"},{"name":"version","kind":"scalar","type":"Int"},{"name":"steps","kind":"scalar","type":"Json"},{"name":"rawCode","kind":"scalar","type":"String"},{"name":"createdAt","kind":"scalar","type":"DateTime"},{"name":"testCase","kind":"object","type":"TestCase","relationName":"TestCaseToTestScript"},{"name":"defaultFor","kind":"object","type":"TestCase","relationName":"DefaultScript"},{"name":"runs","kind":"object","type":"TestRun","relationName":"TestRunToTestScript"}],"dbName":null},"TestRun":{"fields":[{"name":"id","kind":"scalar","type":"String"},{"name":"testCaseId","kind":"scalar","type":"String"},{"name":"scriptId","kind":"scalar","type":"String"},{"name":"status","kind":"scalar","type":"String"},{"name":"startedAt","kind":"scalar","type":"DateTime"},{"name":"finishedAt","kind":"scalar","type":"DateTime"},{"name":"logs","kind":"scalar","type":"String"},{"name":"meta","kind":"scalar","type":"Json"},{"name":"createdAt","kind":"scalar","type":"DateTime"},{"name":"testCase","kind":"object","type":"TestCase","relationName":"TestCaseToTestRun"},{"name":"script","kind":"object","type":"TestScript","relationName":"TestRunToTestScript"},{"name":"stepResults","kind":"object","type":"StepResult","relationName":"StepResultToTestRun"}],"dbName":null},"StepResult":{"fields":[{"name":"id","kind":"scalar","type":"String"},{"name":"runId","kind":"scalar","type":"String"},{"name":"stepIndex","kind":"scalar","type":"Int"},{"name":"action","kind":"scalar","type":"String"},{"name":"status","kind":"scalar","type":"String"},{"name":"message","kind":"scalar","type":"String"},{"name":"durationMs","kind":"scalar","type":"Int"},{"name":"screenshot","kind":"scalar","type":"String"},{"name":"consoleLog","kind":"scalar","type":"String"},{"name":"networkLog","kind":"scalar","type":"String"},{"name":"healed","kind":"scalar","type":"Boolean"},{"name":"healedLocator","kind":"scalar","type":"Json"},{"name":"createdAt","kind":"scalar","type":"DateTime"},{"name":"run","kind":"object","type":"TestRun","relationName":"StepResultToTestRun"}],"dbName":null},"GenerationLog":{"fields":[{"name":"id","kind":"scalar","type":"String"},{"name":"jobId","kind":"scalar","type":"String"},{"name":"projectId","kind":"scalar","type":"String"},{"name":"testCaseId","kind":"scalar","type":"String"},{"name":"status","kind":"scalar","type":"String"},{"name":"nl","kind":"scalar","type":"String"},{"name":"startUrl","kind":"scalar","type":"String"},{"name":"finishedAt","kind":"scalar","type":"DateTime"},{"name":"totalUsage","kind":"scalar","type":"Json"},{"name":"scriptSteps","kind":"scalar","type":"Json"},{"name":"error","kind":"scalar","type":"String"},{"name":"loopState","kind":"scalar","type":"Json"},{"name":"createdAt","kind":"scalar","type":"DateTime"},{"name":"updatedAt","kind":"scalar","type":"DateTime"},{"name":"steps","kind":"object","type":"GenerationStep","relationName":"GenerationLogToGenerationStep"},{"name":"testCase","kind":"object","type":"TestCase","relationName":"GenerationLogToTestCase"}],"dbName":null},"GenerationStep":{"fields":[{"name":"id","kind":"scalar","type":"String"},{"name":"logId","kind":"scalar","type":"String"},{"name":"type","kind":"scalar","type":"String"},{"name":"stepIndex","kind":"scalar","type":"Int"},{"name":"message","kind":"scalar","type":"String"},{"name":"system","kind":"scalar","type":"String"},{"name":"user","kind":"scalar","type":"String"},{"name":"assistant","kind":"scalar","type":"String"},{"name":"tool","kind":"scalar","type":"String"},{"name":"args","kind":"scalar","type":"Json"},{"name":"result","kind":"scalar","type":"String"},{"name":"error","kind":"scalar","type":"String"},{"name":"usage","kind":"scalar","type":"Json"},{"name":"createdAt","kind":"scalar","type":"DateTime"},{"name":"log","kind":"object","type":"GenerationLog","relationName":"GenerationLogToGenerationStep"}],"dbName":null},"Plugin":{"fields":[{"name":"id","kind":"scalar","type":"String"},{"name":"name","kind":"scalar","type":"String"},{"name":"version","kind":"scalar","type":"String"},{"name":"description","kind":"scalar","type":"String"},{"name":"kind","kind":"scalar","type":"String"},{"name":"entryFile","kind":"scalar","type":"String"},{"name":"source","kind":"scalar","type":"String"},{"name":"builtin","kind":"scalar","type":"Boolean"},{"name":"actions","kind":"scalar","type":"Json"},{"name":"createdAt","kind":"scalar","type":"DateTime"},{"name":"updatedAt","kind":"scalar","type":"DateTime"},{"name":"presets","kind":"object","type":"PluginPresetItem","relationName":"PluginToPluginPresetItem"}],"dbName":null},"PluginPreset":{"fields":[{"name":"id","kind":"scalar","type":"String"},{"name":"name","kind":"scalar","type":"String"},{"name":"description","kind":"scalar","type":"String"},{"name":"builtin","kind":"scalar","type":"Boolean"},{"name":"createdAt","kind":"scalar","type":"DateTime"},{"name":"updatedAt","kind":"scalar","type":"DateTime"},{"name":"items","kind":"object","type":"PluginPresetItem","relationName":"PluginPresetToPluginPresetItem"},{"name":"projects","kind":"object","type":"Project","relationName":"PluginPresetToProject"}],"dbName":null},"PluginPresetItem":{"fields":[{"name":"id","kind":"scalar","type":"String"},{"name":"presetId","kind":"scalar","type":"String"},{"name":"pluginId","kind":"scalar","type":"String"},{"name":"priority","kind":"scalar","type":"Int"},{"name":"preset","kind":"object","type":"PluginPreset","relationName":"PluginPresetToPluginPresetItem"},{"name":"plugin","kind":"object","type":"Plugin","relationName":"PluginToPluginPresetItem"}],"dbName":null}},"enums":{},"types":{}}');
+config.runtimeDataModel = JSON.parse('{"models":{"Project":{"fields":[{"name":"id","kind":"scalar","type":"String"},{"name":"name","kind":"scalar","type":"String"},{"name":"baseUrl","kind":"scalar","type":"String"},{"name":"presetId","kind":"scalar","type":"String"},{"name":"preset","kind":"object","type":"PluginPreset","relationName":"PluginPresetToProject"},{"name":"viewport","kind":"scalar","type":"Json"},{"name":"createdAt","kind":"scalar","type":"DateTime"},{"name":"updatedAt","kind":"scalar","type":"DateTime"},{"name":"testCases","kind":"object","type":"TestCase","relationName":"ProjectToTestCase"},{"name":"envVars","kind":"object","type":"EnvVar","relationName":"EnvVarToProject"},{"name":"loginConfigs","kind":"object","type":"LoginConfig","relationName":"LoginConfigToProject"}],"dbName":null},"EnvVar":{"fields":[{"name":"id","kind":"scalar","type":"String"},{"name":"projectId","kind":"scalar","type":"String"},{"name":"key","kind":"scalar","type":"String"},{"name":"value","kind":"scalar","type":"String"},{"name":"createdAt","kind":"scalar","type":"DateTime"},{"name":"project","kind":"object","type":"Project","relationName":"EnvVarToProject"}],"dbName":null},"LoginConfig":{"fields":[{"name":"id","kind":"scalar","type":"String"},{"name":"projectId","kind":"scalar","type":"String"},{"name":"name","kind":"scalar","type":"String"},{"name":"storageState","kind":"scalar","type":"Json"},{"name":"isDefault","kind":"scalar","type":"Boolean"},{"name":"createdAt","kind":"scalar","type":"DateTime"},{"name":"updatedAt","kind":"scalar","type":"DateTime"},{"name":"project","kind":"object","type":"Project","relationName":"LoginConfigToProject"}],"dbName":null},"TestCase":{"fields":[{"name":"id","kind":"scalar","type":"String"},{"name":"projectId","kind":"scalar","type":"String"},{"name":"title","kind":"scalar","type":"String"},{"name":"description","kind":"scalar","type":"String"},{"name":"naturalLanguage","kind":"scalar","type":"String"},{"name":"status","kind":"scalar","type":"String"},{"name":"sortOrder","kind":"scalar","type":"Int"},{"name":"defaultScriptId","kind":"scalar","type":"String"},{"name":"defaultScript","kind":"object","type":"TestScript","relationName":"DefaultScript"},{"name":"createdAt","kind":"scalar","type":"DateTime"},{"name":"updatedAt","kind":"scalar","type":"DateTime"},{"name":"project","kind":"object","type":"Project","relationName":"ProjectToTestCase"},{"name":"scripts","kind":"object","type":"TestScript","relationName":"TestCaseToTestScript"},{"name":"runs","kind":"object","type":"TestRun","relationName":"TestCaseToTestRun"},{"name":"generationLogs","kind":"object","type":"GenerationLog","relationName":"GenerationLogToTestCase"}],"dbName":null},"TestScript":{"fields":[{"name":"id","kind":"scalar","type":"String"},{"name":"testCaseId","kind":"scalar","type":"String"},{"name":"version","kind":"scalar","type":"Int"},{"name":"steps","kind":"scalar","type":"Json"},{"name":"intent","kind":"scalar","type":"Json"},{"name":"rawCode","kind":"scalar","type":"String"},{"name":"createdAt","kind":"scalar","type":"DateTime"},{"name":"testCase","kind":"object","type":"TestCase","relationName":"TestCaseToTestScript"},{"name":"defaultFor","kind":"object","type":"TestCase","relationName":"DefaultScript"},{"name":"runs","kind":"object","type":"TestRun","relationName":"TestRunToTestScript"}],"dbName":null},"TestRun":{"fields":[{"name":"id","kind":"scalar","type":"String"},{"name":"testCaseId","kind":"scalar","type":"String"},{"name":"scriptId","kind":"scalar","type":"String"},{"name":"status","kind":"scalar","type":"String"},{"name":"startedAt","kind":"scalar","type":"DateTime"},{"name":"finishedAt","kind":"scalar","type":"DateTime"},{"name":"logs","kind":"scalar","type":"String"},{"name":"meta","kind":"scalar","type":"Json"},{"name":"createdAt","kind":"scalar","type":"DateTime"},{"name":"testCase","kind":"object","type":"TestCase","relationName":"TestCaseToTestRun"},{"name":"script","kind":"object","type":"TestScript","relationName":"TestRunToTestScript"},{"name":"stepResults","kind":"object","type":"StepResult","relationName":"StepResultToTestRun"}],"dbName":null},"StepResult":{"fields":[{"name":"id","kind":"scalar","type":"String"},{"name":"runId","kind":"scalar","type":"String"},{"name":"stepIndex","kind":"scalar","type":"Int"},{"name":"action","kind":"scalar","type":"String"},{"name":"status","kind":"scalar","type":"String"},{"name":"message","kind":"scalar","type":"String"},{"name":"durationMs","kind":"scalar","type":"Int"},{"name":"screenshot","kind":"scalar","type":"String"},{"name":"consoleLog","kind":"scalar","type":"String"},{"name":"networkLog","kind":"scalar","type":"String"},{"name":"healed","kind":"scalar","type":"Boolean"},{"name":"healedLocator","kind":"scalar","type":"Json"},{"name":"createdAt","kind":"scalar","type":"DateTime"},{"name":"run","kind":"object","type":"TestRun","relationName":"StepResultToTestRun"}],"dbName":null},"GenerationLog":{"fields":[{"name":"id","kind":"scalar","type":"String"},{"name":"jobId","kind":"scalar","type":"String"},{"name":"projectId","kind":"scalar","type":"String"},{"name":"testCaseId","kind":"scalar","type":"String"},{"name":"status","kind":"scalar","type":"String"},{"name":"nl","kind":"scalar","type":"String"},{"name":"startUrl","kind":"scalar","type":"String"},{"name":"finishedAt","kind":"scalar","type":"DateTime"},{"name":"totalUsage","kind":"scalar","type":"Json"},{"name":"scriptSteps","kind":"scalar","type":"Json"},{"name":"error","kind":"scalar","type":"String"},{"name":"loopState","kind":"scalar","type":"Json"},{"name":"createdAt","kind":"scalar","type":"DateTime"},{"name":"updatedAt","kind":"scalar","type":"DateTime"},{"name":"steps","kind":"object","type":"GenerationStep","relationName":"GenerationLogToGenerationStep"},{"name":"testCase","kind":"object","type":"TestCase","relationName":"GenerationLogToTestCase"}],"dbName":null},"GenerationStep":{"fields":[{"name":"id","kind":"scalar","type":"String"},{"name":"logId","kind":"scalar","type":"String"},{"name":"type","kind":"scalar","type":"String"},{"name":"stepIndex","kind":"scalar","type":"Int"},{"name":"message","kind":"scalar","type":"String"},{"name":"system","kind":"scalar","type":"String"},{"name":"user","kind":"scalar","type":"String"},{"name":"assistant","kind":"scalar","type":"String"},{"name":"tool","kind":"scalar","type":"String"},{"name":"args","kind":"scalar","type":"Json"},{"name":"result","kind":"scalar","type":"String"},{"name":"error","kind":"scalar","type":"String"},{"name":"usage","kind":"scalar","type":"Json"},{"name":"createdAt","kind":"scalar","type":"DateTime"},{"name":"log","kind":"object","type":"GenerationLog","relationName":"GenerationLogToGenerationStep"}],"dbName":null},"Plugin":{"fields":[{"name":"id","kind":"scalar","type":"String"},{"name":"name","kind":"scalar","type":"String"},{"name":"version","kind":"scalar","type":"String"},{"name":"description","kind":"scalar","type":"String"},{"name":"kind","kind":"scalar","type":"String"},{"name":"entryFile","kind":"scalar","type":"String"},{"name":"source","kind":"scalar","type":"String"},{"name":"builtin","kind":"scalar","type":"Boolean"},{"name":"actions","kind":"scalar","type":"Json"},{"name":"createdAt","kind":"scalar","type":"DateTime"},{"name":"updatedAt","kind":"scalar","type":"DateTime"},{"name":"presets","kind":"object","type":"PluginPresetItem","relationName":"PluginToPluginPresetItem"}],"dbName":null},"PluginPreset":{"fields":[{"name":"id","kind":"scalar","type":"String"},{"name":"name","kind":"scalar","type":"String"},{"name":"description","kind":"scalar","type":"String"},{"name":"builtin","kind":"scalar","type":"Boolean"},{"name":"createdAt","kind":"scalar","type":"DateTime"},{"name":"updatedAt","kind":"scalar","type":"DateTime"},{"name":"items","kind":"object","type":"PluginPresetItem","relationName":"PluginPresetToPluginPresetItem"},{"name":"projects","kind":"object","type":"Project","relationName":"PluginPresetToProject"}],"dbName":null},"PluginPresetItem":{"fields":[{"name":"id","kind":"scalar","type":"String"},{"name":"presetId","kind":"scalar","type":"String"},{"name":"pluginId","kind":"scalar","type":"String"},{"name":"priority","kind":"scalar","type":"Int"},{"name":"preset","kind":"object","type":"PluginPreset","relationName":"PluginPresetToPluginPresetItem"},{"name":"plugin","kind":"object","type":"Plugin","relationName":"PluginToPluginPresetItem"}],"dbName":null}},"enums":{},"types":{}}');
 config.parameterizationSchema = {
-  strings: JSON.parse('["where","orderBy","cursor","preset","presets","_count","plugin","items","projects","testCase","defaultFor","script","run","stepResults","runs","defaultScript","project","scripts","log","steps","generationLogs","testCases","envVars","loginConfigs","Project.findUnique","Project.findUniqueOrThrow","Project.findFirst","Project.findFirstOrThrow","Project.findMany","data","Project.createOne","Project.createMany","Project.createManyAndReturn","Project.updateOne","Project.updateMany","Project.updateManyAndReturn","create","update","Project.upsertOne","Project.deleteOne","Project.deleteMany","having","_min","_max","Project.groupBy","Project.aggregate","EnvVar.findUnique","EnvVar.findUniqueOrThrow","EnvVar.findFirst","EnvVar.findFirstOrThrow","EnvVar.findMany","EnvVar.createOne","EnvVar.createMany","EnvVar.createManyAndReturn","EnvVar.updateOne","EnvVar.updateMany","EnvVar.updateManyAndReturn","EnvVar.upsertOne","EnvVar.deleteOne","EnvVar.deleteMany","EnvVar.groupBy","EnvVar.aggregate","LoginConfig.findUnique","LoginConfig.findUniqueOrThrow","LoginConfig.findFirst","LoginConfig.findFirstOrThrow","LoginConfig.findMany","LoginConfig.createOne","LoginConfig.createMany","LoginConfig.createManyAndReturn","LoginConfig.updateOne","LoginConfig.updateMany","LoginConfig.updateManyAndReturn","LoginConfig.upsertOne","LoginConfig.deleteOne","LoginConfig.deleteMany","LoginConfig.groupBy","LoginConfig.aggregate","TestCase.findUnique","TestCase.findUniqueOrThrow","TestCase.findFirst","TestCase.findFirstOrThrow","TestCase.findMany","TestCase.createOne","TestCase.createMany","TestCase.createManyAndReturn","TestCase.updateOne","TestCase.updateMany","TestCase.updateManyAndReturn","TestCase.upsertOne","TestCase.deleteOne","TestCase.deleteMany","_avg","_sum","TestCase.groupBy","TestCase.aggregate","TestScript.findUnique","TestScript.findUniqueOrThrow","TestScript.findFirst","TestScript.findFirstOrThrow","TestScript.findMany","TestScript.createOne","TestScript.createMany","TestScript.createManyAndReturn","TestScript.updateOne","TestScript.updateMany","TestScript.updateManyAndReturn","TestScript.upsertOne","TestScript.deleteOne","TestScript.deleteMany","TestScript.groupBy","TestScript.aggregate","TestRun.findUnique","TestRun.findUniqueOrThrow","TestRun.findFirst","TestRun.findFirstOrThrow","TestRun.findMany","TestRun.createOne","TestRun.createMany","TestRun.createManyAndReturn","TestRun.updateOne","TestRun.updateMany","TestRun.updateManyAndReturn","TestRun.upsertOne","TestRun.deleteOne","TestRun.deleteMany","TestRun.groupBy","TestRun.aggregate","StepResult.findUnique","StepResult.findUniqueOrThrow","StepResult.findFirst","StepResult.findFirstOrThrow","StepResult.findMany","StepResult.createOne","StepResult.createMany","StepResult.createManyAndReturn","StepResult.updateOne","StepResult.updateMany","StepResult.updateManyAndReturn","StepResult.upsertOne","StepResult.deleteOne","StepResult.deleteMany","StepResult.groupBy","StepResult.aggregate","GenerationLog.findUnique","GenerationLog.findUniqueOrThrow","GenerationLog.findFirst","GenerationLog.findFirstOrThrow","GenerationLog.findMany","GenerationLog.createOne","GenerationLog.createMany","GenerationLog.createManyAndReturn","GenerationLog.updateOne","GenerationLog.updateMany","GenerationLog.updateManyAndReturn","GenerationLog.upsertOne","GenerationLog.deleteOne","GenerationLog.deleteMany","GenerationLog.groupBy","GenerationLog.aggregate","GenerationStep.findUnique","GenerationStep.findUniqueOrThrow","GenerationStep.findFirst","GenerationStep.findFirstOrThrow","GenerationStep.findMany","GenerationStep.createOne","GenerationStep.createMany","GenerationStep.createManyAndReturn","GenerationStep.updateOne","GenerationStep.updateMany","GenerationStep.updateManyAndReturn","GenerationStep.upsertOne","GenerationStep.deleteOne","GenerationStep.deleteMany","GenerationStep.groupBy","GenerationStep.aggregate","Plugin.findUnique","Plugin.findUniqueOrThrow","Plugin.findFirst","Plugin.findFirstOrThrow","Plugin.findMany","Plugin.createOne","Plugin.createMany","Plugin.createManyAndReturn","Plugin.updateOne","Plugin.updateMany","Plugin.updateManyAndReturn","Plugin.upsertOne","Plugin.deleteOne","Plugin.deleteMany","Plugin.groupBy","Plugin.aggregate","PluginPreset.findUnique","PluginPreset.findUniqueOrThrow","PluginPreset.findFirst","PluginPreset.findFirstOrThrow","PluginPreset.findMany","PluginPreset.createOne","PluginPreset.createMany","PluginPreset.createManyAndReturn","PluginPreset.updateOne","PluginPreset.updateMany","PluginPreset.updateManyAndReturn","PluginPreset.upsertOne","PluginPreset.deleteOne","PluginPreset.deleteMany","PluginPreset.groupBy","PluginPreset.aggregate","PluginPresetItem.findUnique","PluginPresetItem.findUniqueOrThrow","PluginPresetItem.findFirst","PluginPresetItem.findFirstOrThrow","PluginPresetItem.findMany","PluginPresetItem.createOne","PluginPresetItem.createMany","PluginPresetItem.createManyAndReturn","PluginPresetItem.updateOne","PluginPresetItem.updateMany","PluginPresetItem.updateManyAndReturn","PluginPresetItem.upsertOne","PluginPresetItem.deleteOne","PluginPresetItem.deleteMany","PluginPresetItem.groupBy","PluginPresetItem.aggregate","AND","OR","NOT","id","presetId","pluginId","priority","equals","in","notIn","lt","lte","gt","gte","not","contains","startsWith","endsWith","name","description","builtin","createdAt","updatedAt","every","some","none","version","kind","entryFile","source","actions","string_contains","string_starts_with","string_ends_with","array_starts_with","array_ends_with","logId","type","stepIndex","message","system","user","assistant","tool","args","result","error","usage","jobId","projectId","testCaseId","status","nl","startUrl","finishedAt","totalUsage","scriptSteps","loopState","runId","action","durationMs","screenshot","consoleLog","networkLog","healed","healedLocator","scriptId","startedAt","logs","meta","rawCode","title","naturalLanguage","sortOrder","defaultScriptId","storageState","isDefault","key","value","baseUrl","viewport","projectId_key","testCaseId_version","presetId_pluginId","is","isNot","connectOrCreate","upsert","createMany","set","disconnect","delete","connect","updateMany","deleteMany","increment","decrement","multiply","divide"]'),
-  graph: "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-ADApAAB_ACADAAAAOAAgAQAAOQAwAgAAOgAgAQAAABIAIAEAAAASACADAAAAEAAgAQAAEQAwAgAAEgAgAwAAABAAIAEAABEAMAIAABIAIAMAAAAQACABAAARADACAAASACAPDgAAygQAIA8AANAEACAQAADIBAAgEQAAyQQAIBQAAMsEACDjAQEAAAAB8wEBAAAAAfUBQAAAAAH2AUAAAAABkQIBAAAAAZMCAQAAAAGnAgEAAAABqAIBAAAAAakCAgAAAAGqAgEAAAABAR0AAIcBACAK4wEBAAAAAfMBAQAAAAH1AUAAAAAB9gFAAAAAAZECAQAAAAGTAgEAAAABpwIBAAAAAagCAQAAAAGpAgIAAAABqgIBAAAAAQEdAACJAQAwAR0AAIkBADABAAAAFAAgDw4AAOwDACAPAADqAwAgEAAAxgQAIBEAAOsDACAUAADtAwAg4wEBAKoDACHzAQEAtAMAIfUBQAC2AwAh9gFAALYDACGRAgEAqgMAIZMCAQCqAwAhpwIBAKoDACGoAgEAtAMAIakCAgCrAwAhqgIBALQDACECAAAAEgAgHQAAjQEAIArjAQEAqgMAIfMBAQC0AwAh9QFAALYDACH2AUAAtgMAIZECAQCqAwAhkwIBAKoDACGnAgEAqgMAIagCAQC0AwAhqQICAKsDACGqAgEAtAMAIQIAAAAQACAdAACPAQAgAgAAABAAIB0AAI8BACABAAAAFAAgAwAAABIAICQAAIcBACAlAACNAQAgAQAAABIAIAEAAAAQACAIBQAAkAUAICoAAJMFACArAACSBQAgXAAAkQUAIF0AAJQFACDzAQAAsAMAIKgCAACwAwAgqgIAALADACAN4AEAAP8CADDhAQAAlwEAEOIBAAD_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_BAAgKgAAggUAICsAAIEFACBcAACABQAgXQAAgwUAIIcCAACwAwAgnAIAALADACCdAgAAsAMAIJ4CAACwAwAgnwIAALADACChAgAAsAMAIBDgAQAA-gIAMOEBAADbAQAQ4gEAAPoCADDjAQEA1AIAIfUBQADeAgAhhgICANUCACGHAgEA3AIAIZMCAQDUAgAhmgIBANQCACGbAgEA1AIAIZwCAgDzAgAhnQIBANwCACGeAgEA3AIAIZ8CAQDcAgAhoAIgAN0CACGhAgAA7QIAIAMAAAAcACABAADaAQAwKQAA2wEAIAMAAAAcACABAAAdADACAAAeACABAAAAKQAgAQAAACkAIAMAAAAnACABAAAoADACAAApACADAAAAJwAgAQAAKAAwAgAAKQAgAwAAACcAIAEAACgAMAIAACkAIBAJAAD-BAAgEwAAiQQAIOMBAQAAAAH1AUAAAAAB9gFAAAAAAY4CAQAAAAGQAgEAAAABkQIBAAAAAZICAQAAAAGTAgEAAAABlAIBAAAAAZUCAQAAAAGWAkAAAAABlwKAAAAAAZgCgAAAAAGZAoAAAAABAR0AAOMBACAO4wEBAAAAAfUBQAAAAAH2AUAAAAABjgIBAAAAAZACAQAAAAGRAgEAAAABkgIBAAAAAZMCAQAAAAGUAgEAAAABlQIBAAAAAZYCQAAAAAGXAoAAAAABmAKAAAAAAZkCgAAAAAEBHQAA5QEAMAEdAADlAQAwAQAAABAAIBAJAAD9BAAgEwAA-gMAIOMBAQCqAwAh9QFAALYDACH2AUAAtgMAIY4CAQC0AwAhkAIBAKoDACGRAgEAtAMAIZICAQC0AwAhkwIBAKoDACGUAgEAqgMAIZUCAQC0AwAhlgJAAPgDACGXAoAAAAABmAKAAAAAAZkCgAAAAAECAAAAKQAgHQAA6QEAIA7jAQEAqgMAIfUBQAC2AwAh9gFAALYDACGOAgEAtAMAIZACAQCqAwAhkQIBALQDACGSAgEAtAMAIZMCAQCqAwAhlAIBAKoDACGVAgEAtAMAIZYCQAD4AwAhlwKAAAAAAZgCgAAAAAGZAoAAAAABAgAAACcAIB0AAOsBACACAAAAJwAgHQAA6wEAIAEAAAAQACADAAAAKQAgJAAA4wEAICUAAOkBACABAAAAKQAgAQAAACcAIAsFAAD6BAAgKgAA_AQAICsAAPsEACCOAgAAsAMAIJECAACwAwAgkgIAALADACCVAgAAsAMAIJYCAACwAwAglwIAALADACCYAgAAsAMAIJkCAACwAwAgEeABAAD2AgAw4QEAAPMBABDiAQAA9gIAMOMBAQDUAgAh9QFAAN4CACH2AUAA3gIAIY4CAQDcAgAhkAIBANQCACGRAgEA3AIAIZICAQDcAgAhkwIBANQCACGUAgEA1AIAIZUCAQDcAgAhlgJAAPcCACGXAgAA7QIAIJgCAADtAgAgmQIAAO0CACADAAAAJwAgAQAA8gEAMCkAAPMBACADAAAAJwAgAQAAKAAwAgAAKQAgAQAAAC0AIAEAAAAtACADAAAAKwAgAQAALAAwAgAALQAgAwAAACsAIAEAACwAMAIAAC0AIAMAAAArACABAAAsADACAAAtACAPEgAA-QQAIOMBAQAAAAH1AUAAAAABhAIBAAAAAYUCAQAAAAGGAgIAAAABhwIBAAAAAYgCAQAAAAGJAgEAAAABigIBAAAAAYsCAQAAAAGMAoAAAAABjQIBAAAAAY4CAQAAAAGPAoAAAAABAR0AAPsBACAO4wEBAAAAAfUBQAAAAAGEAgEAAAABhQIBAAAAAYYCAgAAAAGHAgEAAAABiAIBAAAAAYkCAQAAAAGKAgEAAAABiwIBAAAAAYwCgAAAAAGNAgEAAAABjgIBAAAAAY8CgAAAAAEBHQAA_QEAMAEdAAD9AQAwDxIAAPgEACDjAQEAqgMAIfUBQAC2AwAhhAIBAKoDACGFAgEAqgMAIYYCAgCFBAAhhwIBALQDACGIAgEAtAMAIYkCAQC0AwAhigIBALQDACGLAgEAtAMAIYwCgAAAAAGNAgEAtAMAIY4CAQC0AwAhjwKAAAAAAQIAAAAtACAdAACAAgAgDuMBAQCqAwAh9QFAALYDACGEAgEAqgMAIYUCAQCqAwAhhgICAIUEACGHAgEAtAMAIYgCAQC0AwAhiQIBALQDACGKAgEAtAMAIYsCAQC0AwAhjAKAAAAAAY0CAQC0AwAhjgIBALQDACGPAoAAAAABAgAAACsAIB0AAIICACACAAAAKwAgHQAAggIAIAMAAAAtACAkAAD7AQAgJQAAgAIAIAEAAAAtACABAAAAKwAgDwUAAPMEACAqAAD2BAAgKwAA9QQAIFwAAPQEACBdAAD3BAAghgIAALADACCHAgAAsAMAIIgCAACwAwAgiQIAALADACCKAgAAsAMAIIsCAACwAwAgjAIAALADACCNAgAAsAMAII4CAACwAwAgjwIAALADACAR4AEAAPICADDhAQAAiQIAEOIBAADyAgAw4wEBANQCACH1AUAA3gIAIYQCAQDUAgAhhQIBANQCACGGAgIA8wIAIYcCAQDcAgAhiAIBANwCACGJAgEA3AIAIYoCAQDcAgAhiwIBANwCACGMAgAA7QIAII0CAQDcAgAhjgIBANwCACGPAgAA7QIAIAMAAAArACABAACIAgAwKQAAiQIAIAMAAAArACABAAAsADACAAAtACAPBAAA6gIAIOABAADvAgAw4QEAAI8CABDiAQAA7wIAMOMBAQAAAAHyAQEAAAAB8wEBAOcCACH0ASAA6AIAIfUBQADpAgAh9gFAAOkCACH6AQEA8AIAIfsBAQDwAgAh_AEBAPACACH9AQEA8AIAIf4BAADxAgAgAQAAAIwCACABAAAAjAIAIA8EAADqAgAg4AEAAO8CADDhAQAAjwIAEOIBAADvAgAw4wEBAPACACHyAQEA8AIAIfMBAQDnAgAh9AEgAOgCACH1AUAA6QIAIfYBQADpAgAh-gEBAPACACH7AQEA8AIAIfwBAQDwAgAh_QEBAPACACH-AQAA8QIAIAMEAADjBAAg8wEAALADACD-AQAAsAMAIAMAAACPAgAgAQAAkAIAMAIAAIwCACADAAAAjwIAIAEAAJACADACAACMAgAgAwAAAI8CACABAACQAgAwAgAAjAIAIAwEAADyBAAg4wEBAAAAAfIBAQAAAAHzAQEAAAAB9AEgAAAAAfUBQAAAAAH2AUAAAAAB-gEBAAAAAfsBAQAAAAH8AQEAAAAB_QEBAAAAAf4BgAAAAAEBHQAAlAIAIAvjAQEAAAAB8gEBAAAAAfMBAQAAAAH0ASAAAAAB9QFAAAAAAfYBQAAAAAH6AQEAAAAB-wEBAAAAAfwBAQAAAAH9AQEAAAAB_gGAAAAAAQEdAACWAgAwAR0AAJYCADAMBAAA6AQAIOMBAQCqAwAh8gEBAKoDACHzAQEAtAMAIfQBIAC1AwAh9QFAALYDACH2AUAAtgMAIfoBAQCqAwAh-wEBAKoDACH8AQEAqgMAIf0BAQCqAwAh_gGAAAAAAQIAAACMAgAgHQAAmQIAIAvjAQEAqgMAIfIBAQCqAwAh8wEBALQDACH0ASAAtQMAIfUBQAC2AwAh9gFAALYDACH6AQEAqgMAIfsBAQCqAwAh_AEBAKoDACH9AQEAqgMAIf4BgAAAAAECAAAAjwIAIB0AAJsCACACAAAAjwIAIB0AAJsCACADAAAAjAIAICQAAJQCACAlAACZAgAgAQAAAIwCACABAAAAjwIAIAUFAADlBAAgKgAA5wQAICsAAOYEACDzAQAAsAMAIP4BAACwAwAgDuABAADsAgAw4QEAAKICABDiAQAA7AIAMOMBAQDUAgAh8gEBANQCACHzAQEA3AIAIfQBIADdAgAh9QFAAN4CACH2AUAA3gIAIfoBAQDUAgAh-wEBANQCACH8AQEA1AIAIf0BAQDUAgAh_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-wEBANQCACH8AQEA1AIAIf0BAQDUAgAh_gEAAO0CACAKBQAA5AIAICoAAO4CACArAADuAgAg5wGAAAAAAe4BgAAAAAH_AQEAAAABgAIBAAAAAYECAQAAAAGCAoAAAAABgwKAAAAAAQfnAYAAAAAB7gGAAAAAAf8BAQAAAAGAAgEAAAABgQIBAAAAAYICgAAAAAGDAoAAAAABDwQAAOoCACDgAQAA7wIAMOEBAACPAgAQ4gEAAO8CADDjAQEA8AIAIfIBAQDwAgAh8wEBAOcCACH0ASAA6AIAIfUBQADpAgAh9gFAAOkCACH6AQEA8AIAIfsBAQDwAgAh_AEBAPACACH9AQEA8AIAIf4BAADxAgAgC-cBAQAAAAHoAQEAAAAE6QEBAAAABOoBAQAAAAHrAQEAAAAB7AEBAAAAAe0BAQAAAAHuAQEA2gIAIe8BAQAAAAHwAQEAAAAB8QEBAAAAAQfnAYAAAAAB7gGAAAAAAf8BAQAAAAGAAgEAAAABgQIBAAAAAYICgAAAAAGDAoAAAAABEeABAADyAgAw4QEAAIkCABDiAQAA8gIAMOMBAQDUAgAh9QFAAN4CACGEAgEA1AIAIYUCAQDUAgAhhgICAPMCACGHAgEA3AIAIYgCAQDcAgAhiQIBANwCACGKAgEA3AIAIYsCAQDcAgAhjAIAAO0CACCNAgEA3AIAIY4CAQDcAgAhjwIAAO0CACANBQAA5AIAICoAAOQCACArAADkAgAgXAAA9QIAIF0AAOQCACDnAQIAAAAB6AECAAAABekBAgAAAAXqAQIAAAAB6wECAAAAAewBAgAAAAHtAQIAAAAB7gECAPQCACENBQAA5AIAICoAAOQCACArAADkAgAgXAAA9QIAIF0AAOQCACDnAQIAAAAB6AECAAAABekBAgAAAAXqAQIAAAAB6wECAAAAAewBAgAAAAHtAQIAAAAB7gECAPQCACEI5wEIAAAAAegBCAAAAAXpAQgAAAAF6gEIAAAAAesBCAAAAAHsAQgAAAAB7QEIAAAAAe4BCAD1AgAhEeABAAD2AgAw4QEAAPMBABDiAQAA9gIAMOMBAQDUAgAh9QFAAN4CACH2AUAA3gIAIY4CAQDcAgAhkAIBANQCACGRAgEA3AIAIZICAQDcAgAhkwIBANQCACGUAgEA1AIAIZUCAQDcAgAhlgJAAPcCACGXAgAA7QIAIJgCAADtAgAgmQIAAO0CACALBQAA5AIAICoAAPkCACArAAD5AgAg5wFAAAAAAegBQAAAAAXpAUAAAAAF6gFAAAAAAesBQAAAAAHsAUAAAAAB7QFAAAAAAe4BQAD4AgAhCwUAAOQCACAqAAD5AgAgKwAA-QIAIOcBQAAAAAHoAUAAAAAF6QFAAAAABeoBQAAAAAHrAUAAAAAB7AFAAAAAAe0BQAAAAAHuAUAA-AIAIQjnAUAAAAAB6AFAAAAABekBQAAAAAXqAUAAAAAB6wFAAAAAAewBQAAAAAHtAUAAAAAB7gFAAPkCACEQ4AEAAPoCADDhAQAA2wEAEOIBAAD6AgAw4wEBANQCACH1AUAA3gIAIYYCAgDVAgAhhwIBANwCACGTAgEA1AIAIZoCAQDUAgAhmwIBANQCACGcAgIA8wIAIZ0CAQDcAgAhngIBANwCACGfAgEA3AIAIaACIADdAgAhoQIAAO0CACAM4AEAAPsCADDhAQAAxQEAEOIBAAD7AgAw4wEBANQCACH1AUAA3gIAIZICAQDUAgAhkwIBANQCACGWAkAA9wIAIaICAQDcAgAhowJAAPcCACGkAgEA3AIAIaUCAADtAgAgCRMAAP0CACDgAQAA_AIAMOEBAACtAQAQ4gEAAPwCADDjAQEA1AIAIfUBQADeAgAh-gECANUCACGSAgEA1AIAIaYCAQDcAgAhCgUAANcCACAqAAD-AgAgKwAA_gIAIOcBgAAAAAHuAYAAAAAB_wEBAAAAAYACAQAAAAGBAgEAAAABggKAAAAAAYMCgAAAAAEH5wGAAAAAAe4BgAAAAAH_AQEAAAABgAIBAAAAAYECAQAAAAGCAoAAAAABgwKAAAAAAQ3gAQAA_wIAMOEBAACXAQAQ4gEAAP8CADDjAQEA1AIAIfMBAQDcAgAh9QFAAN4CACH2AUAA3gIAIZECAQDUAgAhkwIBANQCACGnAgEA1AIAIagCAQDcAgAhqQICANUCACGqAgEA3AIAIQrgAQAAgAMAMOEBAAB_ABDiAQAAgAMAMOMBAQDUAgAh8gEBANQCACH1AUAA3gIAIfYBQADeAgAhkQIBANQCACGrAgAA_QIAIKwCIADdAgAhCOABAACBAwAw4QEAAGkAEOIBAACBAwAw4wEBANQCACH1AUAA3gIAIZECAQDUAgAhrQIBANQCACGuAgEA1AIAIQrgAQAAggMAMOEBAABTABDiAQAAggMAMOMBAQDUAgAh5AEBANwCACHyAQEA1AIAIfUBQADeAgAh9gFAAN4CACGvAgEA3AIAIbACAADtAgAgCxAAAIUDACDgAQAAgwMAMOEBAAA4ABDiAQAAgwMAMOMBAQDwAgAh8gEBAPACACH1AUAA6QIAIfYBQADpAgAhkQIBAPACACGrAgAAhAMAIKwCIADoAgAhB-cBgAAAAAHuAYAAAAAB_wEBAAAAAYACAQAAAAGBAgEAAAABggKAAAAAAYMCgAAAAAEQAwAAngMAIBUAAJMDACAWAACfAwAgFwAAoAMAIOABAACdAwAw4QEAAAsAEOIBAACdAwAw4wEBAPACACHkAQEA5wIAIfIBAQDwAgAh9QFAAOkCACH2AUAA6QIAIa8CAQDnAgAhsAIAAPECACC0AgAACwAgtQIAAAsAIAKRAgEAAAABrQIBAAAAAQkQAACFAwAg4AEAAIcDADDhAQAANAAQ4gEAAIcDADDjAQEA8AIAIfUBQADpAgAhkQIBAPACACGtAgEA8AIAIa4CAQDwAgAhEhIAAIoDACDgAQAAiAMAMOEBAAArABDiAQAAiAMAMOMBAQDwAgAh9QFAAOkCACGEAgEA8AIAIYUCAQDwAgAhhgICAIkDACGHAgEA5wIAIYgCAQDnAgAhiQIBAOcCACGKAgEA5wIAIYsCAQDnAgAhjAIAAPECACCNAgEA5wIAIY4CAQDnAgAhjwIAAPECACAI5wECAAAAAegBAgAAAAXpAQIAAAAF6gECAAAAAesBAgAAAAHsAQIAAAAB7QECAAAAAe4BAgDkAgAhFQkAAI4DACATAACNAwAg4AEAAIsDADDhAQAAJwAQ4gEAAIsDADDjAQEA8AIAIfUBQADpAgAh9gFAAOkCACGOAgEA5wIAIZACAQDwAgAhkQIBAOcCACGSAgEA5wIAIZMCAQDwAgAhlAIBAPACACGVAgEA5wIAIZYCQACMAwAhlwIAAPECACCYAgAA8QIAIJkCAADxAgAgtAIAACcAILUCAAAnACATCQAAjgMAIBMAAI0DACDgAQAAiwMAMOEBAAAnABDiAQAAiwMAMOMBAQDwAgAh9QFAAOkCACH2AUAA6QIAIY4CAQDnAgAhkAIBAPACACGRAgEA5wIAIZICAQDnAgAhkwIBAPACACGUAgEA8AIAIZUCAQDnAgAhlgJAAIwDACGXAgAA8QIAIJgCAADxAgAgmQIAAPECACAI5wFAAAAAAegBQAAAAAXpAUAAAAAF6gFAAAAAAesBQAAAAAHsAUAAAAAB7QFAAAAAAe4BQAD5AgAhA_cBAAArACD4AQAAKwAg-QEAACsAIBQOAACUAwAgDwAAmAMAIBAAAIUDACARAACbAwAgFAAAnAMAIOABAACaAwAw4QEAABAAEOIBAACaAwAw4wEBAPACACHzAQEA5wIAIfUBQADpAgAh9gFAAOkCACGRAgEA8AIAIZMCAQDwAgAhpwIBAPACACGoAgEA5wIAIakCAgCRAwAhqgIBAOcCACG0AgAAEAAgtQIAABAAIAL6AQIAAAABkgIBAAAAAQwJAACSAwAgCgAAkwMAIA4AAJQDACATAACEAwAg4AEAAJADADDhAQAAFAAQ4gEAAJADADDjAQEA8AIAIfUBQADpAgAh-gECAJEDACGSAgEA8AIAIaYCAQDnAgAhCOcBAgAAAAHoAQIAAAAE6QECAAAABOoBAgAAAAHrAQIAAAAB7AECAAAAAe0BAgAAAAHuAQIA1wIAIRQOAACUAwAgDwAAmAMAIBAAAIUDACARAACbAwAgFAAAnAMAIOABAACaAwAw4QEAABAAEOIBAACaAwAw4wEBAPACACHzAQEA5wIAIfUBQADpAgAh9gFAAOkCACGRAgEA8AIAIZMCAQDwAgAhpwIBAPACACGoAgEA5wIAIakCAgCRAwAhqgIBAOcCACG0AgAAEAAgtQIAABAAIAP3AQAAEAAg-AEAABAAIPkBAAAQACAD9wEAABcAIPgBAAAXACD5AQAAFwAgEQwAAJYDACDgAQAAlQMAMOEBAAAcABDiAQAAlQMAMOMBAQDwAgAh9QFAAOkCACGGAgIAkQMAIYcCAQDnAgAhkwIBAPACACGaAgEA8AIAIZsCAQDwAgAhnAICAIkDACGdAgEA5wIAIZ4CAQDnAgAhnwIBAOcCACGgAiAA6AIAIaECAADxAgAgEQkAAJIDACALAACYAwAgDQAAmQMAIOABAACXAwAw4QEAABcAEOIBAACXAwAw4wEBAPACACH1AUAA6QIAIZICAQDwAgAhkwIBAPACACGWAkAAjAMAIaICAQDnAgAhowJAAIwDACGkAgEA5wIAIaUCAADxAgAgtAIAABcAILUCAAAXACAPCQAAkgMAIAsAAJgDACANAACZAwAg4AEAAJcDADDhAQAAFwAQ4gEAAJcDADDjAQEA8AIAIfUBQADpAgAhkgIBAPACACGTAgEA8AIAIZYCQACMAwAhogIBAOcCACGjAkAAjAMAIaQCAQDnAgAhpQIAAPECACAOCQAAkgMAIAoAAJMDACAOAACUAwAgEwAAhAMAIOABAACQAwAw4QEAABQAEOIBAACQAwAw4wEBAPACACH1AUAA6QIAIfoBAgCRAwAhkgIBAPACACGmAgEA5wIAIbQCAAAUACC1AgAAFAAgA_cBAAAcACD4AQAAHAAg-QEAABwAIBIOAACUAwAgDwAAmAMAIBAAAIUDACARAACbAwAgFAAAnAMAIOABAACaAwAw4QEAABAAEOIBAACaAwAw4wEBAPACACHzAQEA5wIAIfUBQADpAgAh9gFAAOkCACGRAgEA8AIAIZMCAQDwAgAhpwIBAPACACGoAgEA5wIAIakCAgCRAwAhqgIBAOcCACED9wEAABQAIPgBAAAUACD5AQAAFAAgA_cBAAAnACD4AQAAJwAg-QEAACcAIA4DAACeAwAgFQAAkwMAIBYAAJ8DACAXAACgAwAg4AEAAJ0DADDhAQAACwAQ4gEAAJ0DADDjAQEA8AIAIeQBAQDnAgAh8gEBAPACACH1AUAA6QIAIfYBQADpAgAhrwIBAOcCACGwAgAA8QIAIA0HAADqAgAgCAAA6wIAIOABAADmAgAw4QEAAAMAEOIBAADmAgAw4wEBAPACACHyAQEA8AIAIfMBAQDnAgAh9AEgAOgCACH1AUAA6QIAIfYBQADpAgAhtAIAAAMAILUCAAADACAD9wEAADQAIPgBAAA0ACD5AQAANAAgA_cBAAA4ACD4AQAAOAAg-QEAADgAIALkAQEAAAAB5QEBAAAAAQkDAACjAwAgBgAApAMAIOABAACiAwAw4QEAAAUAEOIBAACiAwAw4wEBAPACACHkAQEA8AIAIeUBAQDwAgAh5gECAJEDACENBwAA6gIAIAgAAOsCACDgAQAA5gIAMOEBAAADABDiAQAA5gIAMOMBAQDwAgAh8gEBAPACACHzAQEA5wIAIfQBIADoAgAh9QFAAOkCACH2AUAA6QIAIbQCAAADACC1AgAAAwAgEQQAAOoCACDgAQAA7wIAMOEBAACPAgAQ4gEAAO8CADDjAQEA8AIAIfIBAQDwAgAh8wEBAOcCACH0ASAA6AIAIfUBQADpAgAh9gFAAOkCACH6AQEA8AIAIfsBAQDwAgAh_AEBAPACACH9AQEA8AIAIf4BAADxAgAgtAIAAI8CACC1AgAAjwIAIAAAAAAAAbkCAQAAAAEFuQICAAAAAb8CAgAAAAHAAgIAAAABwQICAAAAAcICAgAAAAEFJAAA-QUAICUAAP8FACC2AgAA-gUAILcCAAD-BQAgvAIAAKUCACAFJAAA9wUAICUAAPwFACC2AgAA-AUAILcCAAD7BQAgvAIAAIwCACADJAAA-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-wMAMCUAAIAEADC2AgAA_AMAMLcCAAD9AwAwuAIAAP4DACC5AgAA_wMAMLoCAAD_AwAwuwIAAP8DADC8AgAA_wMAML0CAACBBAAwvgIAAIIEADAN4wEBAAAAAfUBQAAAAAGFAgEAAAABhgICAAAAAYcCAQAAAAGIAgEAAAABiQIBAAAAAYoCAQAAAAGLAgEAAAABjAKAAAAAAY0CAQAAAAGOAgEAAAABjwKAAAAAAQIAAAAtACAkAACHBAAgAwAAAC0AICQAAIcEACAlAACGBAAgAR0AAO4FADASEgAAigMAIOABAACIAwAw4QEAACsAEOIBAACIAwAw4wEBAAAAAfUBQADpAgAhhAIBAPACACGFAgEA8AIAIYYCAgCJAwAhhwIBAOcCACGIAgEA5wIAIYkCAQDnAgAhigIBAOcCACGLAgEA5wIAIYwCAADxAgAgjQIBAOcCACGOAgEA5wIAIY8CAADxAgAgAgAAAC0AIB0AAIYEACACAAAAgwQAIB0AAIQEACAR4AEAAIIEADDhAQAAgwQAEOIBAACCBAAw4wEBAPACACH1AUAA6QIAIYQCAQDwAgAhhQIBAPACACGGAgIAiQMAIYcCAQDnAgAhiAIBAOcCACGJAgEA5wIAIYoCAQDnAgAhiwIBAOcCACGMAgAA8QIAII0CAQDnAgAhjgIBAOcCACGPAgAA8QIAIBHgAQAAggQAMOEBAACDBAAQ4gEAAIIEADDjAQEA8AIAIfUBQADpAgAhhAIBAPACACGFAgEA8AIAIYYCAgCJAwAhhwIBAOcCACGIAgEA5wIAIYkCAQDnAgAhigIBAOcCACGLAgEA5wIAIYwCAADxAgAgjQIBAOcCACGOAgEA5wIAIY8CAADxAgAgDeMBAQCqAwAh9QFAALYDACGFAgEAqgMAIYYCAgCFBAAhhwIBALQDACGIAgEAtAMAIYkCAQC0AwAhigIBALQDACGLAgEAtAMAIYwCgAAAAAGNAgEAtAMAIY4CAQC0AwAhjwKAAAAAAQW5AgIAAAABvwICAAAAAcACAgAAAAHBAgIAAAABwgICAAAAAQ3jAQEAqgMAIfUBQAC2AwAhhQIBAKoDACGGAgIAhQQAIYcCAQC0AwAhiAIBALQDACGJAgEAtAMAIYoCAQC0AwAhiwIBALQDACGMAoAAAAABjQIBALQDACGOAgEAtAMAIY8CgAAAAAEN4wEBAAAAAfUBQAAAAAGFAgEAAAABhgICAAAAAYcCAQAAAAGIAgEAAAABiQIBAAAAAYoCAQAAAAGLAgEAAAABjAKAAAAAAY0CAQAAAAGOAgEAAAABjwKAAAAAAQ4TAACJBAAg4wEBAAAAAfUBQAAAAAH2AUAAAAABjgIBAAAAAZACAQAAAAGRAgEAAAABkwIBAAAAAZQCAQAAAAGVAgEAAAABlgJAAAAAAZcCgAAAAAGYAoAAAAABmQKAAAAAAQQkAAD7AwAwtgIAAPwDADC4AgAA_gMAILwCAAD_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_BQAgvAIAAAEAIAMkAAC9BQAgtgIAAL4FACC8AgAAAQAgAAAABSQAALgFACAlAAC7BQAgtgIAALkFACC3AgAAugUAILwCAAABACADJAAAuAUAILYCAAC5BQAgvAIAAAEAIAAAAAckAACzBQAgJQAAtgUAILYCAAC0BQAgtwIAALUFACC6AgAAAwAguwIAAAMAILwCAAClAgAgAyQAALMFACC2AgAAtAUAILwCAAClAgAgBwMAAK8FACAVAACoBQAgFgAAsAUAIBcAALEFACDkAQAAsAMAIK8CAACwAwAgsAIAALADACAKCQAApwUAIBMAAKYFACCOAgAAsAMAIJECAACwAwAgkgIAALADACCVAgAAsAMAIJYCAACwAwAglwIAALADACCYAgAAsAMAIJkCAACwAwAgAAgOAACpBQAgDwAAqwUAIBAAAKQFACARAACtBQAgFAAArgUAIPMBAACwAwAgqAIAALADACCqAgAAsAMAIAAACAkAAKcFACALAACrBQAgDQAArAUAIJYCAACwAwAgogIAALADACCjAgAAsAMAIKQCAACwAwAgpQIAALADACAECQAApwUAIAoAAKgFACAOAACpBQAgpgIAALADACAAAAADBwAA4wQAIAgAAOQEACDzAQAAsAMAIAAAAwQAAOMEACDzAQAAsAMAIP4BAACwAwAgBwcAAOEEACDjAQEAAAAB8gEBAAAAAfMBAQAAAAH0ASAAAAAB9QFAAAAAAfYBQAAAAAECAAAApQIAICQAALMFACADAAAAAwAgJAAAswUAICUAALcFACAJAAAAAwAgBwAAtwMAIB0AALcFACDjAQEAqgMAIfIBAQCqAwAh8wEBALQDACH0ASAAtQMAIfUBQAC2AwAh9gFAALYDACEHBwAAtwMAIOMBAQCqAwAh8gEBAKoDACHzAQEAtAMAIfQBIAC1AwAh9QFAALYDACH2AUAAtgMAIQoDAACjBQAgFQAA0gQAIBcAANQEACDjAQEAAAAB5AEBAAAAAfIBAQAAAAH1AUAAAAAB9gFAAAAAAa8CAQAAAAGwAoAAAAABAgAAAAEAICQAALgFACADAAAACwAgJAAAuAUAICUAALwFACAMAAAACwAgAwAAogUAIBUAAMQDACAXAADGAwAgHQAAvAUAIOMBAQCqAwAh5AEBALQDACHyAQEAqgMAIfUBQAC2AwAh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-gEBAAAAAfsBAQAAAAH8AQEAAAAB_QEBAAAAAf4BgAAAAAECAAAAjAIAICQAAPcFACAHCAAA4gQAIOMBAQAAAAHyAQEAAAAB8wEBAAAAAfQBIAAAAAH1AUAAAAAB9gFAAAAAAQIAAAClAgAgJAAA-QUAIAMAAACPAgAgJAAA9wUAICUAAP0FACANAAAAjwIAIB0AAP0FACDjAQEAqgMAIfIBAQCqAwAh8wEBALQDACH0ASAAtQMAIfUBQAC2AwAh9gFAALYDACH6AQEAqgMAIfsBAQCqAwAh_AEBAKoDACH9AQEAqgMAIf4BgAAAAAEL4wEBAKoDACHyAQEAqgMAIfMBAQC0AwAh9AEgALUDACH1AUAAtgMAIfYBQAC2AwAh-gEBAKoDACH7AQEAqgMAIfwBAQCqAwAh_QEBAKoDACH-AYAAAAABAwAAAAMAICQAAPkFACAlAACABgAgCQAAAAMAIAgAALgDACAdAACABgAg4wEBAKoDACHyAQEAqgMAIfMBAQC0AwAh9AEgALUDACH1AUAAtgMAIfYBQAC2AwAhBwgAALgDACDjAQEAqgMAIfIBAQCqAwAh8wEBALQDACH0ASAAtQMAIfUBQAC2AwAh9gFAALYDACEFAwQCBQATFRMHFjcRFzsSAwUABgcIAwgNAQIDAAIGAAQCBAkDBQAFAQQKAAIHDgAIDwAGBQAQDiYJDxUIEAABESUIFCoNBAUADAkABwoWBw4aCQQFAAsJAAcLGwgNHwoBDAAJAQ0gAAIKIQAOIgADBQAPCS8HEy4OARIADQETMAADDjIAETEAFDMAARAAAQEQAAEDFTwAFj0AFz4AAAEDSAIBA04CAwUAGCoAGSsAGgAAAAMFABgqABkrABoBEAABARAAAQMFAB8qACArACEAAAADBQAfKgAgKwAhARAAAQEQAAEDBQAmKgAnKwAoAAAAAwUAJioAJysAKAIPjAEIEAABAg-SAQgQAAEFBQAtKgAwKwAxXAAuXQAvAAAAAAAFBQAtKgAwKwAxXAAuXQAvAQkABwEJAAcFBQA2KgA5KwA6XAA3XQA4AAAAAAAFBQA2KgA5KwA6XAA3XQA4AgkABwu6AQgCCQAHC8ABCAMFAD8qAEArAEEAAAADBQA_KgBAKwBBAQwACQEMAAkFBQBGKgBJKwBKXABHXQBIAAAAAAAFBQBGKgBJKwBKXABHXQBIAQnoAQcBCe4BBwMFAE8qAFArAFEAAAADBQBPKgBQKwBRARIADQESAA0FBQBWKgBZKwBaXABXXQBYAAAAAAAFBQBWKgBZKwBaXABXXQBYAAADBQBfKgBgKwBhAAAAAwUAXyoAYCsAYQAAAwUAZioAZysAaAAAAAMFAGYqAGcrAGgCAwACBgAEAgMAAgYABAUFAG0qAHArAHFcAG5dAG8AAAAAAAUFAG0qAHArAHFcAG5dAG8YAgEZPwEaQAEbQQEcQgEeRAEfRhQgRxUhSgEiTBQjTRYmTwEnUAEoURQsVBctVRsuVhEvVxEwWBExWREyWhEzXBE0XhQ1Xxw2YRE3YxQ4ZB05ZRE6ZhE7ZxQ8ah49ayI-bBI_bRJAbhJBbxJCcBJDchJEdBRFdSNGdxJHeRRIeiRJexJKfBJLfRRMgAElTYEBKU6CAQdPgwEHUIQBB1GFAQdShgEHU4gBB1SKARRViwEqVo4BB1eQARRYkQErWZMBB1qUAQdblQEUXpgBLF-ZATJgmgEIYZsBCGKcAQhjnQEIZJ4BCGWgAQhmogEUZ6MBM2ilAQhppwEUaqgBNGupAQhsqgEIbasBFG6uATVvrwE7cLABCXGxAQlysgEJc7MBCXS0AQl1tgEJdrgBFHe5ATx4vAEJeb4BFHq_AT17wQEJfMIBCX3DARR-xgE-f8cBQoAByAEKgQHJAQqCAcoBCoMBywEKhAHMAQqFAc4BCoYB0AEUhwHRAUOIAdMBCokB1QEUigHWAUSLAdcBCowB2AEKjQHZARSOAdwBRY8B3QFLkAHeAQ2RAd8BDZIB4AENkwHhAQ2UAeIBDZUB5AENlgHmARSXAecBTJgB6gENmQHsARSaAe0BTZsB7wENnAHwAQ2dAfEBFJ4B9AFOnwH1AVKgAfYBDqEB9wEOogH4AQ6jAfkBDqQB-gEOpQH8AQ6mAf4BFKcB_wFTqAGBAg6pAYMCFKoBhAJUqwGFAg6sAYYCDq0BhwIUrgGKAlWvAYsCW7ABjQIEsQGOAgSyAZECBLMBkgIEtAGTAgS1AZUCBLYBlwIUtwGYAly4AZoCBLkBnAIUugGdAl27AZ4CBLwBnwIEvQGgAhS-AaMCXr8BpAJiwAGmAgLBAacCAsIBqQICwwGqAgLEAasCAsUBrQICxgGvAhTHAbACY8gBsgICyQG0AhTKAbUCZMsBtgICzAG3AgLNAbgCFM4BuwJlzwG8AmnQAb0CA9EBvgID0gG_AgPTAcACA9QBwQID1QHDAgPWAcUCFNcBxgJq2AHIAgPZAcoCFNoBywJr2wHMAgPcAc0CA90BzgIU3gHRAmzfAdICcg"
+  strings: JSON.parse('["where","orderBy","cursor","preset","presets","_count","plugin","items","projects","testCase","defaultFor","script","run","stepResults","runs","defaultScript","project","scripts","log","steps","generationLogs","testCases","envVars","loginConfigs","Project.findUnique","Project.findUniqueOrThrow","Project.findFirst","Project.findFirstOrThrow","Project.findMany","data","Project.createOne","Project.createMany","Project.createManyAndReturn","Project.updateOne","Project.updateMany","Project.updateManyAndReturn","create","update","Project.upsertOne","Project.deleteOne","Project.deleteMany","having","_min","_max","Project.groupBy","Project.aggregate","EnvVar.findUnique","EnvVar.findUniqueOrThrow","EnvVar.findFirst","EnvVar.findFirstOrThrow","EnvVar.findMany","EnvVar.createOne","EnvVar.createMany","EnvVar.createManyAndReturn","EnvVar.updateOne","EnvVar.updateMany","EnvVar.updateManyAndReturn","EnvVar.upsertOne","EnvVar.deleteOne","EnvVar.deleteMany","EnvVar.groupBy","EnvVar.aggregate","LoginConfig.findUnique","LoginConfig.findUniqueOrThrow","LoginConfig.findFirst","LoginConfig.findFirstOrThrow","LoginConfig.findMany","LoginConfig.createOne","LoginConfig.createMany","LoginConfig.createManyAndReturn","LoginConfig.updateOne","LoginConfig.updateMany","LoginConfig.updateManyAndReturn","LoginConfig.upsertOne","LoginConfig.deleteOne","LoginConfig.deleteMany","LoginConfig.groupBy","LoginConfig.aggregate","TestCase.findUnique","TestCase.findUniqueOrThrow","TestCase.findFirst","TestCase.findFirstOrThrow","TestCase.findMany","TestCase.createOne","TestCase.createMany","TestCase.createManyAndReturn","TestCase.updateOne","TestCase.updateMany","TestCase.updateManyAndReturn","TestCase.upsertOne","TestCase.deleteOne","TestCase.deleteMany","_avg","_sum","TestCase.groupBy","TestCase.aggregate","TestScript.findUnique","TestScript.findUniqueOrThrow","TestScript.findFirst","TestScript.findFirstOrThrow","TestScript.findMany","TestScript.createOne","TestScript.createMany","TestScript.createManyAndReturn","TestScript.updateOne","TestScript.updateMany","TestScript.updateManyAndReturn","TestScript.upsertOne","TestScript.deleteOne","TestScript.deleteMany","TestScript.groupBy","TestScript.aggregate","TestRun.findUnique","TestRun.findUniqueOrThrow","TestRun.findFirst","TestRun.findFirstOrThrow","TestRun.findMany","TestRun.createOne","TestRun.createMany","TestRun.createManyAndReturn","TestRun.updateOne","TestRun.updateMany","TestRun.updateManyAndReturn","TestRun.upsertOne","TestRun.deleteOne","TestRun.deleteMany","TestRun.groupBy","TestRun.aggregate","StepResult.findUnique","StepResult.findUniqueOrThrow","StepResult.findFirst","StepResult.findFirstOrThrow","StepResult.findMany","StepResult.createOne","StepResult.createMany","StepResult.createManyAndReturn","StepResult.updateOne","StepResult.updateMany","StepResult.updateManyAndReturn","StepResult.upsertOne","StepResult.deleteOne","StepResult.deleteMany","StepResult.groupBy","StepResult.aggregate","GenerationLog.findUnique","GenerationLog.findUniqueOrThrow","GenerationLog.findFirst","GenerationLog.findFirstOrThrow","GenerationLog.findMany","GenerationLog.createOne","GenerationLog.createMany","GenerationLog.createManyAndReturn","GenerationLog.updateOne","GenerationLog.updateMany","GenerationLog.updateManyAndReturn","GenerationLog.upsertOne","GenerationLog.deleteOne","GenerationLog.deleteMany","GenerationLog.groupBy","GenerationLog.aggregate","GenerationStep.findUnique","GenerationStep.findUniqueOrThrow","GenerationStep.findFirst","GenerationStep.findFirstOrThrow","GenerationStep.findMany","GenerationStep.createOne","GenerationStep.createMany","GenerationStep.createManyAndReturn","GenerationStep.updateOne","GenerationStep.updateMany","GenerationStep.updateManyAndReturn","GenerationStep.upsertOne","GenerationStep.deleteOne","GenerationStep.deleteMany","GenerationStep.groupBy","GenerationStep.aggregate","Plugin.findUnique","Plugin.findUniqueOrThrow","Plugin.findFirst","Plugin.findFirstOrThrow","Plugin.findMany","Plugin.createOne","Plugin.createMany","Plugin.createManyAndReturn","Plugin.updateOne","Plugin.updateMany","Plugin.updateManyAndReturn","Plugin.upsertOne","Plugin.deleteOne","Plugin.deleteMany","Plugin.groupBy","Plugin.aggregate","PluginPreset.findUnique","PluginPreset.findUniqueOrThrow","PluginPreset.findFirst","PluginPreset.findFirstOrThrow","PluginPreset.findMany","PluginPreset.createOne","PluginPreset.createMany","PluginPreset.createManyAndReturn","PluginPreset.updateOne","PluginPreset.updateMany","PluginPreset.updateManyAndReturn","PluginPreset.upsertOne","PluginPreset.deleteOne","PluginPreset.deleteMany","PluginPreset.groupBy","PluginPreset.aggregate","PluginPresetItem.findUnique","PluginPresetItem.findUniqueOrThrow","PluginPresetItem.findFirst","PluginPresetItem.findFirstOrThrow","PluginPresetItem.findMany","PluginPresetItem.createOne","PluginPresetItem.createMany","PluginPresetItem.createManyAndReturn","PluginPresetItem.updateOne","PluginPresetItem.updateMany","PluginPresetItem.updateManyAndReturn","PluginPresetItem.upsertOne","PluginPresetItem.deleteOne","PluginPresetItem.deleteMany","PluginPresetItem.groupBy","PluginPresetItem.aggregate","AND","OR","NOT","id","presetId","pluginId","priority","equals","in","notIn","lt","lte","gt","gte","not","contains","startsWith","endsWith","name","description","builtin","createdAt","updatedAt","every","some","none","version","kind","entryFile","source","actions","string_contains","string_starts_with","string_ends_with","array_starts_with","array_ends_with","logId","type","stepIndex","message","system","user","assistant","tool","args","result","error","usage","jobId","projectId","testCaseId","status","nl","startUrl","finishedAt","totalUsage","scriptSteps","loopState","runId","action","durationMs","screenshot","consoleLog","networkLog","healed","healedLocator","scriptId","startedAt","logs","meta","intent","rawCode","title","naturalLanguage","sortOrder","defaultScriptId","storageState","isDefault","key","value","baseUrl","viewport","projectId_key","testCaseId_version","presetId_pluginId","is","isNot","connectOrCreate","upsert","createMany","set","disconnect","delete","connect","updateMany","deleteMany","increment","decrement","multiply","divide"]'),
+  graph: "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BQAgpgIAALADACCnAgAAsAMAIA4JAACSAwAgCgAAkwMAIA4AAJQDACATAACEAwAg4AEAAJADADDhAQAAFAAQ4gEAAJADADDjAQEAAAAB9QFAAOkCACH6AQIAkQMAIZICAQDwAgAhpgIAAPECACCnAgEA5wIAIbMCAACPAwAgAwAAABQAIAEAACMAMAIAACQAIAMAAAAXACABAAAYADACAAAZACATCQAAjgMAIBMAAI0DACDgAQAAiwMAMOEBAAAnABDiAQAAiwMAMOMBAQDwAgAh9QFAAOkCACH2AUAA6QIAIY4CAQDnAgAhkAIBAPACACGRAgEA5wIAIZICAQDnAgAhkwIBAPACACGUAgEA8AIAIZUCAQDnAgAhlgJAAIwDACGXAgAA8QIAIJgCAADxAgAgmQIAAPECACAKCQAApwUAIBMAAKYFACCOAgAAsAMAIJECAACwAwAgkgIAALADACCVAgAAsAMAIJYCAACwAwAglwIAALADACCYAgAAsAMAIJkCAACwAwAgEwkAAI4DACATAACNAwAg4AEAAIsDADDhAQAAJwAQ4gEAAIsDADDjAQEAAAAB9QFAAOkCACH2AUAA6QIAIY4CAQDnAgAhkAIBAAAAAZECAQDnAgAhkgIBAOcCACGTAgEA8AIAIZQCAQDwAgAhlQIBAOcCACGWAkAAjAMAIZcCAADxAgAgmAIAAPECACCZAgAA8QIAIAMAAAAnACABAAAoADACAAApACASEgAAigMAIOABAACIAwAw4QEAACsAEOIBAACIAwAw4wEBAPACACH1AUAA6QIAIYQCAQDwAgAhhQIBAPACACGGAgIAiQMAIYcCAQDnAgAhiAIBAOcCACGJAgEA5wIAIYoCAQDnAgAhiwIBAOcCACGMAgAA8QIAII0CAQDnAgAhjgIBAOcCACGPAgAA8QIAIAsSAAClBQAghgIAALADACCHAgAAsAMAIIgCAACwAwAgiQIAALADACCKAgAAsAMAIIsCAACwAwAgjAIAALADACCNAgAAsAMAII4CAACwAwAgjwIAALADACASEgAAigMAIOABAACIAwAw4QEAACsAEOIBAACIAwAw4wEBAAAAAfUBQADpAgAhhAIBAPACACGFAgEA8AIAIYYCAgCJAwAhhwIBAOcCACGIAgEA5wIAIYkCAQDnAgAhigIBAOcCACGLAgEA5wIA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-ADApAAB_ACADAAAAOAAgAQAAOQAwAgAAOgAgAQAAABIAIAEAAAASACADAAAAEAAgAQAAEQAwAgAAEgAgAwAAABAAIAEAABEAMAIAABIAIAMAAAAQACABAAARADACAAASACAPDgAAygQAIA8AANAEACAQAADIBAAgEQAAyQQAIBQAAMsEACDjAQEAAAAB8wEBAAAAAfUBQAAAAAH2AUAAAAABkQIBAAAAAZMCAQAAAAGoAgEAAAABqQIBAAAAAaoCAgAAAAGrAgEAAAABAR0AAIcBACAK4wEBAAAAAfMBAQAAAAH1AUAAAAAB9gFAAAAAAZECAQAAAAGTAgEAAAABqAIBAAAAAakCAQAAAAGqAgIAAAABqwIBAAAAAQEdAACJAQAwAR0AAIkBADABAAAAFAAgDw4AAOwDACAPAADqAwAgEAAAxgQAIBEAAOsDACAUAADtAwAg4wEBAKoDACHzAQEAtAMAIfUBQAC2AwAh9gFAALYDACGRAgEAqgMAIZMCAQCqAwAhqAIBAKoDACGpAgEAtAMAIaoCAgCrAwAhqwIBALQDACECAAAAEgAgHQAAjQEAIArjAQEAqgMAIfMBAQC0AwAh9QFAALYDACH2AUAAtgMAIZECAQCqAwAhkwIBAKoDACGoAgEAqgMAIakCAQC0AwAhqgICAKsDACGrAgEAtAMAIQIAAAAQACAdAACPAQAgAgAAABAAIB0AAI8BACABAAAAFAAgAwAAABIAICQAAIcBACAlAACNAQAgAQAAABIAIAEAAAAQACAIBQAAkAUAICoAAJMFACArAACSBQAgXAAAkQUAIF0AAJQFACDzAQAAsAMAIKkCAACwAwAgqwIAALADACAN4AEAAP8CADDhAQAAlwEAEOIBAAD_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-wEBAPACACH8AQEA8AIAIf0BAQDwAgAh_gEAAPECACABAAAAjAIAIAEAAACMAgAgDwQAAOoCACDgAQAA7wIAMOEBAACPAgAQ4gEAAO8CADDjAQEA8AIAIfIBAQDwAgAh8wEBAOcCACH0ASAA6AIAIfUBQADpAgAh9gFAAOkCACH6AQEA8AIAIfsBAQDwAgAh_AEBAPACACH9AQEA8AIAIf4BAADxAgAgAwQAAOMEACDzAQAAsAMAIP4BAACwAwAgAwAAAI8CACABAACQAgAwAgAAjAIAIAMAAACPAgAgAQAAkAIAMAIAAIwCACADAAAAjwIAIAEAAJACADACAACMAgAgDAQAAPIEACDjAQEAAAAB8gEBAAAAAfMBAQAAAAH0ASAAAAAB9QFAAAAAAfYBQAAAAAH6AQEAAAAB-wEBAAAAAfwBAQAAAAH9AQEAAAAB_gGAAAAAAQEdAACUAgAgC-MBAQAAAAHyAQEAAAAB8wEBAAAAAfQBIAAAAAH1AUAAAAAB9gFAAAAAAfoBAQAAAAH7AQEAAAAB_AEBAAAAAf0BAQAAAAH-AYAAAAABAR0AAJYCADABHQAAlgIAMAwEAADoBAAg4wEBAKoDACHyAQEAqgMAIfMBAQC0AwAh9AEgALUDACH1AUAAtgMAIfYBQAC2AwAh-gEBAKoDACH7AQEAqgMAIfwBAQCqAwAh_QEBAKoDACH-AYAAAAABAgAAAIwCACAdAACZAgAgC-MBAQCqAwAh8gEBAKoDACHzAQEAtAMAIfQBIAC1AwAh9QFAALYDACH2AUAAtgMAIfoBAQCqAwAh-wEBAKoDACH8AQEAqgMAIf0BAQCqAwAh_gGAAAAAAQIAAACPAgAgHQAAmwIAIAIAAACPAgAgHQAAmwIAIAMAAACMAgAgJAAAlAIAICUAAJkCACABAAAAjAIAIAEAAACPAgAgBQUAAOUEACAqAADnBAAgKwAA5gQAIPMBAACwAwAg_gEAALADACAO4AEAAOwCADDhAQAAogIAEOIBAADsAgAw4wEBANQCACHyAQEA1AIAIfMBAQDcAgAh9AEgAN0CACH1AUAA3gIAIfYBQADeAgAh-gEBANQCACH7AQEA1AIAIfwBAQDUAgAh_QEBANQCACH-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_cBAAAFACD4AQAABQAg-QEAAAUAIAP3AQAACwAg-AEAAAsAIPkBAAALACAO4AEAAOwCADDhAQAAogIAEOIBAADsAgAw4wEBANQCACHyAQEA1AIAIfMBAQDcAgAh9AEgAN0CACH1AUAA3gIAIfYBQADeAgAh-gEBANQCACH7AQEA1AIAIfwBAQDUAgAh_QEBANQCACH-AQAA7QIAIAoFAADkAgAgKgAA7gIAICsAAO4CACDnAYAAAAAB7gGAAAAAAf8BAQAAAAGAAgEAAAABgQIBAAAAAYICgAAAAAGDAoAAAAABB-cBgAAAAAHuAYAAAAAB_wEBAAAAAYACAQAAAAGBAgEAAAABggKAAAAAAYMCgAAAAAEPBAAA6gIAIOABAADvAgAw4QEAAI8CABDiAQAA7wIAMOMBAQDwAgAh8gEBAPACACHzAQEA5wIAIfQBIADoAgAh9QFAAOkCACH2AUAA6QIAIfoBAQDwAgAh-wEBAPACACH8AQEA8AIAIf0BAQDwAgAh_gEAAPECACAL5wEBAAAAAegBAQAAAATpAQEAAAAE6gEBAAAAAesBAQAAAAHsAQEAAAAB7QEBAAAAAe4BAQDaAgAh7wEBAAAAAfABAQAAAAHxAQEAAAABB-cBgAAAAAHuAYAAAAAB_wEBAAAAAYACAQAAAAGBAgEAAAABggKAAAAAAYMCgAAAAAER4AEAAPICADDhAQAAiQIAEOIBAADyAgAw4wEBANQCACH1AUAA3gIAIYQCAQDUAgAhhQIBANQCACGGAgIA8wIAIYcCAQDcAgAhiAIBANwCACGJAgEA3AIAIYoCAQDcAgAhiwIBANwCACGMAgAA7QIAII0CAQDcAgAhjgIBANwCACGPAgAA7QIAIA0FAADkAgAgKgAA5AIAICsAAOQCACBcAAD1AgAgXQAA5AIAIOcBAgAAAAHoAQIAAAAF6QECAAAABeoBAgAAAAHrAQIAAAAB7AECAAAAAe0BAgAAAAHuAQIA9AIAIQ0FAADkAgAgKgAA5AIAICsAAOQCACBcAAD1AgAgXQAA5AIAIOcBAgAAAAHoAQIAAAAF6QECAAAABeoBAgAAAAHrAQIAAAAB7AECAAAAAe0BAgAAAAHuAQIA9AIAIQjnAQgAAAAB6AEIAAAABekBCAAAAAXqAQgAAAAB6wEIAAAAAewBCAAAAAHtAQgAAAAB7gEIAPUCACER4AEAAPYCADDhAQAA8wEAEOIBAAD2AgAw4wEBANQCACH1AUAA3gIAIfYBQADeAgAhjgIBANwCACGQAgEA1AIAIZECAQDcAgAhkgIBANwCACGTAgEA1AIAIZQCAQDUAgAhlQIBANwCACGWAkAA9wIAIZcCAADtAgAgmAIAAO0CACCZAgAA7QIAIAsFAADkAgAgKgAA-QIAICsAAPkCACDnAUAAAAAB6AFAAAAABekBQAAAAAXqAUAAAAAB6wFAAAAAAewBQAAAAAHtAUAAAAAB7gFAAPgCACELBQAA5AIAICoAAPkCACArAAD5AgAg5wFAAAAAAegBQAAAAAXpAUAAAAAF6gFAAAAAAesBQAAAAAHsAUAAAAAB7QFAAAAAAe4BQAD4AgAhCOcBQAAAAAHoAUAAAAAF6QFAAAAABeoBQAAAAAHrAUAAAAAB7AFAAAAAAe0BQAAAAAHuAUAA-QIAIRDgAQAA-gIAMOEBAADbAQAQ4gEAAPoCADDjAQEA1AIAIfUBQADeAgAhhgICANUCACGHAgEA3AIAIZMCAQDUAgAhmgIBANQCACGbAgEA1AIAIZwCAgDzAgAhnQIBANwCACGeAgEA3AIAIZ8CAQDcAgAhoAIgAN0CACGhAgAA7QIAIAzgAQAA-wIAMOEBAADFAQAQ4gEAAPsCADDjAQEA1AIAIfUBQADeAgAhkgIBANQCACGTAgEA1AIAIZYCQAD3AgAhogIBANwCACGjAkAA9wIAIaQCAQDcAgAhpQIAAO0CACAKEwAA_QIAIOABAAD8AgAw4QEAAK0BABDiAQAA_AIAMOMBAQDUAgAh9QFAAN4CACH6AQIA1QIAIZICAQDUAgAhpgIAAO0CACCnAgEA3AIAIQoFAADXAgAgKgAA_gIAICsAAP4CACDnAYAAAAAB7gGAAAAAAf8BAQAAAAGAAgEAAAABgQIBAAAAAYICgAAAAAGDAoAAAAABB-cBgAAAAAHuAYAAAAAB_wEBAAAAAYACAQAAAAGBAgEAAAABggKAAAAAAYMCgAAAAAEN4AEAAP8CADDhAQAAlwEAEOIBAAD_AgAw4wEBANQCACHzAQEA3AIAIfUBQADeAgAh9gFAAN4CACGRAgEA1AIAIZMCAQDUAgAhqAIBANQCACGpAgEA3AIAIaoCAgDVAgAhqwIBANwCACEK4AEAAIADADDhAQAAfwAQ4gEAAIADADDjAQEA1AIAIfIBAQDUAgAh9QFAAN4CACH2AUAA3gIAIZECAQDUAgAhrAIAAP0CACCtAiAA3QIAIQjgAQAAgQMAMOEBAABpABDiAQAAgQMAMOMBAQDUAgAh9QFAAN4CACGRAgEA1AIAIa4CAQDUAgAhrwIBANQCACEK4AEAAIIDADDhAQAAUwAQ4gEAAIIDADDjAQEA1AIAIeQBAQDcAgAh8gEBANQCACH1AUAA3gIAIfYBQADeAgAhsAIBANwCACGxAgAA7QIAIAsQAACFAwAg4AEAAIMDADDhAQAAOAAQ4gEAAIMDADDjAQEA8AIAIfIBAQDwAgAh9QFAAOkCACH2AUAA6QIAIZECAQDwAgAhrAIAAIQDACCtAiAA6AIAIQfnAYAAAAAB7gGAAAAAAf8BAQAAAAGAAgEAAAABgQIBAAAAAYICgAAAAAGDAoAAAAABEAMAAJ4DACAVAACTAwAgFgAAnwMAIBcAAKADACDgAQAAnQMAMOEBAAALABDiAQAAnQMAMOMBAQDwAgAh5AEBAOcCACHyAQEA8AIAIfUBQADpAgAh9gFAAOkCACGwAgEA5wIAIbECAADxAgAgtQIAAAsAILYCAAALACACkQIBAAAAAa4CAQAAAAEJEAAAhQMAIOABAACHAwAw4QEAADQAEOIBAACHAwAw4wEBAPACACH1AUAA6QIAIZECAQDwAgAhrgIBAPACACGvAgEA8AIAIRISAACKAwAg4AEAAIgDADDhAQAAKwAQ4gEAAIgDADDjAQEA8AIAIfUBQADpAgAhhAIBAPACACGFAgEA8AIAIYYCAgCJAwAhhwIBAOcCACGIAgEA5wIAIYkCAQDnAgAhigIBAOcCACGLAgEA5wIAIYwCAADxAgAgjQIBAOcCACGOAgEA5wIAIY8CAADxAgAgCOcBAgAAAAHoAQIAAAAF6QECAAAABeoBAgAAAAHrAQIAAAAB7AECAAAAAe0BAgAAAAHuAQIA5AIAIRUJAACOAwAgEwAAjQMAIOABAACLAwAw4QEAACcAEOIBAACLAwAw4wEBAPACACH1AUAA6QIAIfYBQADpAgAhjgIBAOcCACGQAgEA8AIAIZECAQDnAgAhkgIBAOcCACGTAgEA8AIAIZQCAQDwAgAhlQIBAOcCACGWAkAAjAMAIZcCAADxAgAgmAIAAPECACCZAgAA8QIAILUCAAAnACC2AgAAJwAgEwkAAI4DACATAACNAwAg4AEAAIsDADDhAQAAJwAQ4gEAAIsDADDjAQEA8AIAIfUBQADpAgAh9gFAAOkCACGOAgEA5wIAIZACAQDwAgAhkQIBAOcCACGSAgEA5wIAIZMCAQDwAgAhlAIBAPACACGVAgEA5wIAIZYCQACMAwAhlwIAAPECACCYAgAA8QIAIJkCAADxAgAgCOcBQAAAAAHoAUAAAAAF6QFAAAAABeoBQAAAAAHrAUAAAAAB7AFAAAAAAe0BQAAAAAHuAUAA-QIAIQP3AQAAKwAg-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-wEBAPACACH8AQEA8AIAIf0BAQDwAgAh_gEAAPECACC1AgAAjwIAILYCAACPAgAgAAAAAAABugIBAAAAAQW6AgIAAAABwAICAAAAAcECAgAAAAHCAgIAAAABwwICAAAAAQUkAAD5BQAgJQAA_wUAILcCAAD6BQAguAIAAP4FACC9AgAApQIAIAUkAAD3BQAgJQAA_AUAILcCAAD4BQAguAIAAPsFACC9AgAAjAIAIAMkAAD5BQAgtwIAAPoFACC9AgAApQIAIAMkAAD3BQAgtwIAAPgFACC9AgAAjAIAIAAAAAABugIBAAAAAQG6AiAAAAABAboCQAAAAAELJAAA1QQAMCUAANoEADC3AgAA1gQAMLgCAADXBAAwuQIAANgEACC6AgAA2QQAMLsCAADZBAAwvAIAANkEADC9AgAA2QQAML4CAADbBAAwvwIAANwEADALJAAAuQMAMCUAAL4DADC3AgAAugMAMLgCAAC7AwAwuQIAALwDACC6AgAAvQMAMLsCAAC9AwAwvAIAAL0DADC9AgAAvQMAML4CAAC_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_gMAILoCAAD_AwAwuwIAAP8DADC8AgAA_wMAML0CAAD_AwAwvgIAAIEEADC_AgAAggQAMA3jAQEAAAAB9QFAAAAAAYUCAQAAAAGGAgIAAAABhwIBAAAAAYgCAQAAAAGJAgEAAAABigIBAAAAAYsCAQAAAAGMAoAAAAABjQIBAAAAAY4CAQAAAAGPAoAAAAABAgAAAC0AICQAAIcEACADAAAALQAgJAAAhwQAICUAAIYEACABHQAA7gUAMBISAACKAwAg4AEAAIgDADDhAQAAKwAQ4gEAAIgDADDjAQEAAAAB9QFAAOkCACGEAgEA8AIAIYUCAQDwAgAhhgICAIkDACGHAgEA5wIAIYgCAQDnAgAhiQIBAOcCACGKAgEA5wIAIYsCAQDnAgAhjAIAAPECACCNAgEA5wIAIY4CAQDnAgAhjwIAAPECACACAAAALQAgHQAAhgQAIAIAAACDBAAgHQAAhAQAIBHgAQAAggQAMOEBAACDBAAQ4gEAAIIEADDjAQEA8AIAIfUBQADpAgAhhAIBAPACACGFAgEA8AIAIYYCAgCJAwAhhwIBAOcCACGIAgEA5wIAIYkCAQDnAgAhigIBAOcCACGLAgEA5wIAIYwCAADxAgAgjQIBAOcCACGOAgEA5wIAIY8CAADxAgAgEeABAACCBAAw4QEAAIMEABDiAQAAggQAMOMBAQDwAgAh9QFAAOkCACGEAgEA8AIAIYUCAQDwAgAhhgICAIkDACGHAgEA5wIAIYgCAQDnAgAhiQIBAOcCACGKAgEA5wIAIYsCAQDnAgAhjAIAAPECACCNAgEA5wIAIY4CAQDnAgAhjwIAAPECACAN4wEBAKoDACH1AUAAtgMAIYUCAQCqAwAhhgICAIUEACGHAgEAtAMAIYgCAQC0AwAhiQIBALQDACGKAgEAtAMAIYsCAQC0AwAhjAKAAAAAAY0CAQC0AwAhjgIBALQDACGPAoAAAAABBboCAgAAAAHAAgIAAAABwQICAAAAAcICAgAAAAHDAgIAAAABDeMBAQCqAwAh9QFAALYDACGFAgEAqgMAIYYCAgCFBAAhhwIBALQDACGIAgEAtAMAIYkCAQC0AwAhigIBALQDACGLAgEAtAMAIYwCgAAAAAGNAgEAtAMAIY4CAQC0AwAhjwKAAAAAAQ3jAQEAAAAB9QFAAAAAAYUCAQAAAAGGAgIAAAABhwIBAAAAAYgCAQAAAAGJAgEAAAABigIBAAAAAYsCAQAAAAGMAoAAAAABjQIBAAAAAY4CAQAAAAGPAoAAAAABDhMAAIkEACDjAQEAAAAB9QFAAAAAAfYBQAAAAAGOAgEAAAABkAIBAAAAAZECAQAAAAGTAgEAAAABlAIBAAAAAZUCAQAAAAGWAkAAAAABlwKAAAAAAZgCgAAAAAGZAoAAAAABBCQAAPsDADC3AgAA_AMAMLkCAAD-AwAgvQIAAP8DADAKCwAApAQAIA0AAKUEACDjAQEAAAAB9QFAAAAAAZMCAQAAAAGWAkAAAAABogIBAAAAAaMCQAAAAAGkAgEAAAABpQKAAAAAAQIAAAAZACAkAACjBAAgAwAAABkAICQAAKMEACAlAACUBAAgAR0AAO0FADAPCQAAkgMAIAsAAJgDACANAACZAwAg4AEAAJcDADDhAQAAFwAQ4gEAAJcDADDjAQEAAAAB9QFAAOkCACGSAgEA8AIAIZMCAQDwAgAhlgJAAIwDACGiAgEA5wIAIaMCQACMAwAhpAIBAOcCACGlAgAA8QIAIAIAAAAZACAdAACUBAAgAgAAAJIEACAdAACTBAAgDOABAACRBAAw4QEAAJIEABDiAQAAkQQAMOMBAQDwAgAh9QFAAOkCACGSAgEA8AIAIZMCAQDwAgAhlgJAAIwDACGiAgEA5wIAIaMCQACMAwAhpAIBAOcCACGlAgAA8QIAIAzgAQAAkQQAMOEBAACSBAAQ4gEAAJEEADDjAQEA8AIAIfUBQADpAgAhkgIBAPACACGTAgEA8AIAIZYCQACMAwAhogIBAOcCACGjAkAAjAMAIaQCAQDnAgAhpQIAAPECACAI4wEBAKoDACH1AUAAtgMAIZMCAQCqAwAhlgJAAPgDACGiAgEAtAMAIaMCQAD4AwAhpAIBALQDACGlAoAAAAABCgsAAJUEACANAACWBAAg4wEBAKoDACH1AUAAtgMAIZMCAQCqAwAhlgJAAPgDACGiAgEAtAMAIaMCQAD4AwAhpAIBALQDACGlAoAAAAABByQAAOcFACAlAADrBQAgtwIAAOgFACC4AgAA6gUAILsCAAAUACC8AgAAFAAgvQIAACQAIAskAACXBAAwJQAAnAQAMLcCAACYBAAwuAIAAJkEADC5AgAAmgQAILoCAACbBAAwuwIAAJsEADC8AgAAmwQAML0CAACbBAAwvgIAAJ0EADC_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_BQAgvQIAAAEAIAMkAAC9BQAgtwIAAL4FACC9AgAAAQAgAAAABSQAALgFACAlAAC7BQAgtwIAALkFACC4AgAAugUAIL0CAAABACADJAAAuAUAILcCAAC5BQAgvQIAAAEAIAAAAAckAACzBQAgJQAAtgUAILcCAAC0BQAguAIAALUFACC7AgAAAwAgvAIAAAMAIL0CAAClAgAgAyQAALMFACC3AgAAtAUAIL0CAAClAgAgBwMAAK8FACAVAACoBQAgFgAAsAUAIBcAALEFACDkAQAAsAMAILACAACwAwAgsQIAALADACAKCQAApwUAIBMAAKYFACCOAgAAsAMAIJECAACwAwAgkgIAALADACCVAgAAsAMAIJYCAACwAwAglwIAALADACCYAgAAsAMAIJkCAACwAwAgAAgOAACpBQAgDwAAqwUAIBAAAKQFACARAACtBQAgFAAArgUAIPMBAACwAwAgqQIAALADACCrAgAAsAMAIAAACAkAAKcFACALAACrBQAgDQAArAUAIJYCAACwAwAgogIAALADACCjAgAAsAMAIKQCAACwAwAgpQIAALADACAFCQAApwUAIAoAAKgFACAOAACpBQAgpgIAALADACCnAgAAsAMAIAAAAAMHAADjBAAgCAAA5AQAIPMBAACwAwAgAAADBAAA4wQAIPMBAACwAwAg_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_gQAIOMBAQAAAAH1AUAAAAAB9gFAAAAAAY4CAQAAAAGQAgEAAAABkQIBAAAAAZICAQAAAAGTAgEAAAABlAIBAAAAAZUCAQAAAAGWAkAAAAABlwKAAAAAAZgCgAAAAAGZAoAAAAABAgAAACkAICQAANEFACADAAAAJwAgJAAA0QUAICUAANUFACARAAAAJwAgCQAA_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-gEBAAAAAfsBAQAAAAH8AQEAAAAB_QEBAAAAAf4BgAAAAAECAAAAjAIAICQAAPcFACAHCAAA4gQAIOMBAQAAAAHyAQEAAAAB8wEBAAAAAfQBIAAAAAH1AUAAAAAB9gFAAAAAAQIAAAClAgAgJAAA-QUAIAMAAACPAgAgJAAA9wUAICUAAP0FACANAAAAjwIAIB0AAP0FACDjAQEAqgMAIfIBAQCqAwAh8wEBALQDACH0ASAAtQMAIfUBQAC2AwAh9gFAALYDACH6AQEAqgMAIfsBAQCqAwAh_AEBAKoDACH9AQEAqgMAIf4BgAAAAAEL4wEBAKoDACHyAQEAqgMAIfMBAQC0AwAh9AEgALUDACH1AUAAtgMAIfYBQAC2AwAh-gEBAKoDACH7AQEAqgMAIfwBAQCqAwAh_QEBAKoDACH-AYAAAAABAwAAAAMAICQAAPkFACAlAACABgAgCQAAAAMAIAgAALgDACAdAACABgAg4wEBAKoDACHyAQEAqgMAIfMBAQC0AwAh9AEgALUDACH1AUAAtgMAIfYBQAC2AwAhBwgAALgDACDjAQEAqgMAIfIBAQCqAwAh8wEBALQDACH0ASAAtQMAIfUBQAC2AwAh9gFAALYDACEFAwQCBQATFRMHFjcRFzsSAwUABgcIAwgNAQIDAAIGAAQCBAkDBQAFAQQKAAIHDgAIDwAGBQAQDiYJDxUIEAABESUIFCoNBAUADAkABwoWBw4aCQQFAAsJAAcLGwgNHwoBDAAJAQ0gAAIKIQAOIgADBQAPCS8HEy4OARIADQETMAADDjIAETEAFDMAARAAAQEQAAEDFTwAFj0AFz4AAAEDSAIBA04CAwUAGCoAGSsAGgAAAAMFABgqABkrABoBEAABARAAAQMFAB8qACArACEAAAADBQAfKgAgKwAhARAAAQEQAAEDBQAmKgAnKwAoAAAAAwUAJioAJysAKAIPjAEIEAABAg-SAQgQAAEFBQAtKgAwKwAxXAAuXQAvAAAAAAAFBQAtKgAwKwAxXAAuXQAvAQkABwEJAAcFBQA2KgA5KwA6XAA3XQA4AAAAAAAFBQA2KgA5KwA6XAA3XQA4AgkABwu6AQgCCQAHC8ABCAMFAD8qAEArAEEAAAADBQA_KgBAKwBBAQwACQEMAAkFBQBGKgBJKwBKXABHXQBIAAAAAAAFBQBGKgBJKwBKXABHXQBIAQnoAQcBCe4BBwMFAE8qAFArAFEAAAADBQBPKgBQKwBRARIADQESAA0FBQBWKgBZKwBaXABXXQBYAAAAAAAFBQBWKgBZKwBaXABXXQBYAAADBQBfKgBgKwBhAAAAAwUAXyoAYCsAYQAAAwUAZioAZysAaAAAAAMFAGYqAGcrAGgCAwACBgAEAgMAAgYABAUFAG0qAHArAHFcAG5dAG8AAAAAAAUFAG0qAHArAHFcAG5dAG8YAgEZPwEaQAEbQQEcQgEeRAEfRhQgRxUhSgEiTBQjTRYmTwEnUAEoURQsVBctVRsuVhEvVxEwWBExWREyWhEzXBE0XhQ1Xxw2YRE3YxQ4ZB05ZRE6ZhE7ZxQ8ah49ayI-bBI_bRJAbhJBbxJCcBJDchJEdBRFdSNGdxJHeRRIeiRJexJKfBJLfRRMgAElTYEBKU6CAQdPgwEHUIQBB1GFAQdShgEHU4gBB1SKARRViwEqVo4BB1eQARRYkQErWZMBB1qUAQdblQEUXpgBLF-ZATJgmgEIYZsBCGKcAQhjnQEIZJ4BCGWgAQhmogEUZ6MBM2ilAQhppwEUaqgBNGupAQhsqgEIbasBFG6uATVvrwE7cLABCXGxAQlysgEJc7MBCXS0AQl1tgEJdrgBFHe5ATx4vAEJeb4BFHq_AT17wQEJfMIBCX3DARR-xgE-f8cBQoAByAEKgQHJAQqCAcoBCoMBywEKhAHMAQqFAc4BCoYB0AEUhwHRAUOIAdMBCokB1QEUigHWAUSLAdcBCowB2AEKjQHZARSOAdwBRY8B3QFLkAHeAQ2RAd8BDZIB4AENkwHhAQ2UAeIBDZUB5AENlgHmARSXAecBTJgB6gENmQHsARSaAe0BTZsB7wENnAHwAQ2dAfEBFJ4B9AFOnwH1AVKgAfYBDqEB9wEOogH4AQ6jAfkBDqQB-gEOpQH8AQ6mAf4BFKcB_wFTqAGBAg6pAYMCFKoBhAJUqwGFAg6sAYYCDq0BhwIUrgGKAlWvAYsCW7ABjQIEsQGOAgSyAZECBLMBkgIEtAGTAgS1AZUCBLYBlwIUtwGYAly4AZoCBLkBnAIUugGdAl27AZ4CBLwBnwIEvQGgAhS-AaMCXr8BpAJiwAGmAgLBAacCAsIBqQICwwGqAgLEAasCAsUBrQICxgGvAhTHAbACY8gBsgICyQG0AhTKAbUCZMsBtgICzAG3AgLNAbgCFM4BuwJlzwG8AmnQAb0CA9EBvgID0gG_AgPTAcACA9QBwQID1QHDAgPWAcUCFNcBxgJq2AHIAgPZAcoCFNoBywJr2wHMAgPcAc0CA90BzgIU3gHRAmzfAdICcg"
 };
 async function decodeBase64AsWasm(wasmBase64) {
   const { Buffer: Buffer2 } = await import("buffer");
@@ -215,6 +215,7 @@ var TestScriptScalarFieldEnum = {
   testCaseId: "testCaseId",
   version: "version",
   steps: "steps",
+  intent: "intent",
   rawCode: "rawCode",
   createdAt: "createdAt"
 };
@@ -512,6 +513,10 @@ var MIGRATIONS = [
     run: (db) => {
       addColumn(db, "Project", "viewport", "JSONB");
     }
+  },
+  {
+    name: "20260909000000_add_test_script_intent",
+    run: (db) => addColumn(db, "TestScript", "intent", "JSONB")
   }
 ];
 function resolveDbPath(url) {
@@ -567,21 +572,21 @@ function loadSource(name) {
     throw new Error(`\u5185\u7F6E\u63D2\u4EF6\u6E90\u7801\u7F3A\u5931\uFF1A${file}\uFF08dev \u4F4D\u4E8E src/services/componentPlugins/sources/\uFF1B\u6784\u5EFA\u4EA7\u7269\u987B\u968F dist/sources/ \u5206\u53D1\uFF09`);
   }
 }
-var SELECT_ACTION_DOC = "\u5728\u4E0B\u62C9\u4E2D\u9009\u62E9\u9009\u9879\uFF08\u81EA\u52A8\u6253\u5F00\u5F39\u5C42\u5E76\u70B9\u51FB\u6587\u672C/\u6807\u9898\u5339\u914D\u9879\uFF0C\u652F\u6301 Ant Design\u3001Element\u3001Vant \u4E0E MUI\uFF1B\u539F\u751F <select> \u7531\u5206\u53D1\u5668\u539F\u751F\u4EA4\u4E92\u5C42\u515C\u5E95 selectOption\uFF1B\u6811\u5F62\u9009\u62E9\u5668\uFF08TreeSelect/\u6811\u5F62\u4E0B\u62C9\uFF09\u540C\u6837\u7528\u672C\u52A8\u4F5C\uFF0Cvalue \u4F20\u76EE\u6807\u8282\u70B9\u53EF\u89C1\u6587\u672C\uFF0C\u6811\u5F62\u5F39\u5C42\u7531 tree-select \u7CFB\u5217\u5185\u7F6E\u63D2\u4EF6\u515C\u5E95\u95ED\u73AF\uFF1B\u7EA7\u8054\u9009\u62E9\u5668\uFF08Cascader\uFF09\u7528\u672C\u52A8\u4F5C\u65F6 value \u4F20\u5B8C\u6574\u8DEF\u5F84\u300CA / B / C\u300D\u9010\u7EA7\u5C55\u5F00\u70B9\u9009\uFF1BVant \u4E0B\u62C9\u83DC\u5355\u4E0E\u6EDA\u8F6E\u9009\u62E9\u5F39\u5C42\u3001MUI Select \u4E0E Autocomplete \u540C\u6837\u7528\u672C\u52A8\u4F5C\uFF09\u3002args.value=\u9009\u9879\u53EF\u89C1\u6587\u672C\u6216\u5B8C\u6574\u8DEF\u5F84";
+var SELECT_ACTION_DOC = "\u5728\u4E0B\u62C9\u4E2D\u9009\u62E9\u9009\u9879\uFF08\u81EA\u52A8\u6253\u5F00\u5F39\u5C42\u5E76\u70B9\u51FB\u6587\u672C/\u6807\u9898\u5339\u914D\u9879\uFF0C\u652F\u6301 Ant Design\u3001Element\u3001Vant \u4E0E MUI\uFF1B\u539F\u751F <select> \u7531\u5206\u53D1\u5668\u539F\u751F\u4EA4\u4E92\u5C42\u515C\u5E95 selectOption\uFF1B\u6811\u5F62\u9009\u62E9\u5668\uFF08TreeSelect/\u6811\u5F62\u4E0B\u62C9\uFF09\u540C\u6837\u7528\u672C\u52A8\u4F5C\uFF0Cvalue \u4F20\u76EE\u6807\u8282\u70B9\u53EF\u89C1\u6587\u672C\uFF0C\u6811\u5F62\u5F39\u5C42\u7531 tree-select \u7CFB\u5217\u5185\u7F6E\u63D2\u4EF6\u515C\u5E95\u95ED\u73AF\uFF1B\u7EA7\u8054\u9009\u62E9\u5668\uFF08Cascader\uFF09\u7528\u672C\u52A8\u4F5C\u65F6 value \u4F20\u5B8C\u6574\u8DEF\u5F84\u300CA / B / C\u300D\u9010\u7EA7\u5C55\u5F00\u70B9\u9009\uFF1BVant \u4E0B\u62C9\u83DC\u5355\u4E0E\u6EDA\u8F6E\u9009\u62E9\u5F39\u5C42\u3001MUI Select \u4E0E Autocomplete \u540C\u6837\u7528\u672C\u52A8\u4F5C\uFF09\u3002args.value=\u9009\u9879\u53EF\u89C1\u6587\u672C\u6216\u5B8C\u6574\u8DEF\u5F84\uFF1BAnt Design\u3001Element \u666E\u901A\u4E0B\u62C9\u548C\u539F\u751F select \u4E5F\u652F\u6301 args.index\uFF08\u975E\u8D1F\u6574\u6570\uFF0C0=\u7B2C\u4E00\u9879\u30011=\u7B2C\u4E8C\u9879\uFF09\uFF0C\u6309\u5F53\u524D\u53EF\u89C1\u4E14\u672A\u7981\u7528\u9009\u9879\u6392\u5E8F\u9009\u62E9\uFF0C\u4E0E value \u4E8C\u9009\u4E00\uFF1B\u9009\u9879\u672A\u77E5\u65F6\u4E0D\u8981\u7701\u7565\u9009\u62E9\u53C2\u6570";
 var SET_DATE_ACTION_DOC = "\u8BBE\u7F6E\u7EC4\u4EF6\u5E93\u65E5\u671F\u9009\u62E9\u5668\uFF08fill \u4F18\u5148\uFF0C\u5931\u8D25\u8D70\u9762\u677F\u7FFB\u9875\u4E0E\u65E5\u671F\u683C\u70B9\u51FB\uFF1B\u65E5\u671F\u65F6\u95F4\u9009\u62E9\u5668\u81EA\u52A8\u70B9\u51FB\u786E\u8BA4/\u786E\u5B9A\u6309\u94AE\u63D0\u4EA4\uFF0C\u652F\u6301 Ant Design \u4E0E Element\uFF1BVant \u65E5\u671F\u6EDA\u8F6E/\u65E5\u5386\u9762\u677F\u4E3A\u53EA\u8BFB\u89E6\u53D1\u5668\uFF0C\u76F4\u63A5\u8D70\u5F39\u5C42\u70B9\u9009+\u786E\u8BA4\uFF09\u3002args.value=YYYY-MM-DD\uFF08\u65E5\u671F\u65F6\u95F4\u9009\u62E9\u5668\u81EA\u52A8\u8865 00:00:00\uFF0C\u4E5F\u53EF\u663E\u5F0F\u5E26 HH:mm(:ss)\uFF09";
 var SET_TIME_ACTION_DOC = "\u8BBE\u7F6E\u7EC4\u4EF6\u5E93\u65F6\u95F4\u9009\u62E9\u5668\uFF08fill \u4F18\u5148\uFF1B\u9762\u677F\u515C\u5E95\u81EA\u52A8\u70B9\u683C\u5E76\u63D0\u4EA4\uFF1B12 \u5C0F\u65F6\u5236\u9762\u677F\u8BF7\u76F4\u63A5 fill \u5B8C\u6574\u65F6\u95F4\uFF0C\u652F\u6301 Ant Design \u4E0E Element\uFF1BVant \u65F6\u95F4\u6EDA\u8F6E\u4E3A\u53EA\u8BFB\u89E6\u53D1\u5668\uFF0C\u76F4\u63A5\u8D70\u5F39\u5C42\u9010\u5217\u70B9\u9009+\u786E\u8BA4\uFF09\u3002args.value=HH:mm(:ss)";
 var SET_VALUE_ACTION_DOC = '\u8BBE\u7F6E\u6ED1\u5757\uFF08Slider\uFF09\u6570\u503C\uFF08\u4EC5\u9002\u7528\u4E8E\u6ED1\u5757\u7EC4\u4EF6\uFF0C\u52FF\u7528\u4E8E\u6B65\u8FDB\u5668/\u8BC4\u5206/\u5F00\u5173\u7B49\u5176\u5B83\u6570\u503C\u63A7\u4EF6\uFF1B\u62D6\u62FD\u624B\u67C4\u5BF9\u9F50\uFF0CAnt Design \u4E0E Element \u53E6\u652F\u6301\u952E\u76D8\u5FAE\u8C03\uFF1B\u8303\u56F4\u6ED1\u5757 args.value \u4F20 "a,b" \u8BBE\u4E24\u7AEF\uFF0C\u5355\u503C\u79FB\u52A8\u6700\u8FD1\u624B\u67C4\uFF1B\u53D7\u6B65\u957F\u9650\u5236\u8BF7\u4F20\u6B65\u957F\u6574\u6570\u500D\u7684\u503C\uFF0C\u652F\u6301 Ant Design\u3001Element\u3001Vant \u4E0E MUI\uFF09\u3002args.value=\u6570\u503C\u6216"a,b"';
 var BUILTIN_PLUGIN_DEFS = [
   {
     name: "ant-select",
-    version: "1.2.0",
+    version: "1.3.0",
     description: "Ant Design \u4E0B\u62C9\u9009\u62E9\u9002\u914D\uFF08\u517C\u5BB9 antd v5/v6 \u89E6\u53D1\u5668 DOM\uFF09\uFF1Aselect \u52A8\u4F5C\uFF08\u539F\u751F <select> \u7531\u5206\u53D1\u5668\u539F\u751F\u5C42\u515C\u5E95\uFF09\u3001combobox \u8BED\u4E49\u5019\u9009\u4E0E\u300C\u52FF fill\u300D\u6807\u6CE8\uFF08\u5185\u7F6E\uFF09\u3002\u5F39\u5C42\u5DF2\u5F00\u4E14\u5F52\u5C5E\u672C\u63A7\u4EF6\u65F6\u590D\u7528\uFF0C\u4ED6\u4EBA\u6B8B\u7559\u5148\u6536\u8D77\u518D\u6253\u5F00\uFF1B\u591A\u9009\u6A21\u5F0F\u9009\u4E2D\u540E\u81EA\u52A8\u6536\u8D77\u5F39\u5C42",
     entryFile: loadSource("ant-select"),
     actionsMeta: [{ name: "select", doc: SELECT_ACTION_DOC, preferFill: false }]
   },
   {
     name: "el-select",
-    version: "1.0.0",
+    version: "1.1.0",
     description: "Element\uFF08element-ui / element-plus\uFF09\u4E0B\u62C9\u9009\u62E9\u9002\u914D\uFF1Aselect \u52A8\u4F5C\uFF08\u539F\u751F <select> \u7531\u5206\u53D1\u5668\u539F\u751F\u5C42\u515C\u5E95\uFF09\u3001combobox \u8BED\u4E49\u5019\u9009\u4E0E\u300C\u52FF fill\u300D\u6807\u6CE8\uFF08\u5185\u7F6E\uFF09\u3002\u5F39\u5C42\u5DF2\u5F00\u65F6\u590D\u7528\uFF1B\u591A\u9009\u6A21\u5F0F\u9009\u4E2D\u540E\u81EA\u52A8\u6536\u8D77\u5F39\u5C42",
     entryFile: loadSource("el-select"),
     actionsMeta: [{ name: "select", doc: SELECT_ACTION_DOC, preferFill: false }]
@@ -914,6 +919,146 @@ import { randomUUID } from "crypto";
 import fs3 from "fs";
 import path5 from "path";
 
+// src/shared/testIntent.ts
+import { z } from "zod";
+var browserAssertionTypes = ["visible", "hidden", "text", "text_exact", "value", "checked", "unchecked", "enabled", "disabled", "count", "url", "url_exact"];
+var expectedAssertionTypes = ["text", "text_exact", "value", "count", "url", "url_exact"];
+var browserAssertionSchema = z.object({
+  type: z.enum(browserAssertionTypes),
+  expected: z.string().optional()
+}).superRefine((a, ctx) => {
+  if (expectedAssertionTypes.includes(a.type) && a.expected == null)
+    ctx.addIssue({ code: "custom", message: `${a.type} \u7F3A\u5C11 expected`, path: ["expected"] });
+  if (["text", "url", "url_exact"].includes(a.type) && !a.expected?.trim())
+    ctx.addIssue({ code: "custom", message: `${a.type} \u7684 expected \u4E0D\u80FD\u4E3A\u7A7A`, path: ["expected"] });
+  if (a.type === "count" && !/^(0|[1-9]\d*)$/.test(a.expected ?? ""))
+    ctx.addIssue({ code: "custom", message: "count \u7684 expected \u5FC5\u987B\u4E3A\u975E\u8D1F\u6574\u6570", path: ["expected"] });
+});
+var acceptanceCriterionSchema = z.object({
+  id: z.string().regex(/^[a-zA-Z][\w-]{0,63}$/),
+  description: z.string().trim().min(1).max(1e3),
+  target: z.string().trim().min(1).max(1e3),
+  source: z.string().trim().min(1).max(1e3),
+  required: z.boolean().default(true),
+  assertion: browserAssertionSchema
+});
+var testIntentSchema = z.object({
+  version: z.literal(1),
+  scenario: z.enum(["positive", "negative", "mixed"]),
+  objective: z.string().trim().min(1).max(2e3),
+  preconditions: z.array(z.string().trim().min(1).max(1e3)).max(30),
+  data: z.array(z.object({
+    name: z.string().trim().min(1).max(200),
+    value: z.string().max(2e3),
+    policy: z.enum(["fixed", "generated"])
+  })).max(50),
+  criteria: z.array(acceptanceCriterionSchema).min(1).max(50),
+  cleanup: z.array(z.string().trim().min(1).max(1e3)).max(20)
+}).superRefine((intent, ctx) => {
+  if (new Set(intent.criteria.map((c) => c.id)).size !== intent.criteria.length)
+    ctx.addIssue({ code: "custom", message: "\u9A8C\u6536\u76EE\u6807 ID \u4E0D\u5F97\u91CD\u590D", path: ["criteria"] });
+  if (!intent.criteria.some((c) => c.required))
+    ctx.addIssue({ code: "custom", message: "\u81F3\u5C11\u9700\u8981\u4E00\u4E2A\u5FC5\u9A8C\u76EE\u6807", path: ["criteria"] });
+});
+
+// src/services/browserExecution.ts
+async function executeLocatorAction(loc, step, timeout = 15e3) {
+  const options = { timeout };
+  switch (step.action) {
+    case "click":
+      await loc.click(options);
+      break;
+    case "fill":
+      await loc.fill(step.value ?? "", options);
+      break;
+    case "press":
+      await loc.press(step.key ?? "Enter", options);
+      break;
+    case "check":
+      await loc.setChecked(step.checked ?? true, options);
+      break;
+    case "select":
+      await loc.selectOption(step.value ?? "", options);
+      break;
+    default:
+      throw new Error(`\u4E0D\u652F\u6301\u7684\u5B9A\u4F4D\u52A8\u4F5C\uFF1A${step.action}`);
+  }
+}
+function observedAction(action) {
+  if (!action?.selector || typeof action.selector !== "string") throw new Error("observe \u672A\u8FD4\u56DE\u6709\u6548 selector");
+  const args = action.arguments ?? [];
+  const base = { selector: action.selector };
+  switch (action.method) {
+    case "click":
+      return { ...base, action: "click" };
+    case "type":
+    case "fill":
+      if (typeof args[0] !== "string") throw new Error("observe \u586B\u5199\u52A8\u4F5C\u7F3A\u5C11\u6587\u672C\u53C2\u6570");
+      return { ...base, action: "fill", value: args[0] };
+    case "press":
+      if (typeof args[0] !== "string") throw new Error("observe \u6309\u952E\u52A8\u4F5C\u7F3A\u5C11 key");
+      return { ...base, action: "press", key: args[0] };
+    case "check":
+      return { ...base, action: "check", checked: true };
+    case "uncheck":
+      return { ...base, action: "check", checked: false };
+    case "setChecked":
+      if (args[0] !== true && args[0] !== false && args[0] !== "true" && args[0] !== "false") throw new Error("observe setChecked \u53C2\u6570\u5FC5\u987B\u662F\u5E03\u5C14\u503C");
+      return { ...base, action: "check", checked: args[0] === true || args[0] === "true" };
+    case "select":
+    case "selectOption":
+      if (typeof args[0] !== "string") throw new Error("observe \u9009\u62E9\u52A8\u4F5C\u4EC5\u652F\u6301\u5355\u4E2A\u5B57\u7B26\u4E32\u503C\uFF0C\u8BF7\u4F7F\u7528 component_action");
+      return { ...base, action: "select", value: args[0] };
+    default:
+      throw new Error(`\u4E0D\u652F\u6301\u7684 observe \u52A8\u4F5C\uFF1A${action.method}\uFF1B\u8BF7\u4F7F\u7528\u786E\u5B9A\u6027\u5DE5\u5177\u6216\u7EC4\u4EF6\u52A8\u4F5C`);
+  }
+}
+async function waitForBrowserAssertion(o) {
+  const parsed = browserAssertionSchema.safeParse({ type: o.type, expected: o.expected });
+  if (!parsed.success) throw new Error(parsed.error.issues.map((i) => i.message).join("\uFF1B"));
+  if (!["text", "url", "url_exact"].includes(o.type) && !o.locator) throw new Error("\u65AD\u8A00\u7F3A\u5C11\u5B9A\u4F4D\u5668");
+  const end = Date.now() + Math.min(3e4, Math.max(0, o.timeoutMs ?? 1e4));
+  let actual = "";
+  do {
+    if (o.signal?.aborted) throw new Error("\u65AD\u8A00\u5DF2\u4E2D\u6B62");
+    try {
+      if (o.scope && await o.scope.count() !== 1) {
+        actual = "\u4F5C\u7528\u57DF\u4E0D\u5B58\u5728\u6216\u4E0D\u552F\u4E00";
+        throw new Error(actual);
+      }
+      let ok = false;
+      if (o.type === "url" || o.type === "url_exact") {
+        actual = String(await o.page.url());
+        ok = o.type === "url_exact" ? actual === o.expected : actual.includes(o.expected);
+      } else if (o.type === "text" || o.type === "text_exact") {
+        const loc = o.locator ?? o.page.locator("body");
+        actual = await loc.innerText({ timeout: Math.max(1, Math.min(200, end - Date.now())) });
+        ok = (!o.locator || await loc.isVisible()) && (o.type === "text_exact" ? actual.replace(/\s+/g, " ").trim() === o.expected.replace(/\s+/g, " ").trim() : actual.includes(o.expected));
+      } else if (o.type === "count") {
+        actual = String(await o.locator.count());
+        ok = actual === o.expected;
+      } else if (o.type === "value") {
+        actual = await o.locator.inputValue({ timeout: Math.max(1, Math.min(200, end - Date.now())) });
+        ok = actual === o.expected;
+      } else if (o.type === "checked" || o.type === "unchecked") {
+        actual = String(await o.locator.isChecked({ timeout: Math.max(1, Math.min(200, end - Date.now())) }));
+        ok = actual === String(o.type === "checked");
+      } else if (o.type === "enabled" || o.type === "disabled") {
+        actual = String(await o.locator.isEnabled({ timeout: Math.max(1, Math.min(200, end - Date.now())) }));
+        ok = actual === String(o.type === "enabled");
+      } else {
+        const visible = await o.locator.isVisible();
+        ok = o.type === "visible" ? visible : !visible;
+      }
+      if (ok) return;
+    } catch {
+    }
+    if (Date.now() >= end) break;
+    await new Promise((resolve) => setTimeout(resolve, Math.min(100, end - Date.now())));
+  } while (true);
+  throw new Error(`\u65AD\u8A00\u672A\u901A\u8FC7\uFF08${o.type}\uFF09\uFF1A\u671F\u671B ${o.expected ?? o.type}\uFF0C\u5B9E\u9645 ${o.type === "value" ? "\u5B57\u6BB5\u503C\u4E0D\u5339\u914D" : actual.slice(0, 160) || "\u4E0D\u6EE1\u8DB3"}`);
+}
+
 // src/services/runnerService.ts
 import { chromium as chromium3 } from "playwright";
 import path4 from "path";
@@ -931,32 +1076,12 @@ import { join as join3 } from "path";
 import fs from "fs";
 import path3 from "path";
 var REASONING_EFFORTS = ["", "low", "high", "max"];
-var DEFAULT_SPLIT_SYSTEM_PROMPT = `\u4F60\u662F\u4E00\u540D\u8D44\u6DF1 Web \u6D4B\u8BD5\u5DE5\u7A0B\u5E08\u3002\u7528\u6237\u4F1A\u7ED9\u51FA\u4E00\u6761\u6D4B\u8BD5\u6D41\u7A0B\u7684\u81EA\u7136\u8BED\u8A00\u63CF\u8FF0\uFF08\u53EF\u80FD\u9644\u6709\u9875\u9762\u622A\u56FE/\u89C6\u89C9\u8BF4\u660E\u4E0E\u9644\u4EF6\u5185\u5BB9\uFF09\uFF0C\u8BF7\u4F60\u636E\u6B64\u628A\u6574\u4E2A\u6D4B\u8BD5\u8FC7\u7A0B\u9884\u62C6\u5206\u4E3A\u4E00\u4EFD**\u6709\u5E8F\u7684\u53EF\u6267\u884C\u6B65\u9AA4\u8BA1\u5212**\uFF0C\u540E\u7EED\u4F1A\u5728\u771F\u5B9E\u6D4F\u89C8\u5668\u91CC\u9010\u6B65\u6267\u884C\u5E76\u56DE\u653E\u3002
-
-\u8F93\u51FA\u8981\u6C42\uFF1A
-- \u53EA\u8F93\u51FA\u4E00\u4E2A JSON \u5BF9\u8C61\uFF0C\u683C\u5F0F\u4E3A {"steps": [ ... ]}\uFF0C\u4E0D\u8981\u8F93\u51FA\u5176\u4ED6\u6587\u5B57\u6216 markdown \u56F4\u680F\u3002
-- \u6BCF\u4E2A\u6B65\u9AA4\u662F\u4E00\u4E2A\u5BF9\u8C61\uFF1A
-  \xB7 "kind": "action"\uFF08\u52A8\u4F5C\uFF09\u6216 "assert"\uFF08\u65AD\u8A00\uFF09\uFF0C\u5FC5\u586B\u3002
-  \xB7 "instruction": \u7528\u81EA\u7136\u8BED\u8A00\u5199\u6E05\u300C\u64CD\u4F5C\u54EA\u4E2A\u5143\u7D20\u3001\u671F\u671B\u4EC0\u4E48\u300D\uFF0C\u5FC5\u586B\u3002\u8FD9\u662F\u540E\u7EED\u7528 act/observe \u5B9A\u4F4D\u4E0E\u56DE\u653E\u81EA\u6108\u7684\u4F9D\u636E\uFF0C\u8D8A\u5177\u4F53\u8D8A\u597D\uFF0C\u5982\u300C\u70B9\u51FB\u9875\u9762\u53F3\u4E0A\u89D2\u300E\u767B\u5F55\u300F\u6309\u94AE\u300D\u300C\u5728\u300E\u7528\u6237\u540D\u300F\u8F93\u5165\u6846\u8F93\u5165 admin\u300D\u300C\u65AD\u8A00\u9875\u9762\u53F3\u4E0A\u89D2\u663E\u793A\u7528\u6237\u540D admin\u300D\u3002
-  \xB7 \u52A8\u4F5C\u6B65\uFF1A"action" \u53EF\u4E3A goto\uFF08\u9700\u5E26 "url"\uFF09\u3001wait\uFF08\u9700\u5E26 "value" \u6BEB\u79D2\u6570\uFF09\uFF1Bclick/fill/press/select/check \u7B49 UI \u52A8\u4F5C**\u5FC5\u987B\u5E26 "action" \u5B57\u6BB5**\uFF08fill/select \u9700\u5E26 "value" \u6307\u5B9A\u8981\u586B\u5165/\u9009\u4E2D\u7684\u503C\uFF0Cpress \u53EF\u5E26 "key"\uFF09\uFF0C\u4F46**\u4E0D\u8981\u63D0\u4F9B\u9009\u62E9\u5668**\u2014\u2014\u76EE\u6807\u5143\u7D20\u5199\u5728 instruction \u91CC\uFF0C\u6267\u884C\u65F6\u7531\u6D4F\u89C8\u5668\u81EA\u52A8\u5B9A\u4F4D\u3002select \u6B65\u7684 value \u5199\u76EE\u6807\u9009\u9879\u7684\u53EF\u89C1\u6587\u672C\uFF1B\u82E5\u4E0D\u786E\u5B9A\u9875\u9762\u5B9E\u9645\u6709\u54EA\u4E9B\u9009\u9879\uFF0C\u6309\u8BED\u4E49\u5199\u8FD1\u4F3C\u63CF\u8FF0\u5373\u53EF\u2014\u2014\u8BE5\u503C\u4EC5\u4F9B\u53C2\u8003\uFF0C\u6267\u884C Agent \u4F1A\u4EE5\u9875\u9762\u5B9E\u9645\u53EF\u9009\u5217\u8868\u4E3A\u51C6\u81EA\u52A8\u4FEE\u6B63\u3002
-  \xB7 \u65AD\u8A00\u6B65\uFF1A"assertion" \u5BF9\u8C61\uFF1AUI \u65AD\u8A00\u7528 {"type":"visible"|"hidden"|"text","expected":"..."}\uFF0C\u76EE\u6807\u5143\u7D20\u5728 instruction \u91CC\u7528\u81EA\u7136\u8BED\u8A00\u63CF\u8FF0\uFF08observe \u4F1A\u53BB\u5B9A\u4F4D\uFF09\uFF1B\u63A5\u53E3\u65AD\u8A00\u7528 {"type":"response_status"|"response_body"|"response_json","urlMatch":"/api/xxx","expected":"...","jsonPath":"data.id"}\uFF1BWebSocket \u65AD\u8A00\u7528 {"type":"ws_sent"|"ws_received","urlMatch":"/ws/xxx"}\u3002urlMatch \u662F URL \u5173\u952E\u8BCD\u5B50\u4E32\uFF0C\u4E0D\u662F\u5B8C\u6574 URL \u6216 CSS \u9009\u62E9\u5668\u3002
-  \xB7 \u65AD\u8A00\u8BC1\u636E\u8981**\u6301\u4E45\u3001\u53EF\u590D\u73B0**\uFF1A\u4E0D\u8981\u65AD\u8A00 toast/\u6D6E\u5C42\u7B49\u51E0\u79D2\u540E\u81EA\u52A8\u6D88\u5931\u7684\u77AC\u6001\u63D0\u793A\uFF08\u5982\u300C\u767B\u5F55\u6210\u529F\u300D\u300C\u4FDD\u5B58\u6210\u529F\u300D\u300C\u53D1\u5E03\u6210\u529F\u300D\uFF09\u2014\u2014\u56DE\u653E\u65F6\u6781\u6613\u56E0\u63D0\u793A\u6D88\u5931\u65F6\u673A\u4E0D\u786E\u5B9A\u800C\u8BEF\u62A5\u5931\u8D25\u3002\u4F18\u5148\u65AD\u8A00**\u63A5\u53E3\u54CD\u5E94**\uFF08\u64CD\u4F5C\u57FA\u672C\u90FD\u6709\u5BF9\u5E94\u63A5\u53E3\uFF0Cresponse_status/response_json \u6700\u7A33\uFF09\uFF1B\u5176\u6B21\u65AD\u8A00**\u64CD\u4F5C\u540E\u7684\u6301\u4E45\u9875\u9762\u5185\u5BB9**\uFF08\u5217\u8868\u65B0\u589E\u7684\u884C\u3001\u8BE6\u60C5\u9875\u5B57\u6BB5\u3001\u8DF3\u8F6C\u540E\u7A33\u5B9A\u5C55\u793A\u7684\u5143\u7D20\uFF09\u3002\u82E5\u7ED3\u679C\u53EA\u80FD\u9760\u77AC\u6001\u63D0\u793A\u4F53\u73B0\uFF0C\u5C31\u6539\u65AD\u8A00\u5B83\u5E26\u6765\u7684\u6301\u4E45\u6548\u679C\uFF08\u5982\u5217\u8868/\u8BE6\u60C5\u51FA\u73B0\u65B0\u6570\u636E\u3001URL \u53D1\u751F\u8DF3\u8F6C\uFF09\u3002
-- \u6B65\u9AA4\u6309\u7528\u6237\u64CD\u4F5C\u7684\u771F\u5B9E\u987A\u5E8F\u6392\u5217\uFF1B\u53EA\u4FDD\u7559\u4E0E\u6D4B\u8BD5\u76EE\u6807\u76F8\u5173\u7684\u6B65\u9AA4\uFF0C\u63A2\u67E5\u6027\u52A8\u4F5C\u4E0D\u8981\u3002
-- \u9700\u8981\u552F\u4E00/\u968F\u673A\u6D4B\u8BD5\u6570\u636E\u7684\u5B57\u6BB5\uFF08\u4E34\u65F6\u7528\u6237\u540D\u3001\u7F16\u53F7\u3001\u6807\u9898\u3001\u624B\u673A\u53F7\u3001\u90AE\u7BB1\u3001\u8EAB\u4EFD\u8BC1\u7B49\uFF09\u628A\u7CFB\u7EDF\u53D8\u91CF\u62FC\u8FDB instruction/value \u91CC\uFF0C\u5199\u6CD5\u4E0E\u73AF\u5883\u53D8\u91CF\u76F8\u540C\u90FD\u662F\u53CC\u82B1\u62EC\u53F7\uFF1A{{systemTime}}\uFF08\u5F53\u524D\u65F6\u95F4\u6233\uFF09\u3001{{randomNumber[:n]}}\uFF08\u968F\u673A\u6570\u5B57\uFF09\u3001{{randomChinese[:n]}}\uFF08\u968F\u673A\u6C49\u5B57\uFF09\u3001{{randomPhone}}\uFF08\u968F\u673A\u624B\u673A\u53F7\uFF09\u3001{{randomEmail}}\uFF08\u968F\u673A\u90AE\u7BB1\uFF09\u3001{{randomIdCard}}\uFF08\u968F\u673A 18 \u4F4D\u8EAB\u4EFD\u8BC1\u53F7\uFF09\u3002\u7CFB\u7EDF\u53D8\u91CF\u662F\u8FD0\u884C\u671F\u5185\u7F6E\u7684\u3001\u65E0\u9700\u5728\u9879\u76EE\u91CC\u5B9A\u4E49\uFF1B\u53EA\u6709\u5F53\u9879\u76EE\u73AF\u5883\u53D8\u91CF\u6070\u597D\u5B9A\u4E49\u4E86\u540C\u540D\u53D8\u91CF\u65F6\u624D\u4EE5\u73AF\u5883\u53D8\u91CF\u4E3A\u51C6\u3002\u8DE8\u73AF\u5883\u590D\u7528\u7684\u503C\uFF08\u6839\u57DF\u540D\u3001\u901A\u7528\u8D26\u53F7\u5BC6\u7801\uFF09\u7528 {{\u53D8\u91CF\u540D}} \u5360\u4F4D\uFF08\u9700\u5728\u9879\u76EE\u8BBE\u7F6E\u91CC\u5B9A\u4E49\uFF09\uFF1B\u4E00\u6B21\u6027\u6D4B\u8BD5\u6570\u636E\u76F4\u63A5\u5199\u771F\u5B9E\u503C\u3002
-- \u8BA1\u5212\u5FC5\u987B**\u4EE5\u4E00\u6761\u65AD\u8A00\u6B65\u9AA4\u7ED3\u5C3E**\uFF0C\u9A8C\u8BC1\u6D4B\u8BD5\u76EE\u6807\u5DF2\u8FBE\u6210\uFF08\u5173\u952E\u7ED3\u679C\u51FA\u73B0\u3001\u76EE\u6807\u9875\u9762\u5143\u7D20\u53EF\u89C1\u3001\u63A5\u53E3\u8FD4\u56DE\u6210\u529F\u7B49\uFF09\u3002
-
-\u3010\u62C6\u6B65\u793A\u4F8B\u3011
-\u8F93\u5165\u63CF\u8FF0\uFF1A\u5728\u7CFB\u7EDF\u91CC\u65B0\u589E\u4E00\u4E2A\u516C\u544A\u5E76\u9A8C\u8BC1\u53D1\u5E03\u6210\u529F\u3002
-\u8F93\u51FA\uFF1A
-{"steps":[
-  {"kind":"action","action":"click","instruction":"\u70B9\u51FB\u5DE6\u4FA7\u83DC\u5355\u300C\u516C\u544A\u7BA1\u7406\u300D"},
-  {"kind":"action","action":"click","instruction":"\u70B9\u51FB\u300C\u65B0\u5EFA\u516C\u544A\u300D\u6309\u94AE"},
-  {"kind":"action","action":"fill","instruction":"\u5728\u300C\u6807\u9898\u300D\u8F93\u5165\u6846\u8F93\u5165 \u516C\u544A_{{randomNumber[:6]}}","value":"\u516C\u544A_{{randomNumber[:6]}}"},
-  {"kind":"action","action":"fill","instruction":"\u5728\u300C\u5185\u5BB9\u300D\u8F93\u5165\u6846\u8F93\u5165 \u8FD9\u662F\u4E00\u6761\u6D4B\u8BD5\u516C\u544A","value":"\u8FD9\u662F\u4E00\u6761\u6D4B\u8BD5\u516C\u544A"},
-  {"kind":"action","action":"click","instruction":"\u70B9\u51FB\u300C\u53D1\u5E03\u300D\u6309\u94AE"},
-  {"kind":"assert","instruction":"\u65AD\u8A00\u516C\u544A\u5217\u8868\u51FA\u73B0\u6807\u9898\u4EE5 \u516C\u544A_ \u5F00\u5934\u7684\u65B0\u6761\u76EE","assertion":{"type":"text","expected":"\u516C\u544A_"}},
-  {"kind":"assert","instruction":"\u65AD\u8A00\u516C\u544A\u5217\u8868\u63A5\u53E3\u8FD4\u56DE\u7684\u6700\u65B0\u6807\u9898\u5305\u542B\u65B0\u6807\u9898\u524D\u7F00","assertion":{"type":"response_json","urlMatch":"/api/announcements","expected":"\u516C\u544A_","jsonPath":"data[0].title"}}
-]}`;
+var DEFAULT_SPLIT_SYSTEM_PROMPT = `\u4F60\u662F\u4E00\u540D\u5177\u5907\u524D\u7AEF\u77E5\u8BC6\u7684 Web \u6D4B\u8BD5\u5DE5\u7A0B\u5E08\u3002\u6839\u636E\u7528\u6237\u63CF\u8FF0\u53CA\u9644\u4EF6\u8BBE\u8BA1\u6709\u5E8F\u7684\u53EF\u6267\u884C\u6D4B\u8BD5\u8BA1\u5212\uFF0C\u660E\u786E\u524D\u7F6E\u6761\u4EF6\u3001\u6570\u636E\u7EA6\u675F\u548C\u53EF\u9A8C\u8BC1\u7684\u4E1A\u52A1\u7ED3\u679C\u3002
+\u6BCF\u6B65\u5FC5\u987B\u5E26 kind\uFF08action/assert\uFF09\u548C instruction\uFF1BUI \u52A8\u4F5C\u5FC5\u987B\u5E26 "action" \u5B57\u6BB5\uFF08click/fill/press/select/check\uFF09\uFF0Cfill/select \u5E26 value\uFF0Cpress \u5E26 key\u3002goto \u5E26 url\uFF0Cwait \u5E26 value \u6BEB\u79D2\u6570\u3002\u76EE\u6807\u7528\u81EA\u7136\u8BED\u8A00\u63CF\u8FF0\uFF0C\u4E0D\u63D0\u4F9B\u9009\u62E9\u5668\u3002
+\u9884\u671F\u7ED3\u679C\u4EE5\u7528\u6237\u9700\u6C42\u6216\u5DF2\u786E\u8BA4\u9A8C\u6536\u6807\u51C6\u4E3A\u4F9D\u636E\u3002\u6B63\u5411\u6D41\u7A0B\u9A8C\u8BC1\u6210\u529F\u7ED3\u679C\uFF1B\u8D1F\u5411\u6D41\u7A0B\u4FDD\u7559\u9519\u8BEF\u8F93\u5165\u5E76\u9A8C\u8BC1\u9884\u671F\u62D2\u7EDD\uFF0C\u4E0D\u80FD\u628A\u8D1F\u5411\u9A8C\u8BC1\u5220\u4F5C\u5931\u8D25\u91CD\u8BD5\u3002\u56FA\u5B9A\u6570\u636E\u4E0D\u80FD\u64C5\u81EA\u66FF\u6362\u3002
+\u4F18\u5148\u9A8C\u8BC1\u6307\u5B9A\u8BB0\u5F55\u7684\u5B8C\u6574\u5B57\u6BB5\u548C\u6301\u4E45\u9875\u9762\u5185\u5BB9\uFF0C\u907F\u514D\u6574\u9875\u901A\u7528\u6587\u6848\u3001\u6807\u9898\u524D\u7F00\u6216\u5355\u4E2A\u6210\u529F\u63D0\u793A\u9020\u6210\u9519\u8BEF\u901A\u8FC7\u3002\u9875\u9762\u548C\u63A5\u53E3\u54CD\u5E94\u90FD\u662F\u5B9E\u9645\u7ED3\u679C\u7684\u8BC1\u636E\uFF0C\u5747\u9700\u5BF9\u7167\u9700\u6C42\u3002
+\u6570\u636E\u9700\u8981\u552F\u4E00\u503C\u65F6\u4F7F\u7528 {{systemTime}}\u3001{{randomNumber[:6]}}\u3001{{randomPhone}}\u3001{{randomEmail}} \u7B49\u7CFB\u7EDF\u53D8\u91CF\uFF1B\u73AF\u5883\u53D8\u91CF\u4E5F\u4F7F\u7528 {{key}}\uFF0C\u4E0D\u5F97\u5199\u51FA\u5BC6\u94A5\u3002\u4E00\u6B21\u8FD0\u884C\u4E2D\u540C\u4E00\u5360\u4F4D\u7B26\u5F15\u7528\u540C\u4E00\u503C\u3002
+\u6B65\u9AA4\u6309\u771F\u5B9E\u987A\u5E8F\u6392\u5217\uFF0C\u53EA\u8986\u76D6\u7528\u6237\u8981\u6C42\uFF0C\u8BA1\u5212\u672B\u6B65\u5FC5\u987B\u4E3A\u65AD\u8A00\u3002\u5E73\u53F0\u968F\u540E\u63D0\u4F9B\u7ED3\u6784\u5316\u6D4B\u8BD5\u610F\u56FE\u7684 JSON \u8F93\u51FA\u534F\u8BAE\uFF0C\u8BF7\u4E25\u683C\u9075\u5B88\u3002`;
 var CONFIG_PATH = process.env.CONFIG_PATH ?? path3.resolve(".local-config.json");
 function readConfigFile() {
   try {
@@ -1079,6 +1204,44 @@ function clearUsage(jobId) {
   store.delete(jobId);
 }
 
+// src/services/generation/privacy.ts
+var environments = /* @__PURE__ */ new Map();
+function setGenerationEnvironment(jobId, env) {
+  environments.set(jobId, { ...env });
+}
+function clearGenerationEnvironment(jobId) {
+  environments.delete(jobId);
+}
+function redactGenerationText(jobId, text) {
+  const values = /* @__PURE__ */ new Map();
+  for (const [key, value] of Object.entries(environments.get(jobId) ?? {})) {
+    if (value && !values.has(value)) values.set(value, `{{${key}}}`);
+  }
+  if (!values.size) return text;
+  const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const pattern = new RegExp(`\\{\\{[^{}]+\\}\\}|${[...values.keys()].sort((a, b) => b.length - a.length).map(escape).join("|")}`, "g");
+  return text.replace(pattern, (match) => match.startsWith("{{") ? match : values.get(match));
+}
+var structuralKeys = /* @__PURE__ */ new Set(["role", "type", "kind", "action", "strategy", "status", "jobId", "tool_call_id", "id", "model", "pluginId", "pluginAction", "__ttSlotKind", "__ttStateKind", "observationKind", "stateFingerprint", "snapshotVersion", "criterionId", "signature", "scenario", "policy", "verifiedAt"]);
+function redactGenerationData(jobId, data) {
+  const visit = (value, key = "", parent = "") => {
+    if (typeof value === "string") {
+      if (structuralKeys.has(key) || parent === "function" && key === "name" || key === "image" || value.startsWith("data:image/")) return value;
+      if (key === "arguments") {
+        try {
+          return JSON.stringify(visit(JSON.parse(value)));
+        } catch {
+        }
+      }
+      return redactGenerationText(jobId, value);
+    }
+    if (Array.isArray(value)) return value.map((item) => visit(item));
+    if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, visit(v, k, key)]));
+    return value;
+  };
+  return visit(data);
+}
+
 // src/services/stagehandManager.ts
 var sessions = /* @__PURE__ */ new Map();
 function onSessionBrowserClosed(jobId, handler) {
@@ -1131,7 +1294,10 @@ function wrapOpenAIWithUsage(client, jobId) {
 }
 function createGatewayClient(usageKey) {
   const c = getConfig();
-  return wrapOpenAIWithUsage(new OpenAI({ apiKey: c.openaiApiKey, baseURL: c.openaiBaseUrl }), usageKey);
+  const client = wrapOpenAIWithUsage(new OpenAI({ apiKey: c.openaiApiKey, baseURL: c.openaiBaseUrl }), usageKey);
+  const create = client.chat.completions.create.bind(client.chat.completions);
+  client.chat.completions.create = (body, ...rest) => create({ ...body, messages: redactGenerationData(usageKey, body.messages) }, ...rest);
+  return client;
 }
 function contentBlocks(content) {
   if (Array.isArray(content)) return content;
@@ -1636,6 +1802,7 @@ var PLUGIN_RUNTIME_SCRIPT = String.raw`(() => {
         if (raw && typeof raw === 'object' && typeof raw.status === 'string') {
           const st = raw.status === 'success' || raw.status === 'failed' ? raw.status : 'uncertain';
           out = { status: st, message: raw.message == null ? '' : String(raw.message) };
+          if (typeof raw.resolvedValue === 'string') out.resolvedValue = raw.resolvedValue;
         } else {
           out = { status: 'success', message: raw == null ? '' : String(raw) };
         }
@@ -1644,7 +1811,8 @@ var PLUGIN_RUNTIME_SCRIPT = String.raw`(() => {
       }
       if (out.status === 'success' && def && typeof def === 'object' && typeof def.verify === 'function') {
         try {
-          const ok = await def.verify(el, args, window.__ttPw);
+          const verifyArgs = typeof out.resolvedValue === 'string' ? { ...args, value: out.resolvedValue } : args;
+          const ok = await def.verify(el, verifyArgs, window.__ttPw);
           if (!ok) out = { status: 'failed', message: (out.message ? out.message + '；' : '') + '动作后验未通过（终态与预期不符）' };
         } catch (ve) {
           out = { status: 'uncertain', message: (out.message ? out.message + '；' : '') + '后验执行异常：' + String((ve && ve.message) || ve) };
@@ -1775,8 +1943,9 @@ ${p.code}
 
 // src/services/locatorCandidateScript.ts
 var CANDIDATE_SCRIPT = PLUGIN_RUNTIME_SCRIPT + String.raw`(() => {
-  if (window.__ttCandidatesInstalled__) return;
-  window.__ttCandidatesInstalled__ = true;
+  if (window.__ttCandidatesInstalled__ === 3) return;
+  window.__ttCandidatesInstalled__ = 3;
+  for (const el of document.querySelectorAll('[data-tt-idx]')) el.removeAttribute('data-tt-idx');
 
   const textOf = (node) => (node.textContent || '').replace(/\s+/g, ' ').trim();
 
@@ -2264,8 +2433,8 @@ var CANDIDATE_SCRIPT = PLUGIN_RUNTIME_SCRIPT + String.raw`(() => {
   // 待真网关 1080p 表格页读字基线实测后可调大（参数集中在此，便于调整）。
   // 组件库自定义复选框/单选（.el-checkbox 等）：真实 input 隐藏会被下方可见性过滤，不加则该控件永远没有编号，
   // 模型只能按相邻元素编号瞎猜（实测把编号 124 的所属部门下拉当成用户类型复选框点击）→ 编号落在可点击的包裹层上
-  var INTERACTIVE_SEL = 'a[href],button,input,select,textarea,[role="button"],[role="combobox"],[role="checkbox"],[role="radio"],[role="tab"],[role="link"],[role="textbox"],[role="option"],[role="menuitem"],[role="switch"],[contenteditable="true"],[tabindex]:not([tabindex="-1"]),.ant-select,.ant-picker,.el-select,.el-date-editor,.el-checkbox,.el-radio,.el-checkbox-button,.el-radio-button,.ant-checkbox-wrapper,.ant-radio-wrapper';
-  window.__ttIndexedEls__ = { byIndex: {}, lastUrl: '' };
+  var INTERACTIVE_SEL = 'a[href],button,input,select,textarea,[role="button"],[role="combobox"],[role="checkbox"],[role="radio"],[role="tab"],[role="link"],[role="textbox"],[role="option"],[role="menuitem"],[role="switch"],[contenteditable="true"],[tabindex]:not([tabindex="-1"]),.ant-select,.ant-select-item-option,.el-select-dropdown__item,.ant-picker,.el-select,.el-date-editor,.el-checkbox,.el-radio,.el-checkbox-button,.el-radio-button,.ant-checkbox-wrapper,.ant-radio-wrapper';
+  window.__ttIndexedEls__ = { byIndex: {}, ids: new WeakMap(), next: 0, documentId: Math.random().toString(36).slice(2), version: 0, signature: '', rows: [] };
 
   /** 元素 → 页内唯一 css 路径（id 优先，其余 nth-of-type 链）。 */
   window.__ttCssPath = function (el) {
@@ -2285,34 +2454,121 @@ var CANDIDATE_SCRIPT = PLUGIN_RUNTIME_SCRIPT + String.raw`(() => {
     return 'body ' + parts.join(' > ');
   };
 
-  /** 收集可交互元素并分配编号（同页复用索引；输出平铺编号行，供快照文本与截图标注共用）。 */
+  function shortStateText(value, max) {
+    return String(value || '').replace(/\s+/g, ' ').trim().slice(0, max || 100);
+  }
+  function isShown(el) {
+    if (!el || !el.isConnected) return false;
+    const r = el.getBoundingClientRect();
+    if (r.width < 4 || r.height < 4) return false;
+    for (let n = el; n && n.nodeType === 1; n = n.parentElement) {
+      const st = getComputedStyle(n);
+      if (st.visibility === 'hidden' || st.display === 'none' || Number(st.opacity) === 0) return false;
+      // rc-select 虚拟列表把 aria option 放在零尺寸、overflow:hidden 的无障碍容器中。
+      // 它们可能有文本尺寸，但不是可点击的可见选项；采集实际的 option div。
+      if (n !== el) {
+        const box = n.getBoundingClientRect();
+        if (box.width < 4 && /hidden|clip/.test(st.overflowX) || box.height < 4 && /hidden|clip/.test(st.overflowY)) return false;
+      }
+    }
+    return true;
+  }
+  function controlState(el) {
+    const input = el.matches('input,select,textarea') ? el : el.querySelector('input,select,textarea');
+    const target = input || el;
+    const parts = [];
+    if (target.type === 'password') parts.push('filled=' + Boolean(target.value));
+    else if ('value' in target) parts.push('value=' + shortStateText(target.value));
+    if (target.type === 'checkbox' || target.type === 'radio') parts.push('checked=' + target.checked);
+    for (const name of ['checked', 'selected', 'expanded', 'invalid', 'required']) {
+      const val = el.getAttribute('aria-' + name);
+      if (val != null) parts.push(name + '=' + val);
+    }
+    if (target.tagName === 'SELECT') parts.push('selected=' + shortStateText(Array.from(target.selectedOptions).map(o => o.textContent).join(',')));
+    if (target.required) parts.push('required=true');
+    if (target.validity && !target.validity.valid) parts.push('invalid=true');
+    return parts.join(' ');
+  }
+
+  /** 文档内身份单调递增；SPA 路由改变不重置。byIndex 只保留当前可见存活节点。 */
   window.__ttCollectInteractive = function () {
     const state = window.__ttIndexedEls__;
-    const url = location.href.split('#')[0];
-    if (state.lastUrl !== url) { state.byIndex = {}; state.lastUrl = url; }
-    // 清理全页旧标：重渲染后新节点会重新分配编号，残留的 data-tt-idx 会造成属性重复（strict violation）
-    for (const n of document.querySelectorAll('[data-tt-idx]')) n.removeAttribute('data-tt-idx');
-    const lines = [];
-    let next = 0;
-    for (const k of Object.keys(state.byIndex)) next = Math.max(next, parseInt(k, 10));
+    const previous = state.byIndex;
+    const current = {};
+    const rows = [];
+    const styleCache = new WeakMap();
     const els = document.body ? document.body.querySelectorAll(INTERACTIVE_SEL) : [];
-    const styleCache = new WeakMap(); // 本轮收集内复用隐藏判定（visibleTextOf 逐元素 getComputedStyle 的开销收拢为每元素一次）
     for (const el of els) {
-      const r = el.getBoundingClientRect();
-      if (r.width < 4 || r.height < 4) continue;
-      const st = getComputedStyle(el);
-      if (st.visibility === 'hidden' || st.display === 'none' || Number(st.opacity) === 0) continue;
-      let idx = el.__ttIdx;
-      const isNew = idx == null;
-      if (idx == null) { idx = ++next; el.__ttIdx = idx; }
-      // 打属性标记：编号定位走 [data-tt-idx]（绝对唯一），避免 nth-of-type 路径在动态渲染下偏移
+      if (!isShown(el)) continue;
+      let idx = state.ids.get(el);
+      const isNew = !idx || !previous[idx];
+      if (!idx) { idx = ++state.next; state.ids.set(el, idx); }
       if (el.getAttribute('data-tt-idx') !== String(idx)) el.setAttribute('data-tt-idx', String(idx));
-      state.byIndex[idx] = el;
-      const label = (el.getAttribute('aria-label') || el.getAttribute('placeholder') || el.getAttribute('title') || visibleTextOf(el, styleCache)).replace(/\s+/g, ' ').slice(0, 48);
-      const dis = el.disabled || el.getAttribute('aria-disabled') === 'true' ? ' [disabled]' : '';
-      lines.push('[' + idx + ']' + (isNew ? '*' : '') + '<' + el.tagName.toLowerCase() + (label ? ' ' + label : '') + '>' + dis);
+      current[idx] = el;
+      const labels = el.labels ? Array.from(el.labels).map(l => visibleTextOf(l, styleCache)).join(' ') : '';
+      const labelled = (el.getAttribute('aria-labelledby') || '').split(/\s+/).map(id => document.getElementById(id)).filter(Boolean).map(l => visibleTextOf(l, styleCache)).join(' ');
+      const label = shortStateText(el.getAttribute('aria-label') || labelled || labels || el.getAttribute('placeholder') || el.getAttribute('title') || visibleTextOf(el, styleCache), 64);
+      const role = computeRole(el) || el.tagName.toLowerCase();
+      const value = controlState(el);
+      const disabled = el.disabled || el.getAttribute('aria-disabled') === 'true' || el.matches('.ant-select-item-option-disabled,.el-select-dropdown__item.is-disabled');
+      const container = el.closest('[role="dialog"],dialog,form,[role="row"],tr,fieldset');
+      const context = container ? shortStateText(container.getAttribute('aria-label') || container.getAttribute('aria-labelledby') && document.getElementById(container.getAttribute('aria-labelledby'))?.textContent || (container.matches('tr,[role="row"]') ? visibleTextOf(container, styleCache) : ''), 64) : '';
+      let notes = '';
+      try { notes = shortStateText(window.__ttPluginRegistry__?.annotateFor(el), 180); } catch (_) {}
+      rows.push({ id: String(idx), role, label, value, disabled: Boolean(disabled), context, notes, isNew });
     }
-    return lines;
+    for (const k of Object.keys(previous)) if (!current[k] && previous[k]?.isConnected) previous[k].removeAttribute('data-tt-idx');
+    state.byIndex = current;
+    state.rows = rows;
+    const signature = location.href + JSON.stringify(rows.map(({ isNew, ...row }) => row));
+    if (signature !== state.signature) { state.version++; state.signature = signature; }
+    return rows.map(row => '[' + row.id + ']' + (row.isNew ? '*' : '') + '<' + row.role + (row.label ? ' ' + row.label : '') + '>' + (row.value ? ' ' + row.value : '') + (row.disabled ? ' [disabled]' : '') + (row.context ? ' in=' + row.context : '') + (row.notes ? ' ' + row.notes : ''));
+  };
+
+  /** 服务器侧持有完整基线；给模型的快照有范围、分页和字符预算。 */
+  window.__ttSnapshot = function (options) {
+    options = options || {};
+    const lines = window.__ttCollectInteractive();
+    const state = window.__ttIndexedEls__;
+    const roots = Array.from(document.querySelectorAll('dialog[open],[role="dialog"],[role="alertdialog"],[role="listbox"],.el-dialog,.el-drawer,.ant-modal,.ant-drawer,.el-select-dropdown,.ant-select-dropdown,.el-picker-panel,.ant-picker-dropdown')).filter(isShown);
+    let root = null;
+    if (options.scope && !['auto', 'page', 'viewport'].includes(options.scope)) {
+      root = document.querySelector(options.scope);
+      if (!root) throw new Error('快照范围不存在：' + options.scope);
+    }
+    const activeRoots = roots.filter(el => !roots.some(other => other !== el && el.contains(other)));
+    const scope = options.scope || 'auto';
+    const query = String(options.query || '').toLowerCase();
+    const selected = state.rows.map((row, i) => ({ row, line: lines[i] })).filter(({row, line}) => {
+      const el = state.byIndex[row.id];
+      if (root && el !== root && !root.contains(el)) return false;
+      if (scope === 'auto' && activeRoots.length && !activeRoots.some(r => el === r || r.contains(el))) return false;
+      if (scope === 'viewport' || scope === 'auto' && !activeRoots.length) {
+        const r = el.getBoundingClientRect();
+        if (r.bottom <= 0 || r.top >= innerHeight || r.right <= 0 || r.left >= innerWidth) return false;
+      }
+      return !query || line.toLowerCase().includes(query);
+    });
+    const offset = Math.max(0, Math.floor(Number(options.offset) || 0));
+    const limit = Math.min(150, Math.max(1, Math.floor(Number(options.limit) || 80)));
+    const maxChars = Math.min(16000, Math.max(500, Number(options.maxChars) || 10000));
+    const output = [];
+    let size = 0;
+    for (const item of selected.slice(offset, offset + limit)) {
+      if (size + item.line.length > maxChars && output.length) break;
+      output.push(item.line); size += item.line.length + 1;
+    }
+    const values = Object.fromEntries(state.rows.map(r => [r.id, r.value]));
+    const structure = JSON.stringify(state.rows.map(r => [r.id, r.role, r.label, r.disabled, r.context, state.byIndex[r.id].getAttribute('aria-expanded')]));
+    const textRoot = root || (activeRoots.length ? activeRoots[activeRoots.length - 1] : document.body);
+    const alerts = Array.from(document.querySelectorAll('[role="alert"],.el-form-item__error,.ant-form-item-explain-error')).filter(isShown).map(el => shortStateText(el.innerText, 180)).slice(0, 8);
+    const pageText = shortStateText(document.body?.innerText, 12000);
+    return { version: state.documentId + ':' + state.version, documentId: state.documentId, url: location.href,
+      lines: output, total: selected.length, allCount: state.rows.length, offset,
+      nextOffset: offset + output.length < selected.length ? offset + output.length : null,
+      scope: root ? options.scope : scope === 'auto' && activeRoots.length ? 'active-overlay' : scope,
+      values, structure, pageText, alerts,
+      context: shortStateText(textRoot?.getAttribute('aria-label') || textRoot?.getAttribute('role') || '', 80) };
   };
 
   /** 给编号元素绘制标注框（截图前调用；粗边框 + 白底蓝字序号块，适配低分辨率重采样）。 */
@@ -2663,7 +2919,12 @@ function componentActionParameters(validActions) {
       action: { type: "string", enum: validActions, description: "\u8BED\u4E49\u52A8\u4F5C\u540D\uFF08\u9650\u5DE5\u5177\u8BF4\u660E\u4E2D\u7684\u53EF\u7528\u52A8\u4F5C\u8BCD\u8868\uFF09" },
       selector: { type: "string", description: "\u76EE\u6807\u63A7\u4EF6\uFF1Asnapshot \u91CC\u7684\u5143\u7D20\u7F16\u53F7\uFF0C\u6216 css/xpath \u5B9A\u4F4D\u8868\u8FBE\u5F0F" },
       value: { type: "string", description: "\u4E3B\u8981\u53C2\u6570\uFF08\u5982\u9009\u9879\u6587\u672C\u3001\u65E5\u671F YYYY-MM-DD\uFF09" },
-      args: { type: "object", description: "\u9644\u52A0\u53C2\u6570\uFF08\u52A8\u4F5C\u81EA\u5B9A\u4E49\uFF09", additionalProperties: true },
+      args: {
+        type: "object",
+        description: "\u9644\u52A0\u53C2\u6570\uFF08\u52A8\u4F5C\u81EA\u5B9A\u4E49\uFF09\uFF1Bselect \u5FC5\u987B\u4F20 value \u6216 args.index\uFF08\u4E8C\u9009\u4E00\uFF09",
+        properties: { index: { type: "integer", minimum: 0, description: "select\uFF1A\u6309\u5F53\u524D\u53EF\u89C1\u4E14\u672A\u7981\u7528\u9009\u9879\u7684\u987A\u5E8F\u9009\u62E9\uFF0C0=\u7B2C\u4E00\u9879\u30011=\u7B2C\u4E8C\u9879\uFF1B\u4EC5\u652F\u6301 Ant Design\u3001Element \u666E\u901A\u4E0B\u62C9\u548C\u539F\u751F select\uFF1B\u65E0\u9700\u5148\u5C55\u5F00\uFF0C\u4E0D\u80FD\u540C\u65F6\u4F20 value" } },
+        additionalProperties: true
+      },
       instruction: { type: "string", description: "\u672C\u6B65\u7684\u81EA\u7136\u8BED\u8A00\u63CF\u8FF0\uFF08\u5FC5\u586B\uFF0C\u7528\u4E8E\u843D\u5E93\u4E0E\u56DE\u653E\u81EA\u6108\uFF09" }
     },
     required: ["action", "selector", "instruction"]
@@ -3567,19 +3828,11 @@ async function executeStep(page, step, networkEntries, wsEntries) {
       await page.goto(step.url);
       break;
     case "click":
-      await (await resolveStepLocator(page, step)).click({ timeout: 1e4 });
-      break;
     case "fill":
-      await (await resolveStepLocator(page, step)).fill(step.value ?? "", { timeout: 1e4 });
-      break;
     case "press":
-      await (await resolveStepLocator(page, step)).press(step.key ?? "Enter", { timeout: 1e4 });
-      break;
     case "check":
-      await (await resolveStepLocator(page, step)).check({ timeout: 1e4 });
-      break;
     case "select":
-      await (await resolveStepLocator(page, step)).selectOption(step.value ?? "", { timeout: 1e4 });
+      await executeLocatorAction(await resolveStepLocator(page, step), step, 1e4);
       break;
     case "assert":
       await runAssertion(page, step, networkEntries, wsEntries);
@@ -3658,32 +3911,9 @@ async function runAssertion(page, step, networkEntries, wsEntries) {
     await runWebsocketAssertion(step.locator.value, a, wsEntries);
     return;
   }
-  if (a.type === "url") {
-    const url = page.url();
-    if (a.expected && !url.includes(a.expected)) throw new Error(`URL \u65AD\u8A00\u5931\u8D25\uFF1A\u5F53\u524D ${url}\uFF0C\u671F\u671B\u542B\u300C${a.expected}\u300D`);
-    return;
-  }
   if (a.type === "hidden" && !step.locator) return;
-  if (a.type === "text" && !step.locator) {
-    const expected = a.expected ?? "";
-    if (!expected) return;
-    for (let i = 0; i < 50; i++) {
-      const body = await page.locator("body").textContent() ?? "";
-      if (body.includes(expected)) return;
-      await new Promise((r) => setTimeout(r, 200));
-    }
-    throw new Error(`\u6587\u672C\u65AD\u8A00\u5931\u8D25\uFF1A\u9875\u9762\u672A\u5305\u542B\u300C${expected}\u300D`);
-  }
-  const loc = buildLocator(page, step.locator);
-  if (a.type === "visible") {
-    await loc.waitFor({ state: "visible", timeout: 1e4 });
-  } else if (a.type === "hidden") {
-    await loc.waitFor({ state: "hidden", timeout: 1e4 });
-  } else if (a.type === "text") {
-    await loc.waitFor({ state: "visible", timeout: 1e4 });
-    const text = await loc.textContent() ?? "";
-    if (a.expected && !text.includes(a.expected)) throw new Error(`\u6587\u672C\u65AD\u8A00\u5931\u8D25\uFF1A\u5B9E\u9645\u300C${text}\u300D\uFF0C\u671F\u671B\u542B\u300C${a.expected}\u300D`);
-  }
+  const loc = step.locator && !["url", "url_exact"].includes(a.type) ? buildLocator(page, step.locator) : void 0;
+  await waitForBrowserAssertion({ page, locator: loc, scope: step.locator?.scope ? resolveQuery(page, step.locator.scope) : void 0, type: a.type, expected: a.expected, timeoutMs: 1e4 });
 }
 async function runResponseAssertion(urlMatch, a, networkEntries) {
   if (!urlMatch) throw new Error("\u63A5\u53E3\u54CD\u5E94\u65AD\u8A00\u7F3A\u5C11 URL \u5339\u914D\u4E32");
@@ -3770,20 +4000,7 @@ async function selfHealStep(stagehand, shPage, page, step) {
   if (!step.instruction) return { healed: false };
   const semantic = async (sel) => sel ? semanticizeLocator(page, sel, { mode: "playwright" }) : void 0;
   try {
-    if (step.action === "assert") {
-      if (step.assertion?.type === "url") return { healed: false };
-      if (step.assertion?.type === "hidden") return { healed: false };
-      const { data: actions } = await stagehand.observe(step.instruction, { page: shPage });
-      if (Array.isArray(actions) && actions.length > 0) {
-        const locator = await semantic(actions[0]?.selector);
-        if (step.assertion?.type === "text" && step.assertion.expected && locator) {
-          const text = await buildLocator(page, locator).textContent() ?? "";
-          if (!text.includes(step.assertion.expected)) return { healed: false };
-        }
-        return { healed: true, locator };
-      }
-      return { healed: false };
-    }
+    if (step.action === "assert") return { healed: false };
     const res = await stagehand.act(step.instruction, { page: shPage });
     if (res?.data?.success && Array.isArray(res.data.actions) && res.data.actions.length > 0) {
       return { healed: true, locator: await semantic(res.data.actions[0]?.selector) };
@@ -4036,55 +4253,60 @@ async function projectRoutes(app2) {
 }
 
 // src/routes/testCases.ts
-import { z as z2 } from "zod";
+import { z as z3 } from "zod";
 
 // src/shared/testScript.ts
-import { z } from "zod";
-var locatorScopeSchema = z.object({
-  strategy: z.enum(["role", "testid", "label", "placeholder", "text", "alt", "title", "css"]),
-  value: z.string(),
-  role: z.string().optional(),
-  name: z.string().optional()
+import { z as z2 } from "zod";
+var locatorScopeSchema = z2.object({
+  strategy: z2.enum(["role", "testid", "label", "placeholder", "text", "alt", "title", "css"]),
+  value: z2.string(),
+  role: z2.string().optional(),
+  name: z2.string().optional()
 });
-var locatorSchema = z.object({
-  strategy: z.enum(["role", "label", "text", "placeholder", "testid", "alt", "title", "css", "xpath", "response", "websocket"]),
-  value: z.string(),
-  role: z.string().optional(),
-  name: z.string().optional(),
+var locatorSchema = z2.object({
+  strategy: z2.enum(["role", "label", "text", "placeholder", "testid", "alt", "title", "css", "xpath", "response", "websocket"]),
+  value: z2.string(),
+  role: z2.string().optional(),
+  name: z2.string().optional(),
   scope: locatorScopeSchema.optional()
 });
-var testStepSchema = z.object({
-  instruction: z.string().optional(),
+var testStepSchema = z2.object({
+  criterionId: z2.string().optional(),
+  // 对应已确认的验收目标
+  instruction: z2.string().optional(),
   // 模块①：LLM 拆出的自然语言子指令；模块②：人类可读描述
-  kind: z.enum(["navigate", "action", "assert", "wait"]).default("action"),
-  action: z.enum(["goto", "click", "fill", "press", "check", "select", "assert", "wait", "raw", "plugin"]),
+  kind: z2.enum(["navigate", "action", "assert", "wait"]).default("action"),
+  action: z2.enum(["goto", "click", "fill", "press", "check", "select", "assert", "wait", "raw", "plugin"]),
   /// 语义动作步骤（action='plugin' 时必填）：action 为语义动作名；pluginId 为生成期命中的插件提示
   /// （可选，回放按语义动作链重匹配时仅作优先尝试）；args 为动作参数。
-  pluginAction: z.object({
-    pluginId: z.string().optional(),
-    action: z.string(),
+  pluginAction: z2.object({
+    pluginId: z2.string().optional(),
+    action: z2.string(),
     /** 插件声明的展示名（落库时随步骤戳入，供状态标签/导出等展示点直接取用）。 */
-    label: z.string().optional(),
+    label: z2.string().optional(),
     // 值放宽为 any：自由参数对象需兼容 Prisma Json 写入（unknown 会破坏 InputJsonObject 约束）
-    args: z.record(z.string(), z.any()).optional()
+    args: z2.record(z2.string(), z2.any()).optional()
   }).optional(),
   locator: locatorSchema.optional(),
-  url: z.string().optional(),
-  value: z.string().optional(),
-  key: z.string().optional(),
-  assertion: z.object({
-    type: z.enum(["visible", "hidden", "text", "url", "response_status", "response_body", "response_json", "ws_sent", "ws_received"]),
-    expected: z.string().optional(),
-    jsonPath: z.string().optional()
+  url: z2.string().optional(),
+  value: z2.string().optional(),
+  key: z2.string().optional(),
+  checked: z2.boolean().optional(),
+  // 旧脚本缺省 true；false 明确取消勾选
+  assertion: z2.object({
+    type: z2.enum([...browserAssertionTypes, "response_status", "response_body", "response_json", "ws_sent", "ws_received"]),
+    expected: z2.string().optional(),
+    jsonPath: z2.string().optional()
     // type='response_json' 时的字段点分路径，如 data.id
   }).optional(),
-  code: z.string().optional(),
+  code: z2.string().optional(),
   // action='raw' 时保留的原始代码行
-  description: z.string().optional()
+  description: z2.string().optional()
 });
-var testScriptSchema = z.object({
-  name: z.string(),
-  steps: z.array(testStepSchema)
+var testScriptSchema = z2.object({
+  name: z2.string(),
+  intent: testIntentSchema.optional(),
+  steps: z2.array(testStepSchema)
 });
 var REVISE_OPS_MAX = 20;
 function applyReviseOps(steps, ops) {
@@ -4185,14 +4407,16 @@ async function testCaseRoutes(app2) {
     const { projectId } = req.params;
     const body = req.body ?? {};
     if (!body.title) return reply.code(400).send({ error: "\u7F3A\u5C11\u7528\u4F8B\u6807\u9898" });
-    const stepsResult = z2.array(testStepSchema).safeParse(body.steps);
+    const stepsResult = z3.array(testStepSchema).safeParse(body.steps);
     if (!stepsResult.success) return reply.code(400).send({ error: "\u6B65\u9AA4\u6570\u636E\u683C\u5F0F\u4E0D\u6B63\u786E" });
+    const intentResult = testIntentSchema.nullish().transform((value) => value ?? void 0).safeParse(body.intent);
+    if (!intentResult.success) return reply.code(400).send({ error: "\u6D4B\u8BD5\u610F\u56FE\u683C\u5F0F\u4E0D\u6B63\u786E" });
     return prisma.$transaction(async (tx) => {
       const tc = await tx.testCase.create({
         data: { projectId, title: body.title, description: body.description ?? null, naturalLanguage: body.naturalLanguage ?? null }
       });
       await tx.testScript.create({
-        data: { testCaseId: tc.id, version: 1, steps: stepsResult.data, rawCode: body.rawCode ?? null }
+        data: { testCaseId: tc.id, version: 1, steps: stepsResult.data, intent: intentResult.data, rawCode: body.rawCode ?? null }
       });
       return tc;
     });
@@ -4266,6 +4490,8 @@ async function testCaseRoutes(app2) {
 }
 
 // src/routes/scripts.ts
+import { z as z4 } from "zod";
+var scriptBody = z4.object({ steps: z4.array(testStepSchema).optional(), rawCode: z4.string().optional(), intent: testIntentSchema.nullish().transform((value) => value ?? void 0) });
 async function scriptRoutes(app2) {
   app2.get(
     "/api/test-cases/:testCaseId/scripts",
@@ -4283,7 +4509,9 @@ async function scriptRoutes(app2) {
   });
   app2.post("/api/test-cases/:testCaseId/scripts", async (req, reply) => {
     const testCaseId = req.params.testCaseId;
-    const { steps, rawCode } = req.body ?? {};
+    const parsed = scriptBody.safeParse(req.body ?? {});
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues.map((i) => i.message).join("\uFF1B") });
+    const { steps, rawCode, intent } = parsed.data;
     if (!Array.isArray(steps)) return reply.code(400).send({ error: "\u7F3A\u5C11 steps" });
     const last = await prisma.testScript.findFirst({
       where: { testCaseId },
@@ -4291,15 +4519,17 @@ async function scriptRoutes(app2) {
     });
     const version = (last?.version ?? 0) + 1;
     return prisma.testScript.create({
-      data: { testCaseId, version, steps, rawCode }
+      data: { testCaseId, version, steps, rawCode, intent }
     });
   });
   app2.put("/api/scripts/:id", async (req, reply) => {
     const { id } = req.params;
-    const { steps, rawCode } = req.body ?? {};
+    const parsed = scriptBody.safeParse(req.body ?? {});
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues.map((i) => i.message).join("\uFF1B") });
+    const { steps, rawCode, intent } = parsed.data;
     const existing = await prisma.testScript.findUnique({ where: { id } });
     if (!existing) return reply.code(404).send({ error: "\u811A\u672C\u4E0D\u5B58\u5728" });
-    return prisma.testScript.update({ where: { id }, data: { steps, rawCode } });
+    return prisma.testScript.update({ where: { id }, data: { steps, rawCode, intent } });
   });
   app2.delete("/api/scripts/:id", async (req) => {
     const { id } = req.params;
@@ -4634,6 +4864,7 @@ function safeJsonParse2(s) {
 // src/services/generation/logBridge.ts
 var activeLogIds = /* @__PURE__ */ new Map();
 function pub(msg) {
+  if (msg.jobId) msg = redactGenerationData(String(msg.jobId), msg);
   publish(msg);
   const logId = msg.jobId ? activeLogIds.get(msg.jobId) : null;
   if (logId) logFromWsEvent(msg, logId);
@@ -4661,6 +4892,9 @@ function logFromWsEvent(msg, logId) {
         type: STEP_TYPE.STATUS,
         message: `\u9884\u62C6\u5206\u5B8C\u6210\uFF0C\u8BF7\u786E\u8BA4\u6B65\u9AA4\u8BA1\u5212\uFF08${Array.isArray(msg.steps) ? msg.steps.length : 0} \u6B65\uFF09`
       });
+      return;
+    case "gen:coverage":
+      appendStep(logId, { type: STEP_TYPE.STATUS, message: "\u9A8C\u6536\u8986\u76D6\u5DF2\u66F4\u65B0", args: { coverage: msg.coverage } });
       return;
     case "gen:revoke":
       appendStep(logId, {
@@ -4697,7 +4931,7 @@ function logFromWsEvent(msg, logId) {
       appendStep(logId, {
         type: STEP_TYPE.DONE,
         message: `\u751F\u6210\u5B8C\u6210\uFF0C\u5171 ${stepCount} \u6B65`,
-        args: { stepCount }
+        args: { stepCount, intent: msg.script?.intent }
       });
       if (msg.jobId) {
         markFinished(msg.jobId, "DONE", {
@@ -4736,7 +4970,24 @@ function pubToolWithUsage(jobId, index, actionLabel2, actionDetail, result, usag
   });
 }
 function updateToolAssistant(jobId, stepIndex, assistant) {
-  updateStepAssistant(activeLogIds.get(jobId), stepIndex, assistant);
+  updateStepAssistant(activeLogIds.get(jobId), stepIndex, redactGenerationText(jobId, assistant));
+}
+
+// src/services/generation/checkpoint.ts
+var checkpoints = /* @__PURE__ */ new Map();
+function clearCheckpoint(jobId) {
+  checkpoints.delete(jobId);
+}
+async function saveCheckpoint(jobId, checkpoint) {
+  const snapshot = structuredClone({ ...redactGenerationData(jobId, checkpoint), substitution: checkpoint.substitution });
+  checkpoints.set(jobId, snapshot);
+  await prisma.generationLog.update({ where: { jobId }, data: { loopState: snapshot } });
+}
+async function loadCheckpoint(jobId) {
+  const memory = checkpoints.get(jobId);
+  if (memory) return structuredClone(memory);
+  const saved = await prisma.generationLog.findUnique({ where: { jobId }, select: { loopState: true } });
+  return saved?.loopState && typeof saved.loopState === "object" ? saved.loopState : null;
 }
 
 // src/services/generation/jobControl.ts
@@ -4747,6 +4998,19 @@ var waitTimers = /* @__PURE__ */ new Map();
 var revokeHandlers = /* @__PURE__ */ new Map();
 var pauseHandlers = /* @__PURE__ */ new Map();
 var pauseTimers = /* @__PURE__ */ new Map();
+var runningJobs = /* @__PURE__ */ new Map();
+function isJobRunning(jobId) {
+  return runningJobs.has(jobId);
+}
+function claimJob(jobId) {
+  if (runningJobs.has(jobId)) return null;
+  const owner = Symbol(jobId);
+  runningJobs.set(jobId, owner);
+  return owner;
+}
+function releaseJobSlot(jobId, owner) {
+  if (!owner || runningJobs.get(jobId) === owner) runningJobs.delete(jobId);
+}
 function setWait(jobId, wait, timeoutMs) {
   waits.set(jobId, wait);
   const t = setTimeout(() => resolveWait(jobId, null), timeoutMs);
@@ -4769,10 +5033,15 @@ function pauseJob(jobId) {
   return true;
 }
 function scheduleSessionGc(jobId) {
+  cancelSessionGc(jobId);
   const t = setTimeout(
     () => {
       pauseTimers.delete(jobId);
       pauseHandlers.delete(jobId);
+      clearCheckpoint(jobId);
+      clearGenerationEnvironment(jobId);
+      clearUsage(jobId);
+      unregisterCancel(jobId);
       closeSession(jobId).catch(() => {
       });
     },
@@ -4788,10 +5057,22 @@ function cancelSessionGc(jobId) {
     pauseTimers.delete(jobId);
   }
 }
-function confirmPlan(jobId, steps) {
+function confirmPlan(jobId, steps, intent) {
   const w = waits.get(jobId);
   if (!w || w.type !== "plan") return false;
-  resolveWait(jobId, steps);
+  steps = redactGenerationData(jobId, steps);
+  const selected = redactGenerationData(jobId, intent ?? w.intent);
+  if (selected) {
+    const parsed = testIntentSchema.safeParse(selected);
+    if (!parsed.success) return `\u6D4B\u8BD5\u610F\u56FE\u65E0\u6548\uFF1A${parsed.error.issues.map((i) => i.message).join("\uFF1B")}`;
+    for (const criterion of parsed.data.criteria.filter((c) => c.required)) {
+      if (!steps.some((s) => s.kind === "assert" && s.criterionId === criterion.id && s.assertion?.type === criterion.assertion.type && s.assertion?.expected === criterion.assertion.expected))
+        return `\u5FC5\u9A8C\u76EE\u6807 ${criterion.id} \u7F3A\u5C11\u5BF9\u5E94\u7684\u8BA1\u5212\u65AD\u8A00\uFF0C\u6216\u7C7B\u578B/\u9884\u671F\u4E0D\u4E00\u81F4\u3002\u8BF7\u540C\u65F6\u4FEE\u6539\u9A8C\u6536\u76EE\u6807\u4E0E\u8BA1\u5212\u3002`;
+    }
+    if (steps.some((s) => s.criterionId && !parsed.data.criteria.some((c) => c.id === s.criterionId))) return "\u8BA1\u5212\u5F15\u7528\u4E86\u4E0D\u5B58\u5728\u7684\u9A8C\u6536\u76EE\u6807";
+    if (steps.at(-1)?.kind !== "assert") return "\u8BA1\u5212\u672B\u6B65\u5FC5\u987B\u662F\u65AD\u8A00";
+    resolveWait(jobId, { steps, intent: parsed.data });
+  } else resolveWait(jobId, { steps });
   return true;
 }
 function assistStep(jobId, decision) {
@@ -4811,10 +5092,10 @@ function askUser(jobId, o) {
   pub({ type: "gen:assist", jobId, stepIndex: o.stepIndex, kind: o.kind, instruction: o.instruction, canManual: o.canManual });
   return new Promise((resolve) => setWait(jobId, { type: "assist", resolve }, ASSIST_TIMEOUT_MS));
 }
-async function awaitPlanConfirm(jobId, plan, usage) {
-  pub({ type: "gen:plan", jobId, steps: plan, usage });
+async function awaitPlanConfirm(jobId, plan, usage, intent) {
+  pub({ type: "gen:plan", jobId, steps: plan, intent, usage });
   return new Promise((resolve) => {
-    setWait(jobId, { type: "plan", resolve }, PLAN_TIMEOUT_MS);
+    setWait(jobId, { type: "plan", resolve, intent }, PLAN_TIMEOUT_MS);
   });
 }
 function createJobRuntime(jobId) {
@@ -4822,29 +5103,46 @@ function createJobRuntime(jobId) {
   let paused = false;
   const abortCtrl = new AbortController();
   const cancel = (message) => {
+    paused = false;
     cancelled = true;
     abortCtrl.abort();
     resolveWait(jobId, null);
-    closeSession(jobId);
+    void closeSession(jobId).catch(() => {
+    });
     pub({ type: "gen:error", jobId, message });
+    if (!isJobRunning(jobId)) {
+      cancelSessionGc(jobId);
+      clearCheckpoint(jobId);
+      clearGenerationEnvironment(jobId);
+      clearUsage(jobId);
+      unregisterCancel(jobId);
+    }
   };
   registerCancel(jobId, () => cancel("\u5DF2\u53D6\u6D88"));
   const pause = () => {
+    if (cancelled) return;
     paused = true;
     cancelled = true;
     abortCtrl.abort();
     resolveWait(jobId, null);
-    pub({ type: "gen:paused", jobId, message: "\u5DF2\u6682\u505C\uFF0C\u53EF\u8C03\u6574\u6B65\u9AA4\u540E\u7EE7\u7EED\u751F\u6210" });
+    pub({ type: "gen:status", jobId, message: "\u6B63\u5728\u6682\u505C\uFF0C\u7B49\u5F85\u5F53\u524D\u64CD\u4F5C\u8BB0\u5F55\u548C\u4FDD\u5B58\u5B8C\u6210\u2026" });
   };
   pauseHandlers.set(jobId, pause);
   return { abortCtrl, isCancelled: () => cancelled, isPaused: () => paused, cancel, pause };
 }
 function releaseJob(jobId, paused) {
+  pauseHandlers.delete(jobId);
+  resolveWait(jobId, null);
+  releaseJobSlot(jobId);
+  if (paused) {
+    pub({ type: "gen:paused", jobId, message: "\u5DF2\u6682\u505C\uFF0C\u53EF\u8C03\u6574\u6B65\u9AA4\u540E\u7EE7\u7EED\u751F\u6210" });
+  }
   if (!paused) {
-    pauseHandlers.delete(jobId);
-    resolveWait(jobId, null);
+    cancelSessionGc(jobId);
     unregisterCancel(jobId);
     clearUsage(jobId);
+    clearCheckpoint(jobId);
+    clearGenerationEnvironment(jobId);
   }
 }
 
@@ -5027,6 +5325,20 @@ ${XLSX.utils.sheet_to_csv(wb.Sheets[name])}`);
   return text;
 }
 
+// src/services/generation/substitution.ts
+function createSubstituter(envMap, now, saved) {
+  const state = {
+    startedAt: saved?.startedAt ?? now,
+    resolvedSystemVars: { ...saved?.resolvedSystemVars }
+  };
+  const sub2 = (text) => {
+    const missing = collectSystemKeys(text ? [text] : []).filter((key) => !Object.hasOwn(state.resolvedSystemVars, key));
+    if (missing.length) Object.assign(state.resolvedSystemVars, resolveSystemKeys(missing, state.startedAt));
+    return substituteAll(text, envMap, state.resolvedSystemVars);
+  };
+  return { sub: sub2, state };
+}
+
 // src/services/generation/sessionSetup.ts
 function buildEnvVarHint(envMap) {
   const envVarKeys = Object.keys(envMap);
@@ -5045,17 +5357,9 @@ function loadGenAttachments(jobId, ids) {
   pub({ type: "gen:status", jobId, message: `[\u9644\u4EF6] \u5DF2\u52A0\u8F7D ${atts.length} \u4E2A\u6587\u4EF6\uFF1A${atts.map((a) => a.name).join("\u3001")}${visionNote}` });
   return { text, images };
 }
-function createSubstituter(envMap, now) {
-  const sysVars = {};
-  const sub2 = (t) => {
-    const missing = collectSystemKeys(t ? [t] : []).filter((k) => !(k in sysVars));
-    if (missing.length) Object.assign(sysVars, resolveSystemKeys(missing, now));
-    return substituteAll(t, envMap, sysVars);
-  };
-  return { sub: sub2 };
-}
 function createStepEmitter(jobId, steps, offsetOf) {
   return async (step) => {
+    step = redactGenerationData(jobId, step);
     normalizeStepSystemVars(step);
     steps.push(step);
     pub({ type: "gen:step", jobId, index: offsetOf() + steps.length - 1, step });
@@ -5151,7 +5455,7 @@ var STUCK_WINDOW = 8;
 var STUCK_WARN_AT = 4;
 var STUCK_ASSIST_AT = 6;
 var STUCK_ABORT_AT = 9;
-var STUCK_MUTATING = /* @__PURE__ */ new Set(["goto", "click", "fill", "press", "check", "select", "component_action", "act"]);
+var STUCK_MUTATING = /* @__PURE__ */ new Set(["goto", "click", "fill", "press", "check", "select", "component_action", "act", "batch_actions"]);
 var SEE_ASSIST_AT = 4;
 var LINK_FLIP_TRANSITIONS = 4;
 var LINK_WINDOW = 12;
@@ -5159,6 +5463,8 @@ function stuckSig(name, args) {
   if (!STUCK_MUTATING.has(name)) return null;
   const sel = String(args.selector ?? "").trim();
   if (name === "goto") return `goto ${String(args.url ?? "")}`;
+  if (name === "batch_actions") return `batch ${JSON.stringify(args.actions ?? [])}`;
+  if (name === "check") return `check ${sel} ${args.checked ?? true}`;
   if (name === "act") return `act ${String(args.instruction ?? "").trim()}`;
   if (name === "component_action") return `component_action ${sel} ${String(args.action ?? "")} ${String(args.value ?? "")}`;
   if (name === "fill" || name === "select") return `${name} ${sel} ${String(args.value ?? "")}`;
@@ -5194,7 +5500,7 @@ function usageDelta(before, after) {
 var stuckWarnText = (count) => `
 \u26A0\uFE0F \u7CFB\u7EDF\u63D0\u793A\uFF1A\u540C\u4E00\u64CD\u4F5C\u8FD1\u671F\u5DF2\u91CD\u590D\u6267\u884C ${count} \u6B21\u4E14\u65E0\u8FDB\u5C55\u3002\u4E0D\u8981\u518D\u6B21\u91CD\u590D\uFF1A\u8BF7\u5148 snapshot \u786E\u8BA4\u5F53\u524D\u72B6\u6001\uFF0C\u6362\u4E00\u79CD\u65B9\u5F0F\uFF08\u5176\u4ED6\u5B9A\u4F4D/\u7EC4\u4EF6\u52A8\u4F5C/act\uFF09\u5B8C\u6210\u76EE\u6807\uFF1B\u82E5\u786E\u8BA4\u76EE\u6807\u65E0\u6CD5\u8FBE\u6210\uFF0C\u8BF7\u8C03\u7528 finish(success=false) \u7ED3\u675F\u3002`;
 var observeWarnText = (count) => `
-\u26A0\uFE0F \u7CFB\u7EDF\u63D0\u793A\uFF1A\u5DF2\u8FDE\u7EED ${count} \u6B21\u89C6\u89C9\u89C2\u5BDF\u4ECD\u65E0\u8FDB\u5C55\u3002\u4E0D\u8981\u7EE7\u7EED\u76F2\u76EE\u622A\u56FE\uFF1A\u8BF7\u8C03\u7528 ask_human \u5411\u7528\u6237\u6C42\u52A9\uFF08\u7B80\u8FF0\u56F0\u60D1\u70B9\u4E0E\u5DF2\u5C1D\u8BD5\u7684\u505A\u6CD5\uFF09\uFF0C\u6216\u6362\u4E00\u6761\u8DEF\u5F84\u5B8C\u6210\u76EE\u6807\u3002`;
+\u26A0\uFE0F \u7CFB\u7EDF\u63D0\u793A\uFF1A\u5DF2\u8FDE\u7EED ${count} \u6B21\u89C2\u5BDF\u4ECD\u65E0\u8FDB\u5C55\u3002\u4E0D\u8981\u7EE7\u7EED\u76F2\u76EE\u622A\u56FE\uFF1A\u8BF7\u8C03\u7528 ask_human \u5411\u7528\u6237\u6C42\u52A9\uFF08\u7B80\u8FF0\u56F0\u60D1\u70B9\u4E0E\u5DF2\u5C1D\u8BD5\u7684\u505A\u6CD5\uFF09\uFF0C\u6216\u6362\u4E00\u6761\u8DEF\u5F84\u5B8C\u6210\u76EE\u6807\u3002`;
 var linkFlipWarnText = (a, b, count) => `
 \u26A0\uFE0F \u7CFB\u7EDF\u63D0\u793A\uFF1A\u5143\u7D20\u300C${a}\u300D\u4E0E\u300C${b}\u300D\u7684 select \u5DF2\u4EA4\u66FF\u6210\u529F\u6267\u884C ${count} \u8F6E\u2014\u2014\u9009\u62E9\u5176\u4E2D\u4E00\u4E2A\u540E\u53E6\u4E00\u4E2A\u88AB\u9875\u9762\u56DE\u8BBE/\u6E05\u7A7A\uFF0C\u7591\u4F3C\u8054\u52A8\u5B57\u6BB5\uFF08\u5F53\u524D\u7EC4\u5408\u4E0D\u88AB\u9875\u9762\u63A5\u53D7\uFF09\u3002\u4E0D\u8981\u7EE7\u7EED\u4EA4\u66FF\u91CD\u8BBE\uFF1A\u8BF7\u5148 snapshot \u786E\u8BA4\u4E24\u5B57\u6BB5\u5F53\u524D\u503C\uFF0C\u6539\u9009\u4E0E\u5DF2\u9009\u5B57\u6BB5\u4E00\u81F4\u7684\u7EC4\u5408\uFF08\u5728\u5176\u4E2D\u4E00\u4E2A\u5B57\u6BB5\u7684\u5F53\u524D\u53EF\u9009\u5217\u8868\u91CC\u53E6\u9009\uFF09\uFF0C\u6216\u8C03\u7528 ask_human \u5411\u7528\u6237\u8BF4\u660E\u8BE5\u8054\u52A8\u73B0\u8C61\u5E76\u786E\u8BA4\u76EE\u6807\u7EC4\u5408\u3002`;
 async function runToolLoop(opts) {
@@ -5203,6 +5509,17 @@ async function runToolLoop(opts) {
   let steps = 0;
   const statefulSlots = /* @__PURE__ */ new Map();
   let round = 0;
+  const historicalTools = /* @__PURE__ */ new Map();
+  for (const message of messages) {
+    if (message.role === "assistant") for (const tc of message.tool_calls ?? []) historicalTools.set(tc.id, tc.function?.name);
+    if (message.role === "tool") {
+      const kind = message.__ttStateKind || tools.find((t) => t.name === historicalTools.get(message.tool_call_id))?.stateful;
+      if (kind) statefulSlots.set(message.tool_call_id, { kind, round: 0 });
+    }
+  }
+  let lastObservedFingerprint;
+  let unchangedObservations = 0;
+  const recentEvidence = [];
   let stuckHist = [];
   const stuckTotal = /* @__PURE__ */ new Map();
   const stuckAssistLatched = /* @__PURE__ */ new Set();
@@ -5247,6 +5564,25 @@ ${text.slice(-120)}`;
   };
   let lastRoundInput = 0;
   const compressIfNeeded = () => {
+    const textSize = messages.reduce((n, m) => n + (typeof m.content === "string" ? m.content.length : 0), 0);
+    const rounds = messages.filter((m) => m.role === "assistant").length;
+    if (opts.workingMemory && (rounds > 18 || textSize > 48e3 || lastRoundInput > 2e4)) {
+      const starts = messages.map((m, i) => m.role === "assistant" ? i : -1).filter((i) => i >= 0);
+      const cutAt = starts[Math.max(0, starts.length - 4)];
+      if (cutAt != null && cutAt > 2) {
+        const memory = redactGenerationText(usageKey, opts.workingMemory());
+        const previous = messages.find((m) => m.__ttMemory)?.content ?? "";
+        const facts = recentEvidence.length ? recentEvidence.join("\n") : String(previous).slice(-2500);
+        messages.splice(2, cutAt - 2, { role: "user", content: `\u3010\u5DF2\u6267\u884C\u4E8B\u5B9E\uFF1B\u539F\u59CB\u8F68\u8FF9\u4FDD\u7559\u5728\u65E5\u5FD7\u3011
+${memory}
+\u3010\u8FD1\u671F\u8BC1\u636E\u4E0E\u5931\u8D25\u539F\u56E0\u3011
+${facts}
+\u672A\u5217\u4E3A\u5B8C\u6210\u7684\u76EE\u6807\u4ECD\u9700\u9A8C\u8BC1\u3002`, __ttMemory: true });
+        const live = new Set(messages.filter((m) => m.role === "tool").map((m) => m.tool_call_id));
+        for (const id of statefulSlots.keys()) if (!live.has(id)) statefulSlots.delete(id);
+      }
+      return;
+    }
     if (lastRoundInput < CONTEXT_WATERMARK_TOKENS) return;
     let seen = 0;
     let cut = 2;
@@ -5278,31 +5614,35 @@ ${text.slice(-120)}`;
       }
     }
   };
-  for (let i = 0; i < maxSteps; i++) {
+  for (let i = 0; i < maxSteps && steps < maxSteps; i++) {
     if (signal?.aborted) break;
     compressIfNeeded();
     round = i + 1;
     const base = { ...getUsage(usageKey) };
     const req = {
       model,
-      messages,
+      messages: messages.map((m) => Object.fromEntries(Object.entries(m).filter(([key]) => !key.startsWith("__tt")))),
       tools: tools.map((t) => ({
         type: "function",
         function: { name: t.name, description: t.description, parameters: t.parameters }
       })),
-      tool_choice: "auto"
+      tool_choice: "auto",
+      parallel_tool_calls: false
     };
     if (reasoningEffort) req.reasoning_effort = reasoningEffort;
     else {
       req.thinking = { type: "disabled" };
       req.temperature = 0;
     }
-    const completion = await client.chat.completions.create(
-      req,
-      signal ? { signal } : void 0
-    );
+    let completion;
+    try {
+      completion = await client.chat.completions.create(req, signal ? { signal } : void 0);
+    } catch (error) {
+      if (signal?.aborted) break;
+      throw error;
+    }
     lastRoundInput = getUsage(usageKey).inputTokens - base.inputTokens;
-    const msg = completion.choices?.[0]?.message;
+    const msg = redactGenerationData(usageKey, completion.choices?.[0]?.message);
     const toolCalls = msg?.tool_calls ?? [];
     if (pendingSeeStep != null && msg?.content) {
       const content = typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content);
@@ -5319,8 +5659,8 @@ ${text.slice(-120)}`;
     let prev = base;
     const answeredIds = /* @__PURE__ */ new Set();
     for (const tc of toolCalls) {
-      if (signal?.aborted) {
-        messages.push({ role: "tool", tool_call_id: tc.id, content: "\uFF08\u5DF2\u4E2D\u6B62\uFF09" });
+      if (signal?.aborted || finished || steps >= maxSteps) {
+        messages.push({ role: "tool", tool_call_id: tc.id, content: finished ? "\uFF08\u672A\u6267\u884C\uFF1A\u4EFB\u52A1\u5DF2\u7ED3\u675F\uFF09" : signal?.aborted ? "\uFF08\u5DF2\u4E2D\u6B62\uFF09" : "\uFF08\u672A\u6267\u884C\uFF1A\u5DF2\u8FBE\u5230\u5DE5\u5177\u6B65\u6570\u4E0A\u9650\uFF09" });
         continue;
       }
       let args = {};
@@ -5330,12 +5670,21 @@ ${text.slice(-120)}`;
         args = {};
       }
       const tool = tools.find((t) => t.name === tc.function?.name);
-      const stateful = Boolean(tool?.stateful);
+      let stateful = Boolean(tool?.stateful);
+      let resultData;
+      let humanIntervened = false;
       let result;
       let resultImage;
       let toolOk = false;
       if (tool?.name === "finish") {
-        const rejectMsg = validateFinish ? await validateFinish(args) : null;
+        let rejectMsg;
+        try {
+          rejectMsg = validateFinish ? await validateFinish(args) : null;
+        } catch (error) {
+          if (!signal?.aborted) throw error;
+          rejectMsg = "\uFF08\u5DF2\u4E2D\u6B62\uFF09";
+        }
+        if (signal?.aborted) rejectMsg = "\uFF08\u5DF2\u4E2D\u6B62\uFF09";
         if (rejectMsg) {
           result = rejectMsg;
         } else {
@@ -5348,30 +5697,33 @@ ${text.slice(-120)}`;
           if (typeof r === "string") {
             result = r;
           } else {
+            resultData = r;
             result = r.text;
             resultImage = r.image;
+            if (r.status === "failed") throw new Error(r.text);
           }
-          toolOk = true;
-          onSuccess?.(tool.name, args);
+          toolOk = typeof r === "string" || r.status == null || r.status === "success";
+          if (toolOk) onSuccess?.(tool.name, args);
         } catch (e) {
-          const err = String(e);
+          const err = redactGenerationText(usageKey, String(e));
           let override = null;
-          if (onFailure) {
+          if (onFailure && !signal?.aborted) {
             try {
               override = await onFailure(tool.name, args, err);
             } catch {
               override = null;
             }
           }
+          humanIntervened = override != null;
           result = override ?? `\u9519\u8BEF\uFF1A${err}`;
         }
       } else {
         result = `\u672A\u77E5\u5DE5\u5177\uFF1A${tc.function?.name}`;
       }
       const toolName = tc.function?.name ?? "";
-      const progressed = toolOk && !finished ? Boolean(isProgress?.(toolName)) : false;
+      const progressed = !finished && resultData?.progressed != null ? resultData.progressed : toolOk && !finished ? Boolean(isProgress?.(toolName)) : false;
       const sig = stuckSig(toolName, args);
-      if (sig && !finished && !progressed) {
+      if (sig && !finished && !progressed && !signal?.aborted) {
         stuckHist.push(sig);
         if (stuckHist.length > STUCK_WINDOW) stuckHist.shift();
         const total = (stuckTotal.get(sig) ?? 0) + 1;
@@ -5390,6 +5742,7 @@ ${text.slice(-120)}`;
             override = null;
           }
           if (override != null) {
+            humanIntervened = true;
             result = override;
             stuckHist = stuckHist.filter((s) => s !== sig);
             stuckAssistLatched.delete(sig);
@@ -5400,23 +5753,35 @@ ${text.slice(-120)}`;
           result += stuckWarnText(inWindow);
         }
       }
-      if (tool?.name === "see" && !finished && toolOk) {
+      const observationTool = ["see", "snapshot", "page_tree", "readText", "api"].includes(toolName);
+      const fingerprint = resultData?.stateFingerprint ?? (observationTool && toolName !== "see" ? `${toolName}:${result}` : void 0);
+      if (fingerprint) {
+        if (fingerprint === lastObservedFingerprint) unchangedObservations++;
+        else {
+          lastObservedFingerprint = fingerprint;
+          unchangedObservations = 0;
+        }
+      }
+      if (observationTool && !finished && toolOk && !signal?.aborted && (toolName === "see" || unchangedObservations > 0)) {
         seeStreak++;
         if (seeStreak >= SEE_ASSIST_AT) {
           let override = null;
           try {
-            override = onStuck ? await onStuck(tool.name, args, seeStreak, "observe") : null;
+            override = onStuck ? await onStuck(toolName, args, seeStreak, "observe") : null;
           } catch {
             override = null;
           }
-          if (override != null) result = override;
-          else result += observeWarnText(seeStreak);
+          if (override != null) {
+            result = override;
+            humanIntervened = true;
+          } else result += observeWarnText(seeStreak);
           seeStreak = 0;
         }
-      } else if (tool && toolOk && !finished && progressed) {
+      } else if (tool && !finished && progressed) {
+        unchangedObservations = 0;
         seeStreak = 0;
       }
-      if (!finished && toolOk && tool && isSelectLike(toolName, args)) {
+      if (!finished && toolOk && tool && !signal?.aborted && isSelectLike(toolName, args) && (resultData?.resetFields == null || resultData.resetFields.length > 0)) {
         const sel = String(args.selector ?? "").trim();
         if (sel) {
           linkHist.push(sel);
@@ -5431,26 +5796,49 @@ ${text.slice(-120)}`;
             } catch {
               override = null;
             }
-            if (override != null) result = override;
-            else result += linkFlipWarnText(flip.a, flip.b, flip.transitions);
+            if (override != null) {
+              result = override;
+              humanIntervened = true;
+            } else result += linkFlipWarnText(flip.a, flip.b, flip.transitions);
             linkHist = [];
           }
         }
       }
+      if (humanIntervened && !signal?.aborted) {
+        resultData = { ...resultData, text: result, observation: void 0, observationKind: void 0 };
+        try {
+          const fresh = await tools.find((t) => t.name === "snapshot")?.execute({});
+          if (fresh != null) resultData = { ...resultData, text: result, observation: typeof fresh === "string" ? fresh : fresh.text, observationKind: "snapshot" };
+        } catch {
+          result += "\n\u4EBA\u5DE5\u5904\u7406\u540E\u8BF7\u91CD\u65B0 snapshot \u83B7\u53D6\u5F53\u524D\u9875\u9762\u3002";
+        }
+      }
+      if (!stateful && toolName !== "finish") {
+        recentEvidence.push(`${toolName} ${JSON.stringify(args).slice(0, 250)} => ${result.slice(0, 550)}`);
+        if (recentEvidence.length > 8) recentEvidence.shift();
+      }
+      const stateKind = resultData?.observationKind ?? tool?.stateful;
+      if (resultData?.observation) {
+        result += `
+${resultData.observation}`;
+        stateful = true;
+      }
+      result = redactGenerationText(usageKey, result);
       const after = { ...getUsage(usageKey) };
       const delta = usageDelta(prev, after);
       prev = after;
       steps++;
       await onStep({ index: steps, name: tc.function?.name ?? "", args, result, usageDelta: delta });
       if ((tc.function?.name ?? "") === "see") pendingSeeStep = steps;
-      if (tool?.stateful) {
-        demoteOldSlots([tool.stateful, ...tool.supersedes ?? []], tc.id);
-        statefulSlots.set(tc.id, { kind: tool.stateful, round });
+      if (stateKind) {
+        demoteOldSlots([stateKind, ...tool?.supersedes ?? [], ...stateKind === "snapshot" ? ["tree", "screenshot"] : []], tc.id);
+        statefulSlots.set(tc.id, { kind: stateKind, round });
       }
       messages.push({
         role: "tool",
         tool_call_id: tc.id,
-        content: compactResult(result, stateful)
+        content: compactResult(result, stateful),
+        ...stateKind ? { __ttStateKind: stateKind } : {}
       });
       if (resultImage) {
         messages.push({
@@ -5480,6 +5868,16 @@ ${text.slice(-120)}`;
 }
 
 // src/services/generation/preSplit.ts
+var INTENT_OUTPUT_PROMPT = `
+\u3010\u6D4B\u8BD5\u610F\u56FE\u4E0E\u8F93\u51FA\u534F\u8BAE\uFF08\u8986\u76D6\u65E7\u7248 steps-only \u793A\u4F8B\uFF09\u3011
+\u8F93\u51FA JSON\uFF1A{"intent":{"version":1,"scenario":"positive|negative|mixed","objective":"\u6D4B\u8BD5\u76EE\u6807","preconditions":["\u5FC5\u8981\u524D\u7F6E\u6761\u4EF6"],"data":[{"name":"\u5B57\u6BB5\u540D","value":"\u6D4B\u8BD5\u503C\u6216 {{\u53D8\u91CF}}","policy":"fixed|generated"}],"criteria":[{"id":"C1","description":"\u9A8C\u6536\u7ED3\u679C","target":"\u5177\u4F53\u5143\u7D20/\u8BB0\u5F55/\u5B57\u6BB5\u8303\u56F4\uFF1B\u4F7F\u7528\u672C\u6B21\u552F\u4E00\u503C\u951A\u5B9A","source":"\u7528\u6237\u9700\u6C42\u539F\u6587\u6216\u9A8C\u6536\u4F9D\u636E\uFF1B\u63A8\u65AD\u9879\u660E\u786E\u5199\u5F85\u786E\u8BA4","required":true,"assertion":{"type":"text_exact","expected":"\u5B8C\u6574\u671F\u671B\u503C"}}],"cleanup":[]},"steps":[...]}\u3002
+- intent \u662F\u5F85\u7528\u6237\u786E\u8BA4\u7684\u9A8C\u6536\u7EA6\u5B9A\u3002\u53EA\u8986\u76D6\u7528\u6237\u8981\u6C42\uFF0C\u4E0D\u64C5\u81EA\u6269\u5927\u6D4B\u8BD5\u8303\u56F4\uFF1B\u672A\u77E5\u4E1A\u52A1\u89C4\u5219\u5199\u5F85\u786E\u8BA4\uFF0C\u4E0D\u4ECE\u9875\u9762\u5F53\u524D\u8868\u73B0\u63A8\u5B9A\u6B63\u786E\u7ED3\u679C\u3002
+- criteria \u81F3\u5C11\u4E00\u4E2A required=true\uFF1B\u6BCF\u4E2A\u5FC5\u9A8C\u76EE\u6807\u90FD\u5BF9\u5E94\u4E00\u4E2A\u8BA1\u5212\u65AD\u8A00\uFF0C\u65AD\u8A00\u6B65\u9AA4\u643A\u5E26 criterionId\uFF0C\u7C7B\u578B\u548C expected \u4E0E\u76EE\u6807\u5B8C\u5168\u4E00\u81F4\u3002
+- \u652F\u6301\u7684\u6D4F\u89C8\u5668\u65AD\u8A00\uFF1Avisible/hidden/text(\u5305\u542B)/text_exact(\u89C4\u8303\u5316\u7A7A\u767D\u540E\u5168\u6587\u76F8\u7B49)/value(\u8F93\u5165\u503C\u7CBE\u786E\u76F8\u7B49)/checked/unchecked/enabled/disabled/count(\u5339\u914D\u8282\u70B9\u6570\uFF0Cexpected \u4E3A\u975E\u8D1F\u6574\u6570\u5B57\u7B26\u4E32)/url(\u5305\u542B)/url_exact(\u76F8\u7B49)\u3002value/text_exact \u53EF\u671F\u671B\u7A7A\u5B57\u7B26\u4E32\u3002\u4E0D\u8981\u8BA1\u5212\u751F\u6210\u5668\u4E0D\u80FD\u6267\u884C\u7684\u63A5\u53E3\u6216 WS \u65AD\u8A00\u3002
+- \u4F18\u5148\u9A8C\u8BC1\u6307\u5B9A\u8BB0\u5F55\u53CA\u5B57\u6BB5\u7684\u6301\u4E45\u4E1A\u52A1\u7ED3\u679C\uFF0C\u4E0D\u80FD\u53EA\u68C0\u67E5\u5168\u9875\u901A\u7528\u524D\u7F00\u6216\u6210\u529F toast\uFF1B\u4E0D\u865A\u6784\u63A5\u53E3\u8DEF\u5F84\uFF0CHTTP 200 \u4E0D\u80FD\u4EE3\u66FF\u4E1A\u52A1\u9A8C\u6536\u3002\u53EA\u6709\u9700\u6C42\u6D89\u53CA\u6301\u4E45\u5316\u65F6\u624D\u8865\u5237\u65B0\u9A8C\u8BC1\u3002
+- \u7528\u6237\u6307\u5B9A\u6570\u636E policy=fixed\uFF1B\u4EC5\u7528\u6237\u5141\u8BB8\u81EA\u7531\u751F\u6210\u7684\u6D4B\u8BD5\u6570\u636E\u7528 generated \u548C\u7CFB\u7EDF\u53D8\u91CF\u3002\u8D1F\u5411\u6D4B\u8BD5\u7684\u975E\u6CD5/\u91CD\u590D\u503C\u5FC5\u987B\u4FDD\u7559\uFF0C\u9884\u671F\u62D2\u7EDD\u4E5F\u662F\u6B63\u786E\u7ED3\u679C\uFF0C\u4E0D\u80FD\u6539\u503C\u8FFD\u6C42\u63D0\u4EA4\u6210\u529F\u3002
+- preconditions/cleanup \u53EA\u63CF\u8FF0\u6709\u4F9D\u636E\u7684\u8981\u6C42\uFF1B\u9700\u8981\u6267\u884C\u7684\u51C6\u5907/\u6E05\u7406\u52A8\u4F5C\u5199\u5165 steps\uFF0C\u6700\u7EC8\u4ECD\u4FDD\u7559\u7ED3\u679C\u65AD\u8A00\u3002\u6CA1\u6709\u6E05\u7406\u8981\u6C42\u65F6 cleanup=[]\u3002
+`;
 function semanticActionSection(vocab) {
   if (!vocab.length) return "";
   const lines = vocab.map((v) => `  \xB7 "${v.name}"\uFF1A${(v.doc ?? "").trim()}${v.preferFill ? "\uFF08\u53EF\u8F93\u5165\u63A7\u4EF6\u4F1A\u4F18\u5148\u5C1D\u8BD5\u76F4\u63A5\u586B\u5199\uFF09" : ""}`).join("\n");
@@ -5496,8 +5894,9 @@ async function splitSystemWithVocab(base, projectId) {
     return base;
   }
 }
-async function preSplit(client, model, systemContent, userContent, envVarHint, reasoningEffort, logId, jobId, images = []) {
-  const fullUser = `${envVarHint ? envVarHint + "\n\n" : ""}${userContent}`;
+async function preSplit(client, model, systemContent, userContent, envVarHint, reasoningEffort, logId, jobId, images = [], signal) {
+  const fullUser = redactGenerationText(jobId, `${envVarHint ? envVarHint + "\n\n" : ""}${userContent}`);
+  systemContent = redactGenerationText(jobId, systemContent + INTENT_OUTPUT_PROMPT);
   const userMsgContent = images.length ? [
     { type: "text", text: fullUser },
     ...images.map((img) => ({
@@ -5519,8 +5918,8 @@ async function preSplit(client, model, systemContent, userContent, envVarHint, r
     req.temperature = 0;
   }
   const before = { ...getUsage(jobId) };
-  const res = await client.chat.completions.create(req);
-  const text = res.choices?.[0]?.message?.content ?? "";
+  const res = await client.chat.completions.create(req, signal ? { signal } : void 0);
+  const text = redactGenerationText(jobId, res.choices?.[0]?.message?.content ?? "");
   const usage = usageDelta(before, getUsage(jobId));
   const parsed = safeJsonParse2(stripFences(text));
   const steps = Array.isArray(parsed?.steps) ? parsed.steps : null;
@@ -5534,11 +5933,15 @@ async function preSplit(client, model, systemContent, userContent, envVarHint, r
     });
   }
   if (!steps) return { steps: null, usage };
+  const intent = testIntentSchema.safeParse(parsed?.intent);
+  if (!intent.success) throw new Error(`\u6D4B\u8BD5\u610F\u56FE\u683C\u5F0F\u4E0D\u5B8C\u6574\uFF1A${intent.error.issues.map((i) => i.message).join("\uFF1B")}`);
   return {
+    intent: intent.data,
     steps: steps.map((s) => {
       const instruction = String(s?.instruction ?? "").trim();
       if (!instruction) return null;
       return {
+        criterionId: typeof s?.criterionId === "string" ? s.criterionId : void 0,
         kind: s?.kind === "assert" ? "assert" : "action",
         instruction,
         action: s?.action,
@@ -5552,14 +5955,109 @@ async function preSplit(client, model, systemContent, userContent, envVarHint, r
   };
 }
 
-// src/services/visualFrameService.ts
+// src/services/generation/intentCoverage.ts
 import { createHash } from "crypto";
+function evidenceSignature(steps, index, criterion) {
+  const executable = (s) => ({
+    kind: s.kind,
+    action: s.action,
+    locator: s.locator,
+    url: s.url,
+    value: s.value,
+    key: s.key,
+    checked: s.checked,
+    pluginAction: s.pluginAction,
+    code: s.code,
+    assertion: s.assertion,
+    criterionId: s.criterionId
+  });
+  const prefix = steps.slice(0, index).filter((s) => s.kind !== "assert").map(executable);
+  return createHash("sha256").update(JSON.stringify({ criterion, prefix, step: executable(steps[index]) })).digest("hex");
+}
+function assertionContractError(criterion, step, sub2) {
+  if (step.assertion?.type !== criterion.assertion.type || sub2(step.assertion?.expected) !== sub2(criterion.assertion.expected))
+    return `\u76EE\u6807 ${criterion.id} \u5FC5\u987B\u4F7F\u7528\u5DF2\u786E\u8BA4\u7684\u65AD\u8A00 ${JSON.stringify(criterion.assertion)}\uFF0C\u4E0D\u80FD\u66FF\u6362\u6216\u5F31\u5316\u9884\u671F`;
+  if (!criterion.assertion.type.startsWith("url") && !step.locator)
+    return `\u76EE\u6807 ${criterion.id} \u5FC5\u987B\u5B9A\u4F4D\u5230\u6307\u5B9A\u8303\u56F4\u300C${criterion.target}\u300D\uFF0C\u4E0D\u80FD\u4EE5\u6574\u9875\u6587\u672C\u4EE3\u66FF`;
+  return null;
+}
+function coverageStatus(intent, steps, evidence) {
+  return intent.criteria.map((criterion) => ({
+    id: criterion.id,
+    description: criterion.description,
+    required: criterion.required,
+    passed: steps.some((step, index) => step.kind === "assert" && step.criterionId === criterion.id && evidence.some((e) => e.criterionId === criterion.id && e.signature === evidenceSignature(steps, index, criterion)))
+  }));
+}
+function completionError(intent, steps, evidence) {
+  if (steps.at(-1)?.kind !== "assert") return "\u811A\u672C\u5FC5\u987B\u4EE5\u65AD\u8A00\u6B65\u9AA4\u7ED3\u5C3E\uFF0C\u8BF7\u5148\u9A8C\u8BC1\u6D4B\u8BD5\u7ED3\u679C\u3002";
+  if (!intent) return null;
+  const missing = coverageStatus(intent, steps, evidence).filter((c) => c.required && !c.passed);
+  return missing.length ? `\u5C1A\u672A\u5B8C\u6210\u5FC5\u9A8C\u76EE\u6807\uFF1A${missing.map((c) => `${c.id}\uFF08${c.description}\uFF09`).join("\u3001")}\u3002\u8BF7\u6309\u5DF2\u786E\u8BA4\u7684\u7C7B\u578B\u3001\u9884\u671F\u548C\u76EE\u6807\u8303\u56F4\u8C03\u7528 assert\uFF0C\u5E76\u643A\u5E26 criterionId\u3002\u4FEE\u8BA2\u524D\u5E8F\u52A8\u4F5C\u6216\u5220\u9664\u65AD\u8A00\u540E\uFF0C\u65E7\u8BC1\u636E\u4E0D\u80FD\u7528\u4E8E\u5B8C\u6210\u6821\u9A8C\u3002` : null;
+}
+
+// src/services/generation/workingMemory.ts
+function buildWorkingMemory(steps, goal) {
+  const recent = [];
+  let chars = 0;
+  for (let i = steps.length - 1; i >= 0; i--) {
+    const s = steps[i];
+    const item = {
+      criterionId: s.criterionId,
+      assertionType: s.assertion?.type,
+      step: i + 1,
+      action: s.action,
+      instruction: s.instruction?.slice(0, 160),
+      value: s.value?.slice(0, 160),
+      checked: s.checked,
+      key: s.key,
+      expected: s.assertion?.expected?.slice(0, 160),
+      locator: s.locator ? `${s.locator.strategy}:${s.locator.value}`.slice(0, 180) : void 0
+    };
+    const size = JSON.stringify(item).length;
+    if (chars + size > 7500) break;
+    recent.unshift(item);
+    chars += size;
+  }
+  return JSON.stringify({
+    goal: goal.slice(0, 1200),
+    recordedSteps: steps.length,
+    recentSteps: recent,
+    omittedSteps: steps.length - recent.length,
+    note: "\u5DF2\u8BB0\u5F55\u8868\u793A\u52A8\u4F5C\u5DF2\u6267\u884C\uFF1B\u4E1A\u52A1\u6210\u529F\u4EE5\u65AD\u8A00\u4E3A\u51C6\u3002\u5B8C\u6574\u76EE\u6807\u7528 read_goal\uFF0C\u5B8C\u6574\u811A\u672C\u7528 read_script\u3002"
+  });
+}
+
+// src/services/browserObservation.ts
+import { createHash as createHash2 } from "crypto";
+async function captureObservation(page, options = {}) {
+  await injectCandidates(page);
+  const state = await page.evaluate((opts) => globalThis.__ttSnapshot(opts), options);
+  if (!state?.version || !Array.isArray(state.lines)) throw new Error("\u5FEB\u7167\u91C7\u96C6\u5931\u8D25\uFF0C\u8BF7\u7B49\u5F85\u9875\u9762\u52A0\u8F7D\u540E\u91CD\u8BD5");
+  return state;
+}
+function observationText(s) {
+  return `\u3010\u5F53\u524D\u5FEB\u7167 snapshotVersion=${s.version} scope=${s.scope} URL=${s.url}\u3011
+` + (s.context ? `\u533A\u57DF\uFF1A${s.context}
+` : "") + s.lines.join("\n") + (s.alerts.length ? `
+\u6821\u9A8C\u63D0\u793A\uFF1A${s.alerts.join("\uFF1B")}` : "") + `
+\u663E\u793A ${s.offset + 1}~${s.offset + s.lines.length} / ${s.total} \u9879\uFF08\u5168\u9875 ${s.allCount} \u9879\uFF09` + (s.nextOffset != null ? `\uFF1B\u7EE7\u7EED snapshot(offset=${s.nextOffset}, scope=${s.scope === "active-overlay" ? "auto" : s.scope})` : "") + '\n\u7F16\u53F7\u7528\u4E8E selector\uFF1B\u672A\u627E\u5230\u76EE\u6807\u53EF\u7528 snapshot(scope="page",query="\u5173\u952E\u8BCD") \u6269\u5927\u8303\u56F4\u3002';
+}
+function stateFingerprint(s) {
+  return createHash2("sha256").update(JSON.stringify([s.documentId, s.url, s.structure, s.values, s.pageText, s.alerts])).digest("hex");
+}
+function batchBoundary(before, after, targetId) {
+  return before.documentId !== after.documentId || before.url !== after.url || before.structure !== after.structure || JSON.stringify(before.alerts) !== JSON.stringify(after.alerts) || Object.keys(before.values).some((id) => id !== targetId && before.values[id] !== after.values[id]);
+}
+
+// src/services/visualFrameService.ts
+import { createHash as createHash3 } from "crypto";
 var DEFAULT_INTERVAL_MS = 200;
 var DEFAULT_MAX_MS = 3e3;
 var STABLE_REQUIRED = 2;
 async function shotHash(pwPage) {
   const buf = await pwPage.screenshot({ type: "png", scale: "css" });
-  return createHash("sha256").update(buf).digest("hex");
+  return createHash3("sha256").update(buf).digest("hex");
 }
 var MODEL_JPEG_QUALITY = 80;
 async function shotBase64(pwPage, clip) {
@@ -5658,9 +6156,15 @@ function semanticSource(selector) {
   const raw3 = String(selector ?? "").trim();
   return /^\d+$/.test(raw3) ? `[data-tt-idx="${Number(raw3)}"]` : raw3;
 }
-async function resolveLocator(ctx, selector) {
-  const raw3 = String(selector ?? "").trim();
+async function resolveLocator(ctx, selector, version) {
+  const raw3 = String(sub(ctx, selector) ?? "").trim();
   if (/^\d+$/.test(raw3)) {
+    if (version != null || ctx.snapshotVersion) {
+      const current = await captureObservation(ctx.pwPage);
+      if (version != null && String(version) !== current.version || ctx.snapshotVersion && ctx.snapshotVersion.split(":")[0] !== current.documentId) {
+        throw new Error("\u5143\u7D20\u7F16\u53F7\u6765\u81EA\u8FC7\u671F\u5FEB\u7167\uFF0C\u8BF7\u4F7F\u7528\u6700\u65B0 snapshotVersion \u548C\u7F16\u53F7");
+      }
+    }
     return ctx.pwPage.locator(`[data-tt-idx="${Number(raw3)}"]`);
   }
   return ctx.pwPage.locator(raw3.startsWith("/") ? `xpath=${raw3}` : raw3);
@@ -5708,44 +6212,22 @@ async function runActionShell(ctx, action, args, extra) {
   if (!selector) throw new Error(`${action} \u7F3A\u5C11 selector\uFF08\u5143\u7D20\u7F16\u53F7\u6216\u5B9A\u4F4D\u8868\u8FBE\u5F0F\uFF09`);
   const instruction = String(args.instruction ?? "").trim();
   if (!instruction) throw new Error(`${action} \u7F3A\u5C11 instruction\uFF08\u672C\u6B65\u81EA\u7136\u8BED\u8A00\u63CF\u8FF0\uFF09`);
-  const loc = await resolveLocator(ctx, selector);
+  const loc = await resolveLocator(ctx, selector, args.snapshotVersion);
   const blocked = await checkOcclusion(ctx, loc);
-  if (blocked) return `\u9519\u8BEF\uFF1A${blocked}`;
+  if (blocked) return { status: "failed", text: `\u9519\u8BEF\uFF1A${blocked}` };
+  if ((action === "fill" || action === "select") && typeof args.value !== "string") throw new Error(`${action} \u7F3A\u5C11 value`);
   const rawValue = args.value != null ? String(args.value) : void 0;
   const realValue = sub(ctx, rawValue);
-  const semPre = await semanticizeLocator(ctx.pwPage, semanticSource(selector), { mode: "playwright", noRawFallback: true }).catch(() => null);
-  switch (action) {
-    case "fill":
-      await loc.fill(realValue ?? "", { timeout: ACTION_TIMEOUT_MS });
-      break;
-    case "select":
-      await loc.selectOption(String(realValue ?? ""), { timeout: ACTION_TIMEOUT_MS });
-      break;
-    case "press":
-      await loc.click({ timeout: ACTION_TIMEOUT_MS });
-      await ctx.pwPage.keyboard.press(extra?.pressKey ?? "Enter");
-      break;
-    case "check":
-      await loc.check({ timeout: ACTION_TIMEOUT_MS });
-      break;
-    default: {
-      const before = await shotHash(ctx.pwPage).catch(() => null);
-      await loc.click({ timeout: ACTION_TIMEOUT_MS });
-      if (before) {
-        await new Promise((r) => setTimeout(r, 400));
-        const after = await shotHash(ctx.pwPage).catch(() => null);
-        if (after && !effectChanged(before, after)) {
-          ctx.note("\u70B9\u51FB\u540E\u753B\u9762\u65E0\u53D8\u5316");
-          return `\u8B66\u544A\uFF1A\u70B9\u51FB\u5DF2\u6267\u884C\u4F46\u753B\u9762\u65E0\u53D8\u5316\uFF08\u53EF\u80FD\u672A\u751F\u6548\uFF0C\u5EFA\u8BAE\u91CD\u65B0 snapshot \u786E\u8BA4\u72B6\u6001\uFF09\u3002${\u5DF2\u843D\u5E93\u63D0\u793A(ctx)}`;
-        }
-      }
-    }
-  }
-  const sem = semPre ?? await semanticizeLocator(ctx.pwPage, semanticSource(selector), { mode: "playwright" });
-  const step = buildStep(action, sem, instruction, action === "fill" || action === "select" ? rawValue : void 0, action === "press" ? extra?.pressKey ?? "Enter" : void 0);
+  const semPre = await semanticizeLocator(ctx.pwPage, semanticSource(sub(ctx, selector) ?? selector), { mode: "playwright", noRawFallback: true }).catch(() => null);
+  if (!semPre) throw new Error("\u65E0\u6CD5\u5728\u64CD\u4F5C\u524D\u751F\u6210\u53EF\u9760\u5B9A\u4F4D\u5668\uFF0C\u672C\u6B65\u672A\u6267\u884C\u3002\u8BF7\u91CD\u65B0 snapshot \u5B9A\u4F4D\u3002");
+  if (action === "check" && args.checked != null && typeof args.checked !== "boolean") throw new Error("checked \u5FC5\u987B\u662F\u5E03\u5C14\u503C");
+  const step = buildStep(action, semPre, instruction, action === "fill" || action === "select" ? rawValue : void 0, action === "press" ? extra?.pressKey ?? "Enter" : void 0);
+  if (action === "check") step.checked = args.checked == null ? true : args.checked;
+  if (ctx.signal?.aborted) throw new Error("\u64CD\u4F5C\u5DF2\u4E2D\u6B62");
+  await executeLocatorAction(loc, { ...step, value: realValue }, ACTION_TIMEOUT_MS);
   const oc = await ctx.emit(step);
   ctx.note(`${instruction}\uFF08${action}\uFF09`);
-  return `${actionLabel(action)}\u5B8C\u6210${realValue ? `\uFF1A${realValue}` : ""}\u3002${\u843D\u5E93\u63D0\u793A(ctx, oc)}`;
+  return { status: "success", recordedStep: oc.index, effect: "unknown", text: `${actionLabel(action)}\u5DF2\u6267\u884C\u3002${\u843D\u5E93\u63D0\u793A(ctx, oc)}` };
 }
 function buildStep(action, sem, instruction, value, key) {
   const base = { kind: "action", action, locator: sem, instruction, description: instruction };
@@ -5762,41 +6244,69 @@ function \u5DF2\u843D\u5E93\u63D0\u793A(ctx) {
 function \u843D\u5E93\u63D0\u793A(ctx, oc) {
   return oc ? `\uFF08\u5DF2\u8BB0\u5F55\u4E3A\u7B2C ${oc.index} \u6B65\uFF09` : \u5DF2\u843D\u5E93\u63D0\u793A(ctx);
 }
-async function doSnapshot(ctx) {
-  let idxLines = [];
-  try {
-    idxLines = await ctx.pwPage.evaluate(() => window.__ttCollectInteractive ? window.__ttCollectInteractive() : []);
-  } catch {
+async function doSnapshot(ctx, options = {}) {
+  const snap = await captureObservation(ctx.pwPage, options);
+  ctx.lastObservation = snap;
+  ctx.snapshotVersion = snap.version;
+  return observationText(snap);
+}
+async function doPageTree(ctx, options = {}) {
+  let tree;
+  const scope = String(options.scope ?? "auto");
+  const active = ctx.pwPage.locator('dialog[open], [role="dialog"]:visible, [role="listbox"]:visible');
+  if (scope !== "page" && (scope !== "auto" || await active.count())) {
+    tree = await (scope === "auto" ? active.last() : ctx.pwPage.locator(scope)).ariaSnapshot({ timeout: 5e3 });
+  } else {
+    const snap = await ctx.page.snapshot();
+    tree = String(snap?.formattedTree ?? "");
+    ctx.xpathMap = snap?.xpathMap ?? {};
   }
-  const idxText = idxLines.length ? idxLines.join("\n") : "\uFF08\u7F16\u53F7\u6536\u96C6\u5931\u8D25\uFF0C\u8BF7\u7528 css/xpath \u5B9A\u4F4D\uFF09";
-  return `\u3010\u53EF\u4EA4\u4E92\u5143\u7D20\u7F16\u53F7\uFF08\u5DE5\u5177 selector \u586B [n] \u7684\u6570\u5B57\uFF1B\u5E26 * \u4E3A\u672C\u6B21\u65B0\u51FA\u73B0\uFF0C\u5982\u5F39\u5C42\u5185\u5BB9\uFF09\u3011
-${idxText}`;
+  let lines = tree.split("\n");
+  if (options.query) {
+    const selected = /* @__PURE__ */ new Set();
+    lines.forEach((line, i) => {
+      if (line.toLowerCase().includes(String(options.query).toLowerCase())) for (let j = Math.max(0, i - 2); j <= i; j++) selected.add(j);
+    });
+    lines = lines.filter((_, i) => selected.has(i));
+  }
+  const offset = Math.max(0, Math.floor(Number(options.offset) || 0));
+  const out = [];
+  let chars = 0;
+  for (const line of lines.slice(offset)) {
+    if (chars + line.length > 14e3 && out.length) break;
+    out.push(line.slice(0, 14e3));
+    chars += line.length + 1;
+  }
+  return `\u3010\u7ED3\u6784\u6811\uFF1B\u6811\u5185\u7F16\u53F7\u4E0D\u80FD\u7528\u4E8E selector\u3011
+${out.join("\n")}
+${offset + out.length}/${lines.length} \u884C` + (offset + out.length < lines.length ? `\uFF1B\u7EE7\u7EED page_tree(offset=${offset + out.length})\uFF0C\u4FDD\u6301 scope/query` : "");
 }
-async function doPageTree(ctx) {
-  const snap = await ctx.page.snapshot();
-  const tree = String(snap?.formattedTree ?? "");
-  ctx.xpathMap = snap?.xpathMap ?? {};
-  const trimmed = tree.length > 45e3 ? tree.slice(0, 45e3) + "\n\u2026(\u5DF2\u622A\u65AD)" : tree;
-  return `\u3010\u9875\u9762\u8BED\u4E49\u6811\uFF08\u5C42\u7EA7\u7ED3\u6784 + \u6587\u672C\u3002\u6811\u5185\u7F16\u53F7\u4E3A\u7ED3\u6784 id\uFF0C\u4E0D\u80FD\u7528\u4F5C\u5DE5\u5177 selector\uFF1B\u5B9A\u4F4D\u4E00\u5F8B\u4EE5\u6700\u65B0 snapshot \u7F16\u53F7\u8868\u7684\u6570\u5B57\u4E3A\u51C6\uFF09\u3011
-${trimmed}`;
-}
+var snapshotParameters = {
+  type: "object",
+  properties: {
+    scope: { type: "string", description: "auto\uFF08\u9ED8\u8BA4\u6D3B\u52A8\u6D6E\u5C42/\u89C6\u53E3\uFF09\u3001page\u3001viewport \u6216 CSS \u533A\u57DF\u9009\u62E9\u5668" },
+    query: { type: "string", description: "\u6309\u5143\u7D20\u540D\u79F0\u6216\u72B6\u6001\u7B5B\u9009" },
+    offset: { type: "integer", minimum: 0 },
+    limit: { type: "integer", minimum: 1, maximum: 150 }
+  }
+};
 function buildGenTools(ctx, finishValidate, askHuman) {
   const tools = [
     {
       name: "snapshot",
-      description: "\u83B7\u53D6\u5F53\u524D\u9875\u9762\u53EF\u4EA4\u4E92\u5143\u7D20\u7F16\u53F7\u8868\uFF08\u5DE5\u5177 selector \u586B [n] \u7684\u6570\u5B57\uFF09\u3002\u64CD\u4F5C\u524D\u5FC5\u770B\uFF1B\u9875\u9762\u53D8\u5316\u540E\u91CD\u65B0\u83B7\u53D6\u3002\u7F16\u53F7\u53EA\u5728\u6700\u65B0\u5FEB\u7167\u5185\u6709\u6548\u3002\u9ED8\u8BA4\u4E0D\u542B\u5B8C\u6574\u9875\u9762\u7ED3\u6784\uFF0C\u9700\u8981\u5C42\u7EA7\u7ED3\u6784\u65F6\u7528 page_tree\u3002",
-      parameters: { type: "object", properties: {} },
+      description: "\u83B7\u53D6\u5E26\u5B57\u6BB5\u503C\u548C\u6821\u9A8C\u72B6\u6001\u7684\u7F16\u53F7\u5FEB\u7167\uFF0C\u9ED8\u8BA4\u805A\u7126\u6D3B\u52A8\u6D6E\u5C42/\u89C6\u53E3\u3002\u53EF\u7528 scope/query \u6269\u5927\u6216\u7F29\u5C0F\u8303\u56F4\uFF0Coffset \u7FFB\u9875\u3002\u52A8\u4F5C\u5DF2\u9644\u5FEB\u7167\u65F6\u76F4\u63A5\u4F7F\u7528\uFF0C\u65E0\u9700\u91CD\u590D\u8C03\u7528\u3002",
+      parameters: snapshotParameters,
       stateful: "snapshot",
-      supersedes: ["tree"],
+      supersedes: ["tree", "screenshot"],
       // 新快照 = 页面已变化，旧结构树层级信息一并失效
-      execute: async () => doSnapshot(ctx)
+      execute: async (a) => doSnapshot(ctx, a)
     },
     {
       name: "page_tree",
       description: "\u83B7\u53D6\u5F53\u524D\u9875\u9762\u5B8C\u6574\u8BED\u4E49\u6811\uFF08\u5C42\u7EA7\u7ED3\u6784 + \u6587\u672C\uFF0C\u4F53\u79EF\u5927\uFF0C\u4EC5\u5728\u9700\u8981\u65F6\u8C03\u7528\uFF09\u3002\u7528\u4E8E\u7F16\u53F7\u8868\u770B\u4E0D\u51FA\u7684\u95EE\u9898\uFF1A\u76EE\u6807\u4E0D\u5728\u7F16\u53F7\u8868\u3001\u9700\u8981\u7406\u89E3\u533A\u57DF\u5C42\u7EA7/\u6392\u67E5\u7ED3\u6784\u7C7B\u95EE\u9898\u3002\u6811\u5185\u7F16\u53F7\u662F\u7ED3\u6784 id\uFF0C\u4E0D\u80FD\u7528\u4F5C\u5DE5\u5177 selector\u3002",
-      parameters: { type: "object", properties: {} },
+      parameters: snapshotParameters,
       stateful: "tree",
-      execute: async () => doPageTree(ctx)
+      execute: async (a) => doPageTree(ctx, a)
     },
     {
       name: "goto",
@@ -5835,7 +6345,7 @@ function buildGenTools(ctx, finishValidate, askHuman) {
     },
     {
       name: "press",
-      description: "\u70B9\u51FB\u5143\u7D20\u540E\u6309\u952E\uFF08\u9ED8\u8BA4 Enter\uFF09\u3002args.selector + args.key? + args.instruction\uFF08\u5FC5\u586B\uFF09",
+      description: "\u805A\u7126\u76EE\u6807\u5143\u7D20\u540E\u6309\u952E\uFF08\u9ED8\u8BA4 Enter\uFF0C\u4E0D\u989D\u5916\u70B9\u51FB\uFF09\u3002args.selector + args.key? + args.instruction\uFF08\u5FC5\u586B\uFF09",
       parameters: {
         type: "object",
         properties: { selector: { type: "string" }, key: { type: "string" }, instruction: { type: "string" } },
@@ -5845,11 +6355,11 @@ function buildGenTools(ctx, finishValidate, askHuman) {
     },
     {
       name: "check",
-      description: "\u52FE\u9009/\u53D6\u6D88\u52FE\u9009\u590D\u9009\u6846\u3002args.selector + args.instruction\uFF08\u5FC5\u586B\uFF09",
+      description: "\u8BBE\u7F6E\u63A7\u4EF6\u52FE\u9009\u72B6\u6001\uFF0Cchecked=true \u52FE\u9009\u3001false \u53D6\u6D88\uFF1Bradio \u4EC5\u652F\u6301 true\u3002args.selector + args.checked + args.instruction\u3002",
       parameters: {
         type: "object",
-        properties: { selector: { type: "string" }, instruction: { type: "string" } },
-        required: ["selector", "instruction"]
+        properties: { selector: { type: "string" }, instruction: { type: "string" }, checked: { type: "boolean" } },
+        required: ["selector", "checked", "instruction"]
       },
       execute: async (a) => runActionShell(ctx, "check", a)
     },
@@ -5865,7 +6375,7 @@ function buildGenTools(ctx, finishValidate, askHuman) {
         try {
           return await runActionShell(ctx, "select", a);
         } catch (e) {
-          return `\u9519\u8BEF\uFF1A${String(e)}\u3002\u63D0\u793A\uFF1A\u7EC4\u4EF6\u5E93\u5047\u63A7\u4EF6\u4E0D\u652F\u6301\u539F\u751F selectOption\uFF0C\u8BF7\u6539\u7528 component_action \u7684 select \u8BED\u4E49\u52A8\u4F5C\u6216 click+click \u4E24\u6BB5\u5F0F\u3002`;
+          return { status: "failed", text: `\u9519\u8BEF\uFF1A${String(e)}\u3002\u63D0\u793A\uFF1A\u7EC4\u4EF6\u5E93\u5047\u63A7\u4EF6\u4E0D\u652F\u6301\u539F\u751F selectOption\uFF0C\u8BF7\u6539\u7528 component_action \u7684 select \u8BED\u4E49\u52A8\u4F5C\u6216 click+click \u4E24\u6BB5\u5F0F\u3002` };
         }
       }
     },
@@ -5882,6 +6392,7 @@ function buildGenTools(ctx, finishValidate, askHuman) {
     },
     {
       name: "readText",
+      stateful: "readText",
       description: "\u8BFB\u53D6\u5143\u7D20\u6587\u672C\u5185\u5BB9\u3002args.selector",
       parameters: {
         type: "object",
@@ -5890,18 +6401,21 @@ function buildGenTools(ctx, finishValidate, askHuman) {
       },
       execute: async (a) => {
         const loc = await resolveLocator(ctx, String(a.selector ?? ""));
-        const text = await loc.textContent({ timeout: 8e3 });
+        const text = await loc.innerText({ timeout: 8e3 });
         return String(text ?? "").slice(0, 800) || "(\u7A7A)";
       }
     },
     {
       name: "assert",
-      description: "\u65AD\u8A00\uFF1Atype=visible(\u5143\u7D20\u53EF\u89C1)|text(\u9875\u9762\u542B\u6587\u672C)|url(URL \u5339\u914D)\u3002args.type + args.selector?/args.expected? + args.instruction\uFF08\u5FC5\u586B\uFF09\u3002\u811A\u672C\u5FC5\u987B\u4EE5\u81F3\u5C11\u4E00\u6761\u65AD\u8A00\u7ED3\u5C3E\u3002",
+      description: "\u9A8C\u8BC1\u7ED3\u679C\u5E76\u8BB0\u5F55\u8BC1\u636E\u3002text=\u5305\u542B\u3001text_exact=\u89C4\u8303\u5316\u7A7A\u767D\u540E\u5168\u6587\u76F8\u7B49\u3001value=\u5B57\u6BB5\u503C\u76F8\u7B49\u3001checked/unchecked\u3001enabled/disabled\u3001count=\u5339\u914D\u6570\u91CF\uFF08\u542B\u9690\u85CF\u8282\u70B9\uFF09\u3001visible/hidden\u3001url=\u5305\u542B/url_exact=\u76F8\u7B49\u3002\u9A8C\u6536\u76EE\u6807\u5FC5\u987B\u5E26 criterionId\uFF0C\u4E25\u683C\u6CBF\u7528\u5DF2\u786E\u8BA4\u7C7B\u578B\u548C expected\uFF0C\u5E76\u5B9A\u4F4D target \u8303\u56F4\u3002count/hidden \u53EF\u7528\u7A33\u5B9A locator \u63CF\u8FF0\u7B26\u5339\u914D\u591A\u4E2A\u6216\u5C1A\u4E0D\u5B58\u5728\u7684\u5143\u7D20\uFF1B\u4E0D\u8981\u7528\u4E34\u65F6\u7F16\u53F7\u8868\u793A\u96C6\u5408/\u4E0D\u5B58\u5728\u76EE\u6807\u3002",
       parameters: {
         type: "object",
         properties: {
-          type: { type: "string", enum: ["visible", "text", "url"] },
+          type: { type: "string", enum: [...browserAssertionTypes] },
+          criterionId: { type: "string" },
+          locator: { type: "object", properties: { strategy: { type: "string", enum: ["role", "label", "text", "placeholder", "testid", "alt", "title", "css", "xpath"] }, value: { type: "string" }, role: { type: "string" }, name: { type: "string" }, scope: { type: "object", properties: { strategy: { type: "string", enum: ["role", "testid", "text", "css"] }, value: { type: "string" }, role: { type: "string" }, name: { type: "string" } }, required: ["strategy", "value"] } }, required: ["strategy", "value"] },
           selector: { type: "string" },
+          timeoutMs: { type: "integer", minimum: 0, maximum: 3e4 },
           expected: { type: "string" },
           instruction: { type: "string" }
         },
@@ -5910,66 +6424,82 @@ function buildGenTools(ctx, finishValidate, askHuman) {
       execute: async (a) => {
         const type = String(a.type);
         const instruction = String(a.instruction ?? "").trim() || `\u65AD\u8A00 ${type}`;
-        let ok = false;
-        let expect = String(a.expected ?? "");
-        if (type === "visible") {
-          const loc = await resolveLocator(ctx, String(a.selector ?? ""));
-          ok = await loc.isVisible();
-          expect = expect || String(a.selector ?? "");
-        } else if (type === "text") {
-          const body = await ctx.pwPage.locator("body").textContent({ timeout: 8e3 });
-          expect = String(a.expected ?? "");
-          const realExpect = sub(ctx, expect) ?? expect;
-          ok = realExpect ? (body ?? "").includes(realExpect) : false;
-        } else if (type === "url") {
-          const u = String(ctx.page.url?.() ?? await ctx.page.url());
-          const expected = sub(ctx, expect || a.selector);
-          ok = expected ? u.includes(String(expected)) : false;
-        } else {
-          throw new Error(`\u672A\u77E5\u65AD\u8A00\u7C7B\u578B\uFF1A${type}`);
+        const expect = a.expected == null ? void 0 : String(a.expected);
+        const criterionId = a.criterionId == null ? void 0 : String(a.criterionId);
+        const criterion = ctx.intent?.criteria.find((c) => c.id === criterionId);
+        if (criterionId && !criterion) throw new Error(`\u672A\u77E5\u9A8C\u6536\u76EE\u6807\uFF1A${criterionId}`);
+        const isUrl = type === "url" || type === "url_exact";
+        let assertSem;
+        let loc;
+        let scope;
+        if (!isUrl) {
+          if (a.locator) {
+            const descriptor = locatorSchema.parse(a.locator);
+            if (descriptor.strategy === "role" && !descriptor.role) descriptor.role = descriptor.value;
+            if (descriptor.scope?.strategy === "role" && !descriptor.scope.role) descriptor.scope.role = descriptor.scope.value;
+            if (["response", "websocket"].includes(descriptor.strategy) || !descriptor.value.trim() || JSON.stringify(descriptor).includes("data-tt-idx")) throw new Error("\u8BF7\u63D0\u4F9B\u7A33\u5B9A\u7684\u6D4F\u89C8\u5668\u5B9A\u4F4D\u63CF\u8FF0\u7B26");
+            const resolved = JSON.parse(JSON.stringify(descriptor), (_key, v) => typeof v === "string" ? sub(ctx, v) : v);
+            const root = resolved.scope ? resolveQuery(ctx.pwPage, resolved.scope) : ctx.pwPage;
+            if (resolved.scope && await root.count() !== 1) throw new Error("\u65AD\u8A00\u4F5C\u7528\u57DF\u5FC5\u987B\u552F\u4E00\u5B58\u5728\uFF0C\u907F\u514D\u7A7A\u8303\u56F4\u9020\u6210\u9519\u8BEF\u901A\u8FC7");
+            scope = resolved.scope ? root : void 0;
+            loc = resolveQuery(root, resolved);
+            assertSem = descriptor;
+          } else if (a.selector) {
+            loc = await resolveLocator(ctx, String(a.selector), a.snapshotVersion);
+            if (type === "count" || type === "hidden") {
+              const selector = String(a.selector).trim();
+              if (/^\d+$/.test(selector) || selector.includes("data-tt-idx")) throw new Error("\u6570\u91CF/\u9690\u85CF\u65AD\u8A00\u8BF7\u4F7F\u7528\u7A33\u5B9A locator\uFF0C\u4E0D\u80FD\u4F7F\u7528\u4E34\u65F6\u7F16\u53F7");
+              assertSem = { strategy: "css", value: selector };
+            }
+          }
         }
-        if (!ok) throw new Error(`\u65AD\u8A00\u672A\u901A\u8FC7\uFF08${type}\uFF09\uFF1A\u671F\u671B ${expect || "(\u5143\u7D20\u53EF\u89C1)"}\uFF0C\u5B9E\u9645\u4E0D\u6EE1\u8DB3`);
-        const assertSem = type === "visible" && a.selector ? await semanticizeLocator(ctx.pwPage, semanticSource(String(a.selector)), { mode: "playwright" }).catch(() => null) : null;
-        const oc = await ctx.emit({ kind: "assert", action: "assert", assertion: { type, expected: expect || void 0 }, ...assertSem ? { locator: assertSem } : {}, instruction, description: instruction });
-        return `\u65AD\u8A00\u901A\u8FC7\uFF08${type}\uFF09\u3002${\u843D\u5E93\u63D0\u793A(ctx, oc)}`;
+        const assertion = { type, expected: expect };
+        if (criterion) {
+          const error = assertionContractError(criterion, { assertion, locator: assertSem ?? (loc ? { strategy: "css", value: String(a.selector) } : void 0) }, ctx.sub);
+          if (error) throw new Error(error);
+        }
+        await waitForBrowserAssertion({ page: { url: () => ctx.page.url(), locator: (selector) => ctx.pwPage.locator(selector) }, locator: loc, scope, type, expected: sub(ctx, expect), timeoutMs: a.timeoutMs == null ? 1e4 : Number(a.timeoutMs), signal: ctx.signal });
+        if (loc && !assertSem) assertSem = await semanticizeLocator(ctx.pwPage, semanticSource(sub(ctx, String(a.selector)) ?? String(a.selector)), { mode: "playwright", noRawFallback: true });
+        if (loc && !assertSem) throw new Error("\u65AD\u8A00\u5B9A\u4F4D\u5668\u672A\u901A\u8FC7\u552F\u4E00\u6027\u9A8C\u8BC1");
+        const step = { kind: "assert", action: "assert", assertion, criterionId, ...assertSem ? { locator: assertSem } : {}, instruction, description: instruction };
+        const oc = await ctx.emit(step);
+        ctx.onAssertionPassed?.(step);
+        return { status: "success", progressed: true, recordedStep: oc.index, text: `\u65AD\u8A00\u901A\u8FC7\uFF08${type}${criterionId ? `\uFF0C\u76EE\u6807 ${criterionId}` : ""}\uFF09\u3002${\u843D\u5E93\u63D0\u793A(ctx, oc)}` };
       }
     },
     {
       name: "act",
-      description: "\u81EA\u7136\u8BED\u8A00\u515C\u5E95\u64CD\u4F5C\uFF08\u8BED\u4E49\u5316\u5B9A\u4F4D\u5931\u8D25\u65F6\u7528\uFF0C\u8BA9\u6D4F\u89C8\u5668 AI \u76F4\u63A5\u7406\u89E3\u6307\u4EE4\u6267\u884C\uFF09\u3002args.instruction\uFF08\u5FC5\u586B\uFF09\u3002\u4E0D\u8981\u7528 Escape \u5173\u95ED\u5F39\u7A97\u5185\u5C55\u5F00\u7684\u4E0B\u62C9\u2014\u2014\u4F1A\u628A\u6574\u4E2A\u5F39\u7A97\u5173\u6389\u3001\u5DF2\u586B\u8868\u5355\u5168\u4E22\uFF1B\u6536\u8D77\u4E0B\u62C9\u6539\u70B9\u89E6\u53D1\u5668\u6216\u76F4\u63A5\u70B9\u9009\u9879\uFF0C\u5173\u95ED\u5F39\u7A97\u6539\u70B9\u300C\u53D6\u6D88/\u5173\u95ED\u300D\u6309\u94AE\u3002",
+      description: "\u81EA\u7136\u8BED\u8A00\u5355\u52A8\u4F5C\u515C\u5E95\uFF1Aobserve \u89E3\u6790\u6700\u5339\u914D\u5019\u9009\uFF0C\u6267\u884C\u524D\u9A8C\u8BC1\u5B9A\u4F4D\u5E76\u8BB0\u5F55\u3002\u590D\u5408\u76EE\u6807\u4E00\u6B21\u53EA\u63A8\u8FDB\u4E00\u4E2A\u52A8\u4F5C\uFF0C\u4F9D\u636E\u8FD4\u56DE\u5FEB\u7167\u7EE7\u7EED\u3002args.instruction\uFF08\u5FC5\u586B\uFF09\u3002\u4E0D\u8981\u7528 Escape \u5173\u95ED\u5F39\u7A97\u5185\u5C55\u5F00\u7684\u4E0B\u62C9\u2014\u2014\u4F1A\u628A\u6574\u4E2A\u5F39\u7A97\u5173\u6389\u3001\u5DF2\u586B\u8868\u5355\u5168\u4E22\uFF1B\u6536\u8D77\u4E0B\u62C9\u6539\u70B9\u89E6\u53D1\u5668\u6216\u76F4\u63A5\u70B9\u9009\u9879\uFF0C\u5173\u95ED\u5F39\u7A97\u6539\u70B9\u300C\u53D6\u6D88/\u5173\u95ED\u300D\u6309\u94AE\u3002",
       parameters: {
         type: "object",
-        properties: { instruction: { type: "string" } },
+        properties: { instruction: { type: "string" }, scope: { type: "string", description: "\u53EF\u9009 CSS \u533A\u57DF\uFF0C\u6536\u7A84 observe \u4E0A\u4E0B\u6587" } },
         required: ["instruction"]
       },
       execute: async (a) => {
         const instruction = sub(ctx, String(a.instruction ?? ""));
+        if (instruction && Object.values(ctx.envMap).some((v) => v && instruction.includes(v))) {
+          return { status: "failed", text: "act \u6307\u4EE4\u5305\u542B\u73AF\u5883\u53D8\u91CF\u503C\uFF0C\u8BF7\u6539\u7528 fill/select/component_action \u7B49\u786E\u5B9A\u6027\u5DE5\u5177\u5E76\u4F20\u5165\u5360\u4F4D\u7B26\uFF0C\u907F\u514D\u5C06\u771F\u5B9E\u503C\u4EA4\u7ED9\u6D4F\u89C8\u5668 AI\u3002" };
+        }
         if (/\b(?:esc|escape)\b/i.test(String(a.instruction ?? ""))) {
           const ov = await detectOverlays(ctx.pwPage);
           if (ov.dialog || ov.dropdown) {
             const scene = [ov.dropdown && "\u5C55\u5F00\u7684\u4E0B\u62C9\u9762\u677F", ov.dialog && "\u5F39\u7A97"].filter(Boolean).join(" + ");
-            return `\u5DF2\u62E6\u622A\u300C\u6309 Escape\u300D\uFF1A\u5F53\u524D\u9875\u9762\u6709${scene}\uFF0CEscape \u53EF\u80FD\u628A\u6574\u4E2A\u5F39\u7A97\u4E00\u8D77\u5173\u95ED\u3001\u5DF2\u586B\u5185\u5BB9\u5168\u90E8\u4E22\u5931\u3002\u8BF7\u6539\u7528\uFF1A\u6536\u8D77\u4E0B\u62C9\u2192\u518D\u70B9\u4E00\u6B21\u89E6\u53D1\u5668\u6216\u76F4\u63A5\u70B9\u9009\u76EE\u6807\u9009\u9879\uFF1B\u5173\u95ED\u5F39\u7A97\u2192\u70B9\u300C\u53D6\u6D88/\u5173\u95ED\u300D\u6309\u94AE\u6216\u53F3\u4E0A\u89D2 \xD7\u3002`;
+            return { status: "failed", text: `\u5DF2\u62E6\u622A\u300C\u6309 Escape\u300D\uFF1A\u5F53\u524D\u9875\u9762\u6709${scene}\uFF0CEscape \u53EF\u80FD\u628A\u6574\u4E2A\u5F39\u7A97\u4E00\u8D77\u5173\u95ED\u3001\u5DF2\u586B\u5185\u5BB9\u5168\u90E8\u4E22\u5931\u3002\u8BF7\u6539\u7528\uFF1A\u6536\u8D77\u4E0B\u62C9\u2192\u518D\u70B9\u4E00\u6B21\u89E6\u53D1\u5668\u6216\u76F4\u63A5\u70B9\u9009\u76EE\u6807\u9009\u9879\uFF1B\u5173\u95ED\u5F39\u7A97\u2192\u70B9\u300C\u53D6\u6D88/\u5173\u95ED\u300D\u6309\u94AE\u6216\u53F3\u4E0A\u89D2 \xD7\u3002` };
           }
         }
-        const res = await ctx.stagehand.act(instruction, { page: ctx.page });
-        const first = res?.data?.actions?.[0];
-        if (!res?.data?.success) throw new Error(`act \u672A\u80FD\u5B8C\u6210\uFF1A${instruction}`);
-        let loc = null;
-        if (first?.selector) {
-          loc = await semanticizeLocator(ctx.pwPage, first.selector, { mode: "playwright" }).catch(() => null);
-        }
-        const method = first?.method ? String(first.method) : "";
-        const act = { click: "click", type: "fill", fill: "fill", press: "press", select: "select", selectOption: "select", check: "check", uncheck: "check" }[method] ?? "click";
-        const arg0 = first?.arguments?.[0] != null ? String(first.arguments[0]) : void 0;
-        const step = loc ? buildStep(act, loc, String(a.instruction), act === "fill" || act === "select" ? arg0 : void 0, act === "press" ? arg0 ?? "Enter" : void 0) : { kind: "action", action: act, instruction: String(a.instruction), description: String(a.instruction), ...arg0 ? { value: arg0 } : {} };
-        const oc = await ctx.emit(step);
-        return `act \u5DF2\u5B8C\u6210\uFF1A${instruction}\u3002${\u843D\u5E93\u63D0\u793A(ctx, oc)}`;
+        const scope = a.scope ? ctx.page.locator(String(a.scope)) : void 0;
+        const result = await ctx.stagehand.observe(instruction, { page: ctx.page, ...scope ? { locator: scope } : {} });
+        if (ctx.signal?.aborted) throw new Error("\u64CD\u4F5C\u5DF2\u4E2D\u6B62");
+        const candidates = result?.data;
+        if (!Array.isArray(candidates) || !candidates.length) throw new Error("observe \u672A\u627E\u5230\u5019\u9009\u52A8\u4F5C");
+        const parsed = observedAction(candidates[0]);
+        return runActionShell(ctx, parsed.action, { ...parsed, instruction: String(a.instruction) }, { pressKey: parsed.key });
       }
     },
     ...ctx.modelVision ? [
       {
         name: "see",
-        description: "\u89C6\u89C9\u89C2\u5BDF\u5F53\u524D\u9875\u9762\uFF1A\u622A\u56FE\uFF08\u5E26\u7F16\u53F7\u6807\u6CE8\uFF09\u76F4\u63A5\u9644\u4E8E\u7ED3\u679C\u8FDB\u5165\u4E0A\u4E0B\u6587\uFF08\u6BD4\u6587\u672C\u5FEB\u7167\u7701 token\uFF0C\u4E5F\u65E0\u5B50\u8C03\u7528\uFF09\u3002\u84DD\u8272\u8FB9\u6846\u4E0A\u7684\u767D\u8272\u6570\u5B57 = snapshot \u5143\u7D20\u7F16\u53F7\uFF0C\u53EF\u76F4\u63A5\u7528\u4E8E selector\u3002\u7528\u4E8E\u786E\u8BA4\u9875\u9762\u72B6\u6001/\u6392\u67E5\u6E32\u67D3\u9519\u4E71/\u56FE\u8868/\u9A8C\u8BC1\u7801/toast \u7B49\u89C6\u89C9\u95EE\u9898\u3002args.x/y/w/h \u4E3A\u53EF\u9009\u88C1\u526A\u533A\u57DF\uFF08px\uFF09\uFF0C\u88C1\u526A\u53EF\u63D0\u5347\u5C0F\u533A\u57DF\u6E05\u6670\u5EA6\u3002",
+        description: "\u89C6\u89C9\u89C2\u5BDF\u5F53\u524D\u9875\u9762\uFF1A\u622A\u56FE\uFF08\u5E26\u7F16\u53F7\u6807\u6CE8\uFF09\u76F4\u63A5\u9644\u4E8E\u7ED3\u679C\u8FDB\u5165\u4E0A\u4E0B\u6587\uFF08\u65E0\u989D\u5916\u7684\u56FE\u50CF\u63CF\u8FF0\u5B50\u8C03\u7528\uFF0C\u6210\u672C\u4F9D\u6A21\u578B\u800C\u5B9A\uFF09\u3002\u84DD\u8272\u8FB9\u6846\u4E0A\u7684\u767D\u8272\u6570\u5B57 = snapshot \u5143\u7D20\u7F16\u53F7\uFF0C\u53EF\u76F4\u63A5\u7528\u4E8E selector\u3002\u7528\u4E8E\u786E\u8BA4\u9875\u9762\u72B6\u6001/\u6392\u67E5\u6E32\u67D3\u9519\u4E71/\u56FE\u8868/\u9A8C\u8BC1\u7801/toast \u7B49\u89C6\u89C9\u95EE\u9898\u3002args.x/y/w/h \u4E3A\u53EF\u9009\u88C1\u526A\u533A\u57DF\uFF08px\uFF09\uFF0C\u88C1\u526A\u53EF\u63D0\u5347\u5C0F\u533A\u57DF\u6E05\u6670\u5EA6\u3002",
         parameters: {
           type: "object",
           properties: {
@@ -5982,7 +6512,9 @@ function buildGenTools(ctx, finishValidate, askHuman) {
         },
         // 视觉观察与快照同为「当前画面」状态：新观察回灌时历史同槽（含所附截图）降级为占位，防止上下文累积
         stateful: "screenshot",
+        supersedes: ["snapshot", "tree"],
         execute: async (a) => {
+          await doSnapshot(ctx);
           await ctx.pwPage.evaluate(() => {
             try {
               if (window.__ttCollectInteractive) window.__ttCollectInteractive();
@@ -6001,8 +6533,9 @@ function buildGenTools(ctx, finishValidate, askHuman) {
           });
           const q = String(a.question ?? "\u63CF\u8FF0\u9875\u9762\u5F53\u524D\u72B6\u6001\u4E0E\u53EF\u4EA4\u4E92\u5143\u7D20").slice(0, 200);
           return {
-            text: `\u622A\u56FE\u5DF2\u9644\u4E8E\u4E0B\u4E00\u6761\u6D88\u606F\uFF08\u84DD\u8272\u8FB9\u6846\u4E0A\u7684\u767D\u8272\u6570\u5B57\u4E3A\u5143\u7D20\u7F16\u53F7\uFF0C\u4E0E snapshot \u7F16\u53F7\u4E00\u81F4\uFF0C\u53EF\u76F4\u63A5\u7528\u4F5C\u5DE5\u5177 selector\uFF09\u3002\u89C2\u5BDF\u8BF7\u6C42\uFF1A${q}\u3002\u8BF7\u4F9D\u636E\u622A\u56FE\u4F5C\u7B54\u5E76\u51B3\u5B9A\u4E0B\u4E00\u6B65\u3002`,
-            image: b64
+            text: `snapshotVersion=${ctx.snapshotVersion}\u3002\u622A\u56FE\u5DF2\u9644\u4E8E\u4E0B\u4E00\u6761\u6D88\u606F\uFF08\u84DD\u8272\u8FB9\u6846\u4E0A\u7684\u767D\u8272\u6570\u5B57\u4E3A\u5143\u7D20\u7F16\u53F7\uFF0C\u4E0E snapshot \u7F16\u53F7\u4E00\u81F4\uFF0C\u53EF\u76F4\u63A5\u7528\u4F5C\u5DE5\u5177 selector\uFF09\u3002\u89C2\u5BDF\u8BF7\u6C42\uFF1A${q}\u3002\u8BF7\u4F9D\u636E\u622A\u56FE\u4F5C\u7B54\u5E76\u51B3\u5B9A\u4E0B\u4E00\u6B65\u3002`,
+            image: b64,
+            stateFingerprint: ctx.lastObservation ? stateFingerprint(ctx.lastObservation) : void 0
           };
         }
       }
@@ -6035,7 +6568,7 @@ function buildGenTools(ctx, finishValidate, askHuman) {
     const vocabDesc = ctx.pluginActions.map((v) => `- ${v.name}\uFF1A${v.doc ?? ""}${v.preferFill ? "\uFF08\u4F18\u5148\u76F4\u63A5\u586B\u5199\uFF09" : ""}`).join("\n");
     tools.push({
       name: "component_action",
-      description: `\u7EC4\u4EF6\u5E93\u8BED\u4E49\u52A8\u4F5C\uFF1A\u5BF9\u7EC4\u4EF6\u5E93\u5047\u63A7\u4EF6\uFF08antd/element \u7684\u4E0B\u62C9\u3001\u65E5\u671F\u9009\u62E9\u5668\u7B49\u975E\u539F\u751F\u63A7\u4EF6\uFF09\u6267\u884C\u6CE8\u518C\u7684\u8BED\u4E49\u52A8\u4F5C\uFF0C\u5E73\u53F0\u81EA\u52A8\u6309\u4F18\u5148\u7EA7\u5339\u914D\u7EC4\u4EF6\u5E93\u63D2\u4EF6\u5B8C\u6210\uFF08\u5931\u8D25\u81EA\u52A8\u964D\u7EA7\uFF1A\u4E0B\u4E00\u63D2\u4EF6 \u2192 \u539F\u751F\u4EA4\u4E92\uFF09\u3002\u52A8\u4F5C\u81EA\u8EAB\u4F1A\u6253\u5F00/\u6536\u8D77\u5F39\u5C42\u7B49\u4E34\u65F6 UI\uFF1A\u76F4\u63A5\u5BF9\u76EE\u6807\u63A7\u4EF6\u8C03\u7528\u5373\u53EF\uFF0C\u65E0\u9700\u5148\u70B9\u51FB\u5B83\u6253\u5F00\uFF08\u5982\u5148\u70B9\u5F00\u4E0B\u62C9\uFF09\uFF1B\u4E0D\u786E\u5B9A\u9009\u9879/\u503C\u662F\u5426\u5B58\u5728\u4E5F\u53EF\u76F4\u63A5\u8C03\u7528\uFF0C\u5931\u8D25\u7ED3\u679C\u4F1A\u5217\u51FA\u5F53\u524D\u53EF\u9009\u9879\u3002args.action=\u52A8\u4F5C\u540D\uFF08\u9650\u4E0B\u65B9\u8BCD\u8868\uFF09+ args.selector\uFF08\u76EE\u6807\u5143\u7D20\u7F16\u53F7\u6216\u5B9A\u4F4D\u8868\u8FBE\u5F0F\uFF09+ args.value\uFF08\u4E3B\u8981\u53C2\u6570\uFF1A\u9009\u9879\u6587\u672C/\u65E5\u671F\uFF09+ args.instruction\uFF08\u5FC5\u586B\uFF09\u3002
+      description: `\u7EC4\u4EF6\u5E93\u8BED\u4E49\u52A8\u4F5C\uFF1A\u5BF9\u7EC4\u4EF6\u5E93\u5047\u63A7\u4EF6\uFF08antd/element \u7684\u4E0B\u62C9\u3001\u65E5\u671F\u9009\u62E9\u5668\u7B49\u975E\u539F\u751F\u63A7\u4EF6\uFF09\u6267\u884C\u6CE8\u518C\u7684\u8BED\u4E49\u52A8\u4F5C\uFF0C\u5E73\u53F0\u81EA\u52A8\u6309\u4F18\u5148\u7EA7\u5339\u914D\u7EC4\u4EF6\u5E93\u63D2\u4EF6\u5B8C\u6210\uFF08\u5931\u8D25\u81EA\u52A8\u964D\u7EA7\uFF1A\u4E0B\u4E00\u63D2\u4EF6 \u2192 \u539F\u751F\u4EA4\u4E92\uFF09\u3002\u52A8\u4F5C\u81EA\u8EAB\u4F1A\u6253\u5F00/\u6536\u8D77\u5F39\u5C42\u7B49\u4E34\u65F6 UI\uFF1A\u76F4\u63A5\u5BF9\u76EE\u6807\u63A7\u4EF6\u8C03\u7528\u5373\u53EF\uFF0C\u65E0\u9700\u5148\u70B9\u51FB\u5B83\u6253\u5F00\uFF08\u5982\u5148\u70B9\u5F00\u4E0B\u62C9\uFF09\uFF1B\u4E0D\u786E\u5B9A\u9009\u9879/\u503C\u662F\u5426\u5B58\u5728\u4E5F\u53EF\u76F4\u63A5\u8C03\u7528\uFF0C\u5931\u8D25\u7ED3\u679C\u4F1A\u5217\u51FA\u5F53\u524D\u53EF\u9009\u9879\u3002args.action=\u52A8\u4F5C\u540D\uFF08\u9650\u4E0B\u65B9\u8BCD\u8868\uFF09+ args.selector\uFF08\u76EE\u6807\u5143\u7D20\u7F16\u53F7\u6216\u5B9A\u4F4D\u8868\u8FBE\u5F0F\uFF09+ args.value\uFF08\u4E3B\u8981\u53C2\u6570\uFF1A\u9009\u9879\u6587\u672C/\u65E5\u671F\uFF1Bselect \u53EF\u6539\u4F20 args.index\uFF0C0 \u8D77\uFF0C\u4E0E value \u4E8C\u9009\u4E00\uFF09+ args.instruction\uFF08\u5FC5\u586B\uFF09\u3002
 \u53EF\u7528\u52A8\u4F5C\u8BCD\u8868\uFF1A
 ${vocabDesc}`,
       parameters: componentActionParameters(ctx.pluginActions.map((v) => v.name)),
@@ -6056,7 +6589,8 @@ ${vocabDesc}`,
   }
   tools.push({
     name: "revise",
-    description: '\u4FEE\u8BA2\u5DF2\u8BB0\u5F55\u7684\u811A\u672C\u6B65\u9AA4\uFF08\u53EA\u6539\u811A\u672C\uFF0C\u4E0D\u6267\u884C\u6D4F\u89C8\u5668\u52A8\u4F5C\uFF0C\u4E0D\u5F71\u54CD\u5F53\u524D\u9875\u9762\u72B6\u6001\uFF09\u3002\u9002\u7528\u573A\u666F\uFF08\u4FEE\u6B63\u540E\u91CD\u505A\u63D0\u4EA4\u65F6\uFF0C\u4FEE\u8BA2\u5DF2\u843D\u6B65\u9AA4\u800C\u4E0D\u662F\u8FFD\u52A0\u91CD\u590D\u6B65\u9AA4\uFF0C\u8BA9\u56DE\u653E\u811A\u672C\u4FDD\u6301\u6700\u77ED\u6210\u529F\u8DEF\u5F84\uFF09\uFF1A\u2460 \u63D0\u4EA4\u5931\u8D25\u4E14\u662F\u53C2\u6570\u95EE\u9898\uFF08\u5982\u624B\u673A\u53F7\u91CD\u590D\u3001\u540D\u79F0\u5DF2\u5B58\u5728\u3001\u503C\u4E0D\u5408\u6CD5\uFF09\u9700\u8981\u6362\u503C\u91CD\u8BD5\u2014\u2014\u6539 value\u3001\u5220\u9664\u5197\u4F59\u7684\u65E7\u503C\u63D0\u4EA4/\u91CD\u586B\u94FE\uFF1B\u2461 \u70B9\u51FB\u63D0\u4EA4\u540E\u5F39\u7A97\u672A\u5173\u3001\u88AB\u5FC5\u586B\u6821\u9A8C\u62E6\u622A\uFF08\u63D0\u4EA4\u672A\u751F\u6548\uFF09\u2014\u2014\u8865\u586B\u7F3A\u5931\u5B57\u6BB5\u91CD\u65B0\u63D0\u4EA4\u6210\u529F\u540E\uFF0C\u5220\u9664\u5148\u524D\u843D\u7A7A\u7684\u65E7\u63D0\u4EA4\u6B65\u3002args.ops \u64CD\u4F5C\u6570\u7EC4\uFF0C\u5E8F\u53F7\u4E0E\u672C\u8F6E\u5DE5\u5177\u7ED3\u679C\u91CC\u300C\u5DF2\u8BB0\u5F55\u4E3A\u7B2C N \u6B65\u300D\u7684 N \u4E00\u81F4\uFF081-based\uFF0C\u4EC5\u672C\u8F6E\u751F\u6210\u5185\uFF1B\u53EF\u4FEE\u8BA2\u8303\u56F4\u89C1\u8FD4\u56DE\u7684\u6E05\u5355\uFF09\uFF1A\n- {"op":"update","step":9,"value":"\u65B0\u503C"} \u4FEE\u6539\u7B2C 9 \u6B65\u7684\u586B\u5199\u503C\uFF08\u53EF\u6539 value/key/instruction/expected\uFF0C\u53EA\u6539\u7ED9\u51FA\u7684\u5B57\u6BB5\uFF1Bexpected \u4EC5\u65AD\u8A00\u6B65\uFF09\n- {"op":"delete","from":12,"to":13} \u5220\u9664\u7B2C 12~13 \u6B65\uFF08\u542B\u7AEF\u70B9\uFF1B\u7701\u7565 to = \u53EA\u5220 from\uFF09\nops \u6309\u987A\u5E8F\u6267\u884C\uFF0C\u5148\u5220\u540E\u6539\u4F1A\u4F7F\u540E\u9762\u7684\u5E8F\u53F7\u79FB\u4F4D\uFF08\u4EE5\u8FD4\u56DE\u7684\u6700\u65B0\u6B65\u9AA4\u6E05\u5355\u4E3A\u51C6\uFF09\u3002\u4FEE\u8BA2\u540E\u7EE7\u7EED\u6B63\u5E38\u6267\u884C\u5269\u4F59\u52A8\u4F5C\u3002',
+    stateful: "script",
+    description: '\u4FEE\u8BA2\u5DF2\u8BB0\u5F55\u7684\u811A\u672C\u6B65\u9AA4\uFF08\u53EA\u6539\u811A\u672C\uFF0C\u4E0D\u6267\u884C\u6D4F\u89C8\u5668\u52A8\u4F5C\uFF0C\u4E0D\u5F71\u54CD\u5F53\u524D\u9875\u9762\u72B6\u6001\uFF09\u3002\u9002\u7528\u573A\u666F\uFF08\u4FEE\u6B63\u52A8\u4F5C\u5DF2\u5B9E\u9645\u6267\u884C\u5E76\u9A8C\u8BC1\u540E\uFF0C\u4EC5\u6E05\u7406\u6709\u660E\u786E\u8BC1\u636E\u7684\u5931\u8D25\u91CD\u8BD5\u5197\u4F59\uFF1B\u4FDD\u7559\u5B8C\u6574\u6210\u529F\u6D41\u7A0B\uFF0C\u4E0D\u4EE5\u6B65\u9AA4\u6700\u5C11\u4E3A\u76EE\u6807\uFF0C\u4E0D\u5F97\u4EC5\u56E0 URL\u3001\u5143\u7D20\u6216\u503C\u76F8\u540C\u5C31\u5220\u9664\u91CD\u590D\u64CD\u4F5C\uFF09\uFF1A\u2460 \u63D0\u4EA4\u5931\u8D25\u4E14\u662F\u53C2\u6570\u95EE\u9898\uFF08\u5982\u624B\u673A\u53F7\u91CD\u590D\u3001\u540D\u79F0\u5DF2\u5B58\u5728\u3001\u503C\u4E0D\u5408\u6CD5\uFF09\u9700\u8981\u6362\u503C\u91CD\u8BD5\u2014\u2014\u6539 value\u3001\u5220\u9664\u5197\u4F59\u7684\u65E7\u503C\u63D0\u4EA4/\u91CD\u586B\u94FE\uFF1B\u2461 \u70B9\u51FB\u63D0\u4EA4\u540E\u5F39\u7A97\u672A\u5173\u3001\u88AB\u5FC5\u586B\u6821\u9A8C\u62E6\u622A\uFF08\u63D0\u4EA4\u672A\u751F\u6548\uFF09\u2014\u2014\u8865\u586B\u7F3A\u5931\u5B57\u6BB5\u91CD\u65B0\u63D0\u4EA4\u6210\u529F\u540E\uFF0C\u5220\u9664\u5148\u524D\u843D\u7A7A\u7684\u65E7\u63D0\u4EA4\u6B65\u3002args.ops \u64CD\u4F5C\u6570\u7EC4\uFF0C\u5E8F\u53F7\u4E0E\u672C\u8F6E\u5DE5\u5177\u7ED3\u679C\u91CC\u300C\u5DF2\u8BB0\u5F55\u4E3A\u7B2C N \u6B65\u300D\u7684 N \u4E00\u81F4\uFF081-based\uFF0C\u4EC5\u672C\u8F6E\u751F\u6210\u5185\uFF1B\u53EF\u4FEE\u8BA2\u8303\u56F4\u89C1\u8FD4\u56DE\u7684\u6E05\u5355\uFF09\uFF1A\n- {"op":"update","step":9,"value":"\u65B0\u503C"} \u4FEE\u6539\u7B2C 9 \u6B65\u7684\u586B\u5199\u503C\uFF08\u53EF\u6539 value/key/instruction/expected\uFF0C\u53EA\u6539\u7ED9\u51FA\u7684\u5B57\u6BB5\uFF1Bexpected \u4EC5\u65AD\u8A00\u6B65\uFF09\n- {"op":"delete","from":12,"to":13} \u5220\u9664\u7B2C 12~13 \u6B65\uFF08\u542B\u7AEF\u70B9\uFF1B\u7701\u7565 to = \u53EA\u5220 from\uFF09\nops \u6309\u987A\u5E8F\u6267\u884C\uFF0C\u5148\u5220\u540E\u6539\u4F1A\u4F7F\u540E\u9762\u7684\u5E8F\u53F7\u79FB\u4F4D\uFF08\u4EE5\u8FD4\u56DE\u7684\u6700\u65B0\u6B65\u9AA4\u6E05\u5355\u4E3A\u51C6\uFF09\u3002\u4FEE\u8BA2\u540E\u7EE7\u7EED\u6B63\u5E38\u6267\u884C\u5269\u4F59\u52A8\u4F5C\u3002',
     parameters: {
       type: "object",
       properties: {
@@ -6089,7 +6623,7 @@ ${vocabDesc}`,
   });
   tools.push({
     name: "finish",
-    description: "\u5B8C\u6210\u811A\u672C\u751F\u6210\u3002\u5FC5\u987B\u5DF2\u6709\u81F3\u5C11\u4E00\u6761\u65AD\u8A00\u6B65\u9AA4\uFF08\u672B\u6B65\u4E3A\u65AD\u8A00\uFF09\u3002args.message \u53EF\u9009\u603B\u7ED3\u3002",
+    description: "\u5B8C\u6210\u811A\u672C\u751F\u6210\u3002\u6240\u6709\u5FC5\u9A8C\u76EE\u6807\u5FC5\u987B\u6709\u4E0E\u5F53\u524D\u811A\u672C\u4E00\u81F4\u7684\u5B9E\u9645\u901A\u8FC7\u8BC1\u636E\uFF0C\u4E14\u672B\u6B65\u4E3A\u65AD\u8A00\uFF1B\u4E0D\u80FD\u7528\u603B\u7ED3\u6587\u5B57\u4EE3\u66FF\u9A8C\u8BC1\u3002args.message \u53EF\u9009\u603B\u7ED3\u3002",
     parameters: {
       type: "object",
       properties: { message: { type: "string" } }
@@ -6100,7 +6634,97 @@ ${vocabDesc}`,
       return `\u811A\u672C\u751F\u6210\u5B8C\u6210\u3002${a.message ?? ""}`;
     }
   });
-  return tools;
+  const mutations = /* @__PURE__ */ new Set(["goto", "click", "fill", "press", "check", "select", "act", "component_action", "batch_actions"]);
+  const batchTools = /* @__PURE__ */ new Set(["fill", "check", "select"]);
+  tools.push({
+    name: "batch_actions",
+    description: "\u6279\u91CF\u586B\u5199\u72EC\u7ACB\u5B57\u6BB5\uFF1A\u6700\u591A 6 \u4E2A fill/check/\u539F\u751F select\uFF0C\u9010\u4E2A\u4E32\u884C\u9A8C\u8BC1\u3001\u6267\u884C\u5E76\u4FDD\u5B58\u3002\u5931\u8D25\u3001\u9875\u9762/\u6D6E\u5C42\u53D8\u5316\u3001\u5176\u4ED6\u5B57\u6BB5\u8054\u52A8\u65F6\u7ACB\u5373\u505C\u6B62\uFF0C\u5DF2\u5B8C\u6210\u52A8\u4F5C\u4E0D\u4F1A\u91CD\u505A\u3002\u4E0D\u8981\u6279\u91CF\u64CD\u4F5C\u8054\u52A8\u5B57\u6BB5\u3002",
+    parameters: { type: "object", properties: { actions: { type: "array", minItems: 1, maxItems: 6, items: { type: "object", properties: {
+      action: { type: "string", enum: ["fill", "check", "select"] },
+      selector: { type: "string" },
+      instruction: { type: "string" },
+      value: { type: "string" },
+      checked: { type: "boolean" }
+    }, required: ["action", "selector", "instruction"] } } }, required: ["actions"] },
+    execute: async (args) => {
+      if (!Array.isArray(args.actions) || !args.actions.length || args.actions.length > 6) throw new Error("\u6279\u6B21\u5FC5\u987B\u5305\u542B 1~6 \u4E2A\u52A8\u4F5C");
+      const actions = args.actions;
+      for (const a of actions) {
+        if (!a || !batchTools.has(String(a.action)) || !a.selector || !a.instruction) throw new Error("\u6279\u6B21\u53EA\u80FD\u5305\u542B\u6709\u6548\u7684 fill/check/select");
+        if (a.action === "check" ? typeof a.checked !== "boolean" : typeof a.value !== "string") throw new Error("\u6279\u6B21\u7F3A\u5C11 value/checked");
+      }
+      let before = await captureObservation(ctx.pwPage);
+      const completed = [];
+      for (const [i, action] of actions.entries()) {
+        if (ctx.signal?.aborted) return { status: "uncertain", text: `\u6279\u6B21\u5DF2\u4E2D\u6B62\uFF1B\u5DF2\u5B8C\u6210 ${completed.length} \u9879\uFF1A${completed.join("\uFF1B")}` };
+        let targetId = null;
+        try {
+          const loc = await resolveLocator(ctx, String(action.selector));
+          targetId = await loc.getAttribute("data-tt-idx", { timeout: 1e3 });
+          const result = await runActionShell(ctx, action.action, action);
+          if (typeof result !== "string" && result.status === "failed") throw new Error(result.text);
+          completed.push(`${i + 1}. ${String(action.instruction)}`);
+        } catch (e) {
+          return { status: "failed", text: `\u7B2C ${i + 1} \u9879\u5931\u8D25\uFF1A${String(e)}\u3002\u5DF2\u5B8C\u6210 ${completed.length} \u9879\uFF08\u5DF2\u4FDD\u5B58\uFF0C\u4E0D\u8981\u91CD\u505A\uFF09\uFF1A${completed.join("\uFF1B")}\uFF1B\u5269\u4F59\u672A\u6267\u884C\u3002` };
+        }
+        await waitStableInPage(ctx.pwPage);
+        const after = await captureObservation(ctx.pwPage);
+        if (!targetId || batchBoundary(before, after, targetId)) {
+          return { status: "success", text: `\u6279\u6B21\u5728\u7B2C ${i + 1} \u9879\u540E\u68C0\u6D4B\u5230\u9875\u9762/\u5176\u4ED6\u5B57\u6BB5\u53D8\u5316\uFF0C\u5DF2\u505C\u6B62\u3002\u5DF2\u5B8C\u6210\u5E76\u4FDD\u5B58\uFF1A${completed.join("\uFF1B")}\uFF1B\u5269\u4F59 ${actions.length - completed.length} \u9879\u672A\u6267\u884C\uFF0C\u8BF7\u4F9D\u636E\u65B0\u5FEB\u7167\u91CD\u65B0\u89C4\u5212\u3002` };
+        }
+        before = after;
+      }
+      return { status: "success", text: `\u6279\u6B21\u5B8C\u6210\uFF08\u9010\u9879\u5DF2\u4FDD\u5B58\uFF09\uFF1A${completed.join("\uFF1B")}` };
+    }
+  });
+  return tools.map((tool) => {
+    if (mutations.has(tool.name)) {
+      const props = tool.parameters.properties ?? {};
+      tool.parameters = { ...tool.parameters, properties: { ...props, snapshotVersion: { type: "string", description: "\u4F7F\u7528\u7F16\u53F7\u65F6\u4F20\u6700\u65B0\u5FEB\u7167\u7248\u672C\uFF1B\u9875\u9762\u53D8\u5316\u540E\u65E7\u7248\u672C\u4F1A\u88AB\u62D2\u7EDD" } } };
+    }
+    return { ...tool, execute: async (args) => {
+      if (ctx.signal?.aborted) throw new Error("\u64CD\u4F5C\u5DF2\u4E2D\u6B62");
+      const mutating = mutations.has(tool.name);
+      const before = mutating ? await captureObservation(ctx.pwPage).catch(() => null) : null;
+      if (mutating && args.snapshotVersion != null && (!before || args.snapshotVersion !== before.version)) throw new Error("\u5FEB\u7167\u7248\u672C\u5DF2\u8FC7\u671F\uFF0C\u8BF7\u83B7\u53D6\u65B0\u5FEB\u7167\u540E\u91CD\u65B0\u89C4\u5212");
+      const targetId = before && args.selector ? await ctx.pwPage.locator(semanticSource(sub(ctx, String(args.selector)) ?? String(args.selector))).getAttribute("data-tt-idx", { timeout: 200 }).catch(() => null) : null;
+      const countBefore = ctx.stepCount();
+      let result;
+      try {
+        result = await tool.execute(args);
+      } catch (error) {
+        if (!mutating) throw new Error(redactGenerationText(ctx.jobId, String(error)));
+        result = { status: "failed", text: redactGenerationText(ctx.jobId, String(error)) };
+      }
+      if (mutating) {
+        const data = typeof result === "string" ? { status: "success", text: result } : result;
+        try {
+          if (before && !ctx.signal?.aborted) await waitStableInPage(ctx.pwPage);
+          const after = await captureObservation(ctx.pwPage);
+          ctx.lastObservation = after;
+          ctx.snapshotVersion = after.version;
+          data.progressed = before ? stateFingerprint(before) !== stateFingerprint(after) : false;
+          data.effect = data.progressed ? "observed" : "unknown";
+          data.stateFingerprint = stateFingerprint(after);
+          data.observation = observationText(after);
+          data.observationKind = "snapshot";
+          if (before) data.resetFields = Object.keys(before.values).filter((id) => id !== (targetId ?? String(args.selector)) && id in after.values && before.values[id] !== after.values[id] && /value=\S|checked=true/.test(before.values[id]));
+        } catch {
+          data.progressed = false;
+          data.effect = "unknown";
+        }
+        const recorded = ctx.stepCount() - countBefore;
+        if (recorded > 0) data.text += ` \u672C\u6B21\u5171\u8BB0\u5F55 ${recorded} \u6B65\u3002`;
+        if (!data.progressed && data.status !== "failed") data.text += " \u5C1A\u672A\u786E\u8BA4\u72B6\u6001\u53D8\u5316\uFF1B\u8BF7\u68C0\u67E5\u7ED3\u679C\uFF0C\u4E0D\u8981\u76F4\u63A5\u91CD\u590D\u63D0\u4EA4\u3002";
+        result = data;
+      } else if (["snapshot", "page_tree", "readText", "api"].includes(tool.name)) {
+        const state = tool.name === "snapshot" ? ctx.lastObservation : await captureObservation(ctx.pwPage).catch(() => null);
+        result = { text: typeof result === "string" ? result : result.text, stateFingerprint: state ? stateFingerprint(state) : void 0 };
+      }
+      if (typeof result !== "string" && result.status === "failed" && ctx.stepCount() === countBefore && tool.name !== "select" && tool.name !== "component_action" && tool.name !== "act" && tool.name !== "batch_actions") throw new Error(redactGenerationText(ctx.jobId, result.text));
+      return redactGenerationData(ctx.jobId, result);
+    } };
+  });
 }
 async function invokeInPage(ctx, pluginId, action, handle, args) {
   const run = ctx.pwPage.evaluate(
@@ -6157,7 +6781,7 @@ async function verifyChainInPage(ctx, chain, action, handle, args) {
   }
 }
 async function emitSemanticActionStep(ctx, action, selector, instruction, winner, rawValue, extraArgs, pre) {
-  const sem = pre ?? await semanticizeLocator(ctx.pwPage, semanticSource(selector), { mode: "playwright" }).catch(() => null);
+  const sem = pre ?? await semanticizeLocator(ctx.pwPage, semanticSource(sub(ctx, selector) ?? selector), { mode: "playwright" }).catch(() => null);
   if (!sem) return null;
   return ctx.emit(
     buildPluginActionStep(action, sem, instruction, {
@@ -6177,21 +6801,36 @@ async function runComponentAction(ctx, a) {
   const instruction = String(a.instruction ?? "").trim() || action;
   const entry = ctx.pluginActions.find((v) => v.name === action);
   if (!entry) {
-    return `\u9519\u8BEF\uFF1A\u672A\u6CE8\u518C\u7684\u8BED\u4E49\u52A8\u4F5C\u300C${action}\u300D\u3002\u53EF\u7528\u52A8\u4F5C\uFF1A${ctx.pluginActions.map((v) => v.name).join("\u3001") || "\uFF08\u65E0\uFF09"}\u3002`;
+    return { status: "failed", text: `\u9519\u8BEF\uFF1A\u672A\u6CE8\u518C\u7684\u8BED\u4E49\u52A8\u4F5C\u300C${action}\u300D\u3002\u53EF\u7528\u52A8\u4F5C\uFF1A${ctx.pluginActions.map((v) => v.name).join("\u3001") || "\uFF08\u65E0\uFF09"}\u3002` };
   }
-  const loc = await resolveLocator(ctx, selector);
-  const handle = await loc.elementHandle({ timeout: 8e3 }).catch(() => null);
-  if (!handle) return `\u9519\u8BEF\uFF1A\u672A\u627E\u5230\u76EE\u6807\u5143\u7D20\uFF08${selector}\uFF09\u3002\u8BF7\u91CD\u65B0 snapshot \u786E\u8BA4\u7F16\u53F7\u540E\u91CD\u8BD5\u3002`;
-  const semPre = await semanticizeLocator(ctx.pwPage, semanticSource(selector), { mode: "playwright", noRawFallback: true }).catch(() => null);
-  const rawValue = a.value != null ? String(a.value) : void 0;
+  const extraArgs = a.args && typeof a.args === "object" ? { ...a.args } : {};
+  const providedValue = a.value ?? extraArgs.value;
+  const indexed = action === "select" && extraArgs.index != null;
+  if (action === "select") {
+    if (indexed && (!Number.isInteger(extraArgs.index) || Number(extraArgs.index) < 0)) {
+      return { status: "failed", text: "select \u53C2\u6570\u9519\u8BEF\uFF1Aargs.index \u5FC5\u987B\u4E3A\u975E\u8D1F\u6574\u6570\uFF080=\u7B2C\u4E00\u9879\uFF0C1=\u7B2C\u4E8C\u9879\uFF09\u3002\u672C\u6B65\u672A\u6267\u884C\u3002" };
+    }
+    if (indexed && providedValue != null) {
+      return { status: "failed", text: "select \u53C2\u6570\u51B2\u7A81\uFF1Avalue \u4E0E args.index \u53EA\u80FD\u4E8C\u9009\u4E00\u3002\u672C\u6B65\u672A\u6267\u884C\uFF0C\u8BF7\u4FEE\u6B63\u53C2\u6570\u540E\u91CD\u8BD5\u672C\u52A8\u4F5C\u3002" };
+    }
+    if (!indexed && (typeof providedValue !== "string" || !providedValue.trim())) {
+      return { status: "failed", text: "select \u7F3A\u5C11 value\uFF08\u9009\u9879\u6587\u672C\uFF09\u3002\u82E5\u76EE\u6807\u662F\u7B2C\u4E00\u9879\uFF0C\u8BF7\u4FDD\u6301 action\u3001selector \u4E0D\u53D8\uFF0C\u8865\u4E0A args:{index:0} \u91CD\u8BD5\uFF1B\u82E5\u5DF2\u77E5\u540D\u79F0\uFF0C\u8BF7\u8865\u4E0A value\u3002instruction \u4EC5\u7528\u4E8E\u63CF\u8FF0\uFF0C\u4E0D\u4F1A\u81EA\u52A8\u89E3\u6790\u4E3A\u9009\u9879\u3002\u672C\u6B65\u672A\u6267\u884C\uFF0C\u65E0\u9700\u5148\u70B9\u51FB\u5C55\u5F00\u6216\u4F7F\u7528 act\u3002" };
+    }
+  }
+  let rawValue = providedValue != null ? String(providedValue) : void 0;
   const value = sub(ctx, rawValue);
-  const extraArgs = a.args && typeof a.args === "object" ? a.args : {};
+  delete extraArgs.value;
+  const loc = await resolveLocator(ctx, selector, a.snapshotVersion);
+  const handle = await loc.elementHandle({ timeout: 8e3 }).catch(() => null);
+  if (!handle) return { status: "failed", text: `\u9519\u8BEF\uFF1A\u672A\u627E\u5230\u76EE\u6807\u5143\u7D20\uFF08${selector}\uFF09\u3002\u8BF7\u91CD\u65B0 snapshot \u786E\u8BA4\u7F16\u53F7\u540E\u91CD\u8BD5\u3002` };
+  const semPre = await semanticizeLocator(ctx.pwPage, semanticSource(sub(ctx, selector) ?? selector), { mode: "playwright", noRawFallback: true }).catch(() => null);
+  if (!semPre) return { status: "failed", text: "\u65E0\u6CD5\u5728\u64CD\u4F5C\u524D\u751F\u6210\u53EF\u9760\u5B9A\u4F4D\u5668\uFF0C\u672C\u6B65\u672A\u6267\u884C\u3002\u8BF7\u91CD\u65B0 snapshot \u5B9A\u4F4D\u3002" };
   const actionArgs = { ...extraArgs, ...value != null ? { value } : {} };
   const beforeHash = await shotHash(ctx.pwPage).catch(() => null);
   const finishOk = async (winner, message) => {
     const oc = await emitSemanticActionStep(ctx, action, selector, instruction, winner, rawValue, extraArgs, semPre);
     ctx.note(`${instruction}\uFF08${action}${winner ? ` via ${winner}` : ""}\uFF09`);
-    return `${message}\u3002${oc ? \u843D\u5E93\u63D0\u793A(ctx, oc) : `\uFF08\u8BED\u4E49\u5B9A\u4F4D\u5931\u8D25\uFF0C\u672C\u6B65\u672A\u843D\u5E93\uFF09`}`;
+    return oc ? `${message}\u3002${\u843D\u5E93\u63D0\u793A(ctx, oc)}` : { status: "uncertain", text: `${message}\u3002\uFF08\u8BED\u4E49\u5B9A\u4F4D\u5931\u8D25\uFF0C\u672C\u6B65\u672A\u843D\u5E93\uFF0C\u8BF7\u5148\u786E\u8BA4\u9875\u9762\u72B6\u6001\u5E76\u8BF7\u6C42\u4EBA\u5DE5\u534F\u52A9\uFF0C\u4E0D\u8981\u91CD\u590D\u6267\u884C\uFF09` };
   };
   if (entry.preferFill && value != null) {
     try {
@@ -6218,8 +6857,15 @@ async function runComponentAction(ctx, a) {
   for (const hit of chain) {
     attempted.push(hit.id);
     const result = await invokeInPage(ctx, hit.id, action, handle, actionArgs).catch((e) => ({ status: "failed", message: String(e) }));
-    if (result.status === "success") return await finishOk(hit.id, result.message || `\u5DF2\u7531\u63D2\u4EF6 ${hit.id} \u5B8C\u6210`);
-    if (result.status === "uncertain") {
+    if (result.status === "success") {
+      if (indexed) {
+        if (!result.resolvedValue?.trim()) return { status: "uncertain", text: "\u63D2\u4EF6\u672A\u8FD4\u56DE\u6309\u5E8F\u9009\u62E9\u7684\u5B9E\u9645\u6587\u672C\uFF0C\u65E0\u6CD5\u4FDD\u5B58\u53EF\u56DE\u653E\u6B65\u9AA4\u3002\u8BF7\u786E\u8BA4\u9875\u9762\u72B6\u6001\u5E76\u8BF7\u6C42\u4EBA\u5DE5\u534F\u52A9\uFF0C\u4E0D\u8981\u91CD\u590D\u6267\u884C\u3002" };
+        rawValue = result.resolvedValue;
+        delete extraArgs.index;
+      }
+      return await finishOk(hit.id, result.message || `\u5DF2\u7531\u63D2\u4EF6 ${hit.id} \u5B8C\u6210`);
+    }
+    if (result.status === "uncertain" && !indexed) {
       await new Promise((r) => setTimeout(r, 300));
       const afterHash = await shotHash(ctx.pwPage).catch(() => null);
       if (beforeHash && afterHash && effectChanged(beforeHash, afterHash)) {
@@ -6231,7 +6877,22 @@ async function runComponentAction(ctx, a) {
   let nativeMessage = "";
   try {
     if (action === "select") {
-      await loc.selectOption(String(value ?? ""));
+      const native = await handle.evaluate((el) => el.tagName === "SELECT");
+      if (!native) throw new Error("\u5DF2\u8DF3\u8FC7\u539F\u751F selectOption\uFF1A\u76EE\u6807\u4E0D\u662F\u539F\u751F <select>\uFF0C\u8BF7\u4FEE\u6B63\u9009\u62E9\u53C2\u6570\u6216\u68C0\u67E5\u63D2\u4EF6\u9002\u914D");
+      if (indexed) {
+        const option = await handle.evaluate((el, requestedIndex) => {
+          const indices = Array.from(el.options).map((o, index) => ({ o, index })).filter(({ o }) => !o.disabled && !o.closest("optgroup[disabled]") && !o.hidden && getComputedStyle(o).display !== "none" && getComputedStyle(o).visibility !== "hidden" && o.value !== "");
+          const option2 = indices[requestedIndex];
+          return option2 ? { index: option2.index, value: option2.o.value } : null;
+        }, Number(extraArgs.index));
+        if (!option) throw new Error("args.index \u8D85\u51FA\u53EF\u9009\u8303\u56F4\uFF08\u5DF2\u6392\u9664\u7981\u7528\u3001\u9690\u85CF\u548C\u7A7A\u503C\u5360\u4F4D\u9879\uFF09\uFF0C\u8BF7\u4FEE\u6B63\u7D22\u5F15\u540E\u91CD\u8BD5\u672C\u52A8\u4F5C");
+        await loc.selectOption({ index: option.index });
+        rawValue = option.value;
+        actionArgs.value = option.value;
+        delete extraArgs.index;
+      } else {
+        await loc.selectOption(String(value ?? ""));
+      }
     } else if (value != null) {
       await loc.fill(String(value ?? ""));
     } else {
@@ -6250,8 +6911,8 @@ async function runComponentAction(ctx, a) {
     chainMessage.trim() ? `\u63D2\u4EF6\u94FE\uFF1A${chainMessage.trim()}` : "",
     nativeMessage.trim() ? `\u539F\u751F\u4EA4\u4E92\uFF1A${nativeMessage.trim()}` : ""
   ].filter(Boolean).join("\uFF1B");
-  const guide = /（当前(可选|可见)：/.test(chainMessage) ? "\u8BF7\u4ECE\u4E0A\u65B9\u300C\u5F53\u524D\u53EF\u9009/\u5F53\u524D\u53EF\u89C1\u300D\u6E05\u5355\u4E2D\u53D6\u6B63\u786E\u6587\u672C\uFF0C\u4EC5\u4FEE\u6B63 args.value \u91CD\u8BD5\u672C\u52A8\u4F5C\uFF08\u5176\u4F59\u53C2\u6570\u4E0D\u53D8\uFF09\uFF0C\u4E0D\u8981\u6539\u7528\u4E24\u6BB5\u5F0F\u70B9\u51FB\u6216 act\u3002" : /禁用/.test(chainMessage) ? "\u8BE5\u503C\u683C\u5F0F\u5408\u6CD5\u4F46\u88AB\u5E94\u7528\u89C4\u5219\u7981\u7528\uFF08\u5982\u65E5\u671F\u4E0D\u53EF\u65E9\u4E8E\u4ECA\u5929\uFF09\uFF0C\u8BF7\u4EC5\u4FEE\u6B63 args.value \u4E3A\u53EF\u7528\u503C\uFF08\u5982\u672A\u6765\u65E5\u671F\uFF09\u91CD\u8BD5\u672C\u52A8\u4F5C\uFF08\u5176\u4F59\u53C2\u6570\u4E0D\u53D8\uFF09\u3002" : "\u8BF7 snapshot \u786E\u8BA4\u5F53\u524D\u9875\u9762\u72B6\u6001\u540E\u6362\u8DEF\u5F84\uFF08\u4E24\u6BB5\u5F0F\u70B9\u51FB\u3001\u4FEE\u6B63\u53C2\u6570\u6216 act\uFF09\u3002";
-  return `\u9519\u8BEF\uFF1A\u8BED\u4E49\u52A8\u4F5C ${action} \u5168\u94FE\u5931\u8D25\uFF08\u5C1D\u8BD5\u987A\u5E8F\uFF1A${attempted.join(" \u2192 ") || "\u65E0\u5339\u914D\u63D2\u4EF6"}\uFF09\u3002${(detail || "\u65E0\u9519\u8BEF\u4FE1\u606F").slice(0, 300)}\u3002${guide}`;
+  const guide = indexed ? "\u8BF7\u4FEE\u6B63 args.index\uFF0C\u6216\u4ECE\u5F53\u524D\u53EF\u9009\u6E05\u5355\u53D6\u5177\u4F53\u6587\u672C\u4F5C\u4E3A value \u5E76\u79FB\u9664 args.index \u540E\u91CD\u8BD5\u672C\u52A8\u4F5C\uFF1B\u4E0D\u8981\u91CD\u590D\u76F8\u540C\u53C2\u6570\u6216\u6539\u7528 act\u3002" : /缺少.*value/.test(chainMessage) ? "\u8BE5\u63D2\u4EF6\u9700\u8981\u5177\u4F53\u9009\u9879\u6587\u672C\uFF1B\u8BF7\u8865\u4E0A value \u5E76\u79FB\u9664 args.index \u540E\u91CD\u8BD5\u672C\u52A8\u4F5C\uFF0C\u4E0D\u8981\u91CD\u590D\u7F3A\u53C2\u8C03\u7528\u3002" : /（当前(可选|可见)：/.test(chainMessage) ? "\u8BF7\u4ECE\u4E0A\u65B9\u300C\u5F53\u524D\u53EF\u9009/\u5F53\u524D\u53EF\u89C1\u300D\u6E05\u5355\u4E2D\u53D6\u6B63\u786E\u6587\u672C\uFF0C\u4EC5\u4FEE\u6B63 args.value \u91CD\u8BD5\u672C\u52A8\u4F5C\uFF08\u5176\u4F59\u53C2\u6570\u4E0D\u53D8\uFF09\uFF0C\u4E0D\u8981\u6539\u7528\u4E24\u6BB5\u5F0F\u70B9\u51FB\u6216 act\u3002" : /禁用/.test(chainMessage) ? "\u8BE5\u503C\u683C\u5F0F\u5408\u6CD5\u4F46\u88AB\u5E94\u7528\u89C4\u5219\u7981\u7528\uFF08\u5982\u65E5\u671F\u4E0D\u53EF\u65E9\u4E8E\u4ECA\u5929\uFF09\uFF0C\u8BF7\u4EC5\u4FEE\u6B63 args.value \u4E3A\u53EF\u7528\u503C\uFF08\u5982\u672A\u6765\u65E5\u671F\uFF09\u91CD\u8BD5\u672C\u52A8\u4F5C\uFF08\u5176\u4F59\u53C2\u6570\u4E0D\u53D8\uFF09\u3002" : "\u8BF7 snapshot \u786E\u8BA4\u5F53\u524D\u9875\u9762\u72B6\u6001\u540E\u6362\u8DEF\u5F84\uFF08\u4E24\u6BB5\u5F0F\u70B9\u51FB\u3001\u4FEE\u6B63\u53C2\u6570\u6216 act\uFF09\u3002";
+  return { status: "failed", text: `\u9519\u8BEF\uFF1A\u8BED\u4E49\u52A8\u4F5C ${action} \u5168\u94FE\u5931\u8D25\uFF08\u5C1D\u8BD5\u987A\u5E8F\uFF1A${attempted.join(" \u2192 ") || "\u65E0\u5339\u914D\u63D2\u4EF6"}\uFF09\u3002${(detail || "\u65E0\u9519\u8BEF\u4FE1\u606F").slice(0, 300)}\u3002${guide}` };
 }
 
 // src/services/networkCaptureService.ts
@@ -6532,25 +7193,25 @@ var GEN_OBSERVATION_TOOLS = /* @__PURE__ */ new Set(["snapshot", "page_tree", "w
 var GEN_LOOP_SYSTEM_PROMPT = `\u4F60\u662F Web \u6D4B\u8BD5\u811A\u672C\u751F\u6210 Agent\uFF1A\u901A\u8FC7\u8C03\u7528\u5DE5\u5177\u5728\u771F\u5B9E\u6D4F\u89C8\u5668\u91CC\u5B8C\u6210\u6D4B\u8BD5\u76EE\u6807\uFF0C\u6BCF\u4E00\u6B65\u6210\u529F\u64CD\u4F5C\u90FD\u4F1A\u81EA\u52A8\u8BB0\u5F55\u4E3A\u811A\u672C\u6B65\u9AA4\u3002
 
 \u64CD\u4F5C\u89C4\u8303\uFF1A
-1. \u52A8\u624B\u524D\u5148\u8C03\u7528 snapshot \u83B7\u53D6\u53EF\u4EA4\u4E92\u5143\u7D20\u7F16\u53F7\u8868\uFF1B\u9875\u9762\u53D1\u751F\u53D8\u5316\uFF08\u5BFC\u822A/\u5F39\u5C42/\u65B0\u589E\u5185\u5BB9\uFF09\u540E\u5FC5\u987B\u91CD\u65B0 snapshot\u3002\u4EC5\u9700\u786E\u8BA4\u9875\u9762\u72B6\u6001/\u67E5\u770B\u89C6\u89C9\u7EBF\u7D22\uFF08toast/\u5F39\u5C42/\u6E32\u67D3\u95EE\u9898\uFF09\u65F6\uFF0C\u4F18\u5148\u7528 see\uFF08\u622A\u56FE\u76F4\u8FBE\u3001\u66F4\u7701\uFF09\uFF1B\u56FE\u4E0A\u770B\u4E0D\u6E05\u6216\u627E\u4E0D\u5230\u76EE\u6807\u518D\u56DE\u5230 snapshot\u3002
-2. \u5143\u7D20\u5F15\u7528\uFF1A\u5DE5\u5177\u7684 selector \u53C2\u6570\u586B snapshot \u7F16\u53F7\u8868\u91CC\u7684\u5143\u7D20\u7F16\u53F7\uFF08\u5982 "12"\uFF09\uFF1B\u7F16\u53F7\u53EA\u5728\u6700\u65B0\u4E00\u6B21 snapshot \u540E\u6709\u6548\u3002\u7F16\u53F7\u8868\u91CC\u627E\u4E0D\u5230\u76EE\u6807\u3001\u6216\u9700\u8981\u9875\u9762\u5C42\u7EA7\u7ED3\u6784\u65F6\uFF0C\u624D\u8C03\u7528 page_tree \u83B7\u53D6\u5B8C\u6574\u8BED\u4E49\u6811\uFF08\u4F53\u79EF\u5927\uFF0C\u4E0D\u8981\u53CD\u590D\u8C03\u7528\uFF09\uFF1B\u6811\u5185\u7F16\u53F7\u4E0D\u80FD\u7528\u4F5C selector\u3002
+1. \u9996\u6B21\u52A8\u624B\u524D\u83B7\u53D6 snapshot\u3002\u52A8\u4F5C\u7ED3\u679C\u82E5\u5DF2\u9644\u6700\u65B0\u5FEB\u7167\uFF0C\u76F4\u63A5\u636E\u6B64\u7EE7\u7EED\uFF0C\u4E0D\u8981\u91CD\u590D\u89C2\u5BDF\u3002\u5FEB\u7167\u9ED8\u8BA4\u805A\u7126\u6D6E\u5C42/\u89C6\u53E3\uFF0C\u627E\u4E0D\u5230\u76EE\u6807\u7528 scope=page + query\uFF1B\u5B57\u6BB5\u72B6\u6001\u548C\u6821\u9A8C\u4F18\u5148\u770B\u6587\u672C\uFF0C\u89C6\u89C9\u95EE\u9898\u518D\u7528 see\u3002
+2. \u72EC\u7ACB\u5B57\u6BB5\u53EF\u7528 batch_actions \u4E00\u6B21\u89C4\u5212\u591A\u4E2A fill/check/select\uFF0C\u5BBF\u4E3B\u4E32\u884C\u6267\u884C\u5E76\u5728\u53D8\u5316\u65F6\u505C\u6B62\uFF1B\u6309\u8FD4\u56DE\u7684\u5DF2\u5B8C\u6210\u6E05\u5355\u7EE7\u7EED\uFF0C\u4E0D\u91CD\u505A\u3002\u8054\u52A8\u5B57\u6BB5\u3001\u63D0\u4EA4\u548C\u5F39\u7A97\u5207\u6362\u5355\u6B65\u5904\u7406\u3002act \u515C\u5E95\u4E00\u6B21\u53EA\u6267\u884C\u4E00\u4E2A\u6700\u5339\u914D\u5019\u9009\uFF0C\u590D\u5408\u76EE\u6807\u6839\u636E\u65B0\u72B6\u6001\u7EE7\u7EED\u3002\u53D6\u6D88\u52FE\u9009\u660E\u786E\u4F20 checked=false\u3002\u5143\u7D20\u5F15\u7528\uFF1A\u5DE5\u5177\u7684 selector \u53C2\u6570\u586B snapshot \u7F16\u53F7\u8868\u91CC\u7684\u5143\u7D20\u7F16\u53F7\uFF08\u5982 "12"\uFF09\uFF1B\u4F7F\u7528\u7F16\u53F7\u65F6\u643A\u5E26\u5BF9\u5E94 snapshotVersion\uFF1B\u65E7\u7248\u672C\u4F1A\u88AB\u62D2\u7EDD\u3002\u7F16\u53F7\u8868\u91CC\u627E\u4E0D\u5230\u76EE\u6807\u3001\u6216\u9700\u8981\u9875\u9762\u5C42\u7EA7\u7ED3\u6784\u65F6\uFF0C\u624D\u8C03\u7528 page_tree \u83B7\u53D6\u5B8C\u6574\u8BED\u4E49\u6811\uFF08\u4F53\u79EF\u5927\uFF0C\u4E0D\u8981\u53CD\u590D\u8C03\u7528\uFF09\uFF1B\u6811\u5185\u7F16\u53F7\u4E0D\u80FD\u7528\u4F5C selector\u3002
 3. \u6BCF\u4E2A\u52A8\u4F5C\u5DE5\u5177\u7684 instruction \u5FC5\u586B\uFF1A\u5199\u4E00\u53E5\u81EA\u7136\u8BED\u8A00\u63CF\u8FF0\uFF08\u5982\u300C\u70B9\u51FB\u767B\u5F55\u6309\u94AE\u300D\uFF09\uFF0C\u5B83\u4F1A\u88AB\u4FDD\u5B58\u8FDB\u811A\u672C\u7528\u4E8E\u56DE\u653E\u81EA\u6108\u3002
-4. \u7EC4\u4EF6\u5E93\u5047\u63A7\u4EF6\uFF08antd/element \u7684\u4E0B\u62C9\u3001\u65E5\u671F\u9762\u677F\u7B49\uFF09\u4E0D\u662F\u539F\u751F\u63A7\u4EF6\uFF1A\u4E0D\u8981\u5BF9\u4E0B\u62C9\u89E6\u53D1\u5668\u7528 fill/select \u539F\u751F\u65B9\u5F0F\uFF1B\u82E5\u53EF\u7528\u5DE5\u5177\u4E2D\u6709 component_action\uFF08\u7EC4\u4EF6\u8BED\u4E49\u52A8\u4F5C\uFF0C\u5982\u9009\u62E9\u4E0B\u62C9\u9009\u9879\u3001\u8BBE\u7F6E\u65E5\u671F\uFF09\uFF0C\u4F18\u5148\u4F7F\u7528\u5B83\u3002
+4. \u7EC4\u4EF6\u5E93\u5047\u63A7\u4EF6\uFF08antd/element \u7684\u4E0B\u62C9\u3001\u65E5\u671F\u9762\u677F\u7B49\uFF09\u4E0D\u662F\u539F\u751F\u63A7\u4EF6\uFF1A\u4E0D\u8981\u5BF9\u4E0B\u62C9\u89E6\u53D1\u5668\u7528 fill/select \u539F\u751F\u65B9\u5F0F\uFF1B\u82E5\u53EF\u7528\u5DE5\u5177\u4E2D\u6709 component_action\uFF08\u7EC4\u4EF6\u8BED\u4E49\u52A8\u4F5C\uFF0C\u5982\u9009\u62E9\u4E0B\u62C9\u9009\u9879\u3001\u8BBE\u7F6E\u65E5\u671F\uFF09\uFF0C\u4F18\u5148\u4F7F\u7528\u5B83\u3002select \u5FC5\u987B\u4F20\u5177\u4F53 value\uFF0C\u6216\u5BF9 Ant Design\u3001Element \u666E\u901A\u4E0B\u62C9/\u539F\u751F select \u4F20 args.index\uFF080=\u7B2C\u4E00\u9879\uFF0C1=\u7B2C\u4E8C\u9879\uFF0C\u4E0E value \u4E8C\u9009\u4E00\uFF09\uFF1Binstruction \u4E0D\u4EE3\u66FF\u53C2\u6570\u3002\u6309\u5E8F\u9009\u62E9\u65E0\u9700\u5148\u5C55\u5F00\u6216\u622A\u56FE\u8BC6\u522B\u540D\u79F0\uFF0C\u76F4\u63A5\u8C03\u7528\u7EC4\u4EF6\u52A8\u4F5C\u3002\u53C2\u6570\u9519\u8BEF\u53EA\u4FEE\u6B63\u53C2\u6570\u540E\u91CD\u8BD5\u672C\u52A8\u4F5C\u3002
 5. \u53EF\u8F93\u5165\u63A7\u4EF6\uFF08\u65E5\u671F\u8F93\u5165\u6846\u7B49\uFF09\u76F4\u63A5\u7528 fill \u586B\u503C\uFF08\u5982\u65E5\u671F 2026-05-04\uFF09\uFF0C\u4E0D\u8981\u9010\u683C\u70B9\u51FB\u3002
 6. wait \u5DE5\u5177\u7528\u4E8E\u7B49\u5F85\u5F39\u5C42\u52A8\u753B/\u52A0\u8F7D\u7ED3\u675F\uFF08\u591A\u5E27\u7A33\u5B9A\u5224\u5B9A\uFF09\uFF0C\u4E0D\u8981\u76F2\u76EE\u8FDE\u7EED\u70B9\u51FB\u3002
 7. \u9047\u5230\u9519\u8BEF\u4E0D\u8981\u91CD\u590D\u540C\u4E00\u64CD\u4F5C\uFF1A\u5148 snapshot \u67E5\u770B\u5F53\u524D\u72B6\u6001\uFF0C\u6362\u8DEF\u5F84\u6216\u8C03\u6574\u53C2\u6570\uFF1B\u8FDE\u7EED\u5931\u8D25\u4F1A\u8BF7\u6C42\u4EBA\u5DE5\u534F\u52A9\u3002\u5DF2\u6210\u529F\u6267\u884C\u7684\u6B65\u9AA4\u90FD\u4F1A\u81EA\u52A8\u8BB0\u5F55\u4E3A\u811A\u672C\u6B65\u9AA4\uFF0C\u4E0D\u8981\u91CD\u505A\u2014\u2014\u91CD\u590D\u767B\u5F55/\u91CD\u590D\u63D0\u4EA4\u53EA\u4F1A\u4EA7\u751F\u5197\u4F59\u6B65\u9AA4\u3001\u8FD8\u53EF\u80FD\u7834\u574F\u5F53\u524D\u9875\u9762\u72B6\u6001\u3002
-8. \u7EA7\u8054/\u8054\u52A8\u4E0B\u62C9\uFF1A\u82E5\u9009\u62E9\u67D0\u5B57\u6BB5\u540E\u53E6\u4E00\u4E2A\u5B57\u6BB5\u7684\u503C\u88AB\u9875\u9762\u6E05\u7A7A/\u56DE\u8BBE\uFF0C\u8BF4\u660E\u4E24\u8005\u662F\u8054\u52A8\u5B57\u6BB5\u3001\u6240\u9009\u7EC4\u5408\u4E0D\u88AB\u9875\u9762\u63A5\u53D7\u2014\u2014\u5148\u9009\u7236\u5B57\u6BB5\uFF08\u5982\u90E8\u95E8\uFF09\uFF0C\u518D\u6253\u5F00\u5B50\u5B57\u6BB5\u4E0B\u62C9\u3001\u4ECE\u5F53\u524D\u53EF\u9009\u5217\u8868\u91CC\u9009\u62E9\u5339\u914D\u7684\u5B50\u9879\uFF08\u5982\u8BE5\u90E8\u95E8\u4E0B\u7684\u8D26\u53F7\uFF09\uFF1B\u82E5\u9009\u5B8C\u5B50\u9879\u7236\u5B57\u6BB5\u4ECD\u88AB\u6253\u56DE\uFF0C\u6362\u5B50\u5B57\u6BB5\u5F53\u524D\u53EF\u9009\u5217\u8868\u91CC\u7684\u5176\u4ED6\u9009\u9879\uFF0C\u6216\u8C03\u7528 ask_human \u8BF4\u660E\u8054\u52A8\u73B0\u8C61\u8BF7\u7528\u6237\u786E\u8BA4\u76EE\u6807\u7EC4\u5408\uFF1B\u4E0D\u8981\u4EA4\u66FF\u53CD\u590D\u91CD\u8BBE\u4E24\u4E2A\u4E92\u76F8\u6253\u56DE\u7684\u5B57\u6BB5\u3002
+8. \u7EA7\u8054/\u8054\u52A8\u4E0B\u62C9\uFF1A\u82E5\u9009\u62E9\u67D0\u5B57\u6BB5\u540E\u53E6\u4E00\u4E2A\u5B57\u6BB5\u7684\u503C\u88AB\u9875\u9762\u6E05\u7A7A/\u56DE\u8BBE\uFF0C\u53EF\u80FD\u5B58\u5728\u8054\u52A8\u3001\u5F02\u6B65\u52A0\u8F7D\u6216\u4EA7\u54C1\u7F3A\u9677\uFF0C\u4E0D\u80FD\u636E\u6B64\u8BA4\u5B9A\u7EC4\u5408\u65E0\u6548\u3002\u5148\u68C0\u67E5\u6821\u9A8C\u4FE1\u606F\u548C\u9700\u6C42\u2014\u2014\u5148\u9009\u7236\u5B57\u6BB5\uFF08\u5982\u90E8\u95E8\uFF09\uFF0C\u518D\u6253\u5F00\u5B50\u5B57\u6BB5\u4E0B\u62C9\u3001\u4ECE\u5F53\u524D\u53EF\u9009\u5217\u8868\u91CC\u9009\u62E9\u5339\u914D\u7684\u5B50\u9879\uFF08\u5982\u8BE5\u90E8\u95E8\u4E0B\u7684\u8D26\u53F7\uFF09\uFF1B\u82E5\u9009\u5B8C\u5B50\u9879\u7236\u5B57\u6BB5\u4ECD\u88AB\u6253\u56DE\uFF0C\u6362\u5B50\u5B57\u6BB5\u5F53\u524D\u53EF\u9009\u5217\u8868\u91CC\u7684\u5176\u4ED6\u9009\u9879\uFF0C\u6216\u8C03\u7528 ask_human \u8BF4\u660E\u8054\u52A8\u73B0\u8C61\u8BF7\u7528\u6237\u786E\u8BA4\u76EE\u6807\u7EC4\u5408\uFF1B\u4E0D\u8981\u4EA4\u66FF\u53CD\u590D\u91CD\u8BBE\u4E24\u4E2A\u4E92\u76F8\u6253\u56DE\u7684\u5B57\u6BB5\u3002
 9. \u611F\u5230\u56F0\u60D1\u65F6\u4E0D\u8981\u53CD\u590D\u8BD5\u9519\uFF0C\u7ACB\u5373\u8C03\u7528 ask_human \u4E3B\u52A8\u5411\u7528\u6237\u6C42\u52A9\uFF08\u6302\u8D77\u751F\u6210\u3001\u7B49\u5F85\u4EBA\u5DE5\u51B3\u7B56\uFF09\u3002\u4EE5\u4E0B\u60C5\u51B5\u89C6\u4E3A\u56F0\u60D1\uFF1A\u6362\u8FC7\u4E0D\u540C\u65B9\u5F0F\u4ECD\u65E0\u6CD5\u8FBE\u6210\u76EE\u6807\u3001\u9875\u9762\u72B6\u6001\u4E0E\u9884\u671F\u4E0D\u7B26\u4E14\u770B\u4E0D\u51FA\u539F\u56E0\u3001\u7F16\u53F7\u8868\u548C\u7ED3\u6784\u6811\u91CC\u90FD\u627E\u4E0D\u5230\u76EE\u6807\u5143\u7D20\u3001\u6216\u4E0B\u4E00\u6B65\u53EA\u80FD\u662F\u91CD\u590D\u4E4B\u524D\u5DF2\u505A\u8FC7\u7684\u64CD\u4F5C\u3002args.question \u7B80\u8FF0\u56F0\u60D1\u70B9\u4E0E\u5DF2\u5C1D\u8BD5\u7684\u505A\u6CD5\uFF0C\u7528\u6237\u4F1A\u636E\u6B64\u7ED9\u51FA\u8865\u5145\u8BF4\u660E\u3001AI \u4FEE\u6B63\u3001\u624B\u52A8\u5B8C\u6210\u6216\u8DF3\u8FC7\u3002\u7CFB\u7EDF\u4E5F\u4F1A\u5728\u591A\u6B21\u89C6\u89C9\u89C2\u5BDF\u4ECD\u65E0\u8FDB\u5C55\u65F6\u81EA\u52A8\u6302\u8D77\u8BF7\u6C42\u4EBA\u5DE5\u534F\u52A9\u2014\u2014\u4E0E\u5176\u53CD\u590D\u622A\u56FE\u76F2\u627E\uFF0C\u4E0D\u5982\u5C3D\u65E9\u6C42\u52A9\u3002
-10. \u63D0\u4EA4\u7C7B\u64CD\u4F5C\uFF08\u70B9\u51FB \u786E\u5B9A/\u63D0\u4EA4/\u4FDD\u5B58/\u53D1\u5E03\uFF09\u540E\u82E5\u5F39\u7A97\u672A\u5173\u95ED\u3001\u9875\u9762\u65E0\u53D8\u5316\u6216\u7ED3\u679C\u5F02\u5E38\uFF1A\u8C03\u7528 api \u5DE5\u5177\u67E5\u770B\u6700\u8FD1\u7684\u63A5\u53E3\u8BF7\u6C42/\u54CD\u5E94\uFF08\u72B6\u6001\u7801\u4E0E\u54CD\u5E94\u4F53\uFF09\uFF0C\u4EE5\u63A5\u53E3\u4E3A\u771F\u503C\u4E0E\u9875\u9762\u5B9E\u9645\u8868\u73B0\u4EA4\u53C9\u6838\u5BF9\uFF0C\u518D\u51B3\u5B9A\u4E0B\u4E00\u6B65\uFF0C\u4E0D\u8981\u76F2\u76EE\u91CD\u590D\u70B9\u51FB\u3002\u5206\u6D41\u53EA\u770B\u4E00\u6761\u6807\u51C6\u2014\u2014\u5931\u8D25\u539F\u56E0\u662F\u5426\u88AB\u9875\u9762\u660E\u786E\u544A\u77E5\u3001\u4E14\u53EF\u5F52\u56E0\u4E8E\u8F93\u5165\uFF1A
-  \xB7 \u53EF\u5F52\u56E0\uFF08\u9875\u9762\u6709\u660E\u786E\u9519\u8BEF\u63D0\u793A/\u7EA2\u5B57\u6821\u9A8C\uFF0C\u4E14\u63A5\u53E3\u540C\u6837\u62A5\u9519\u3001\u6307\u5411\u53EF\u4FEE\u6B63\u7684\u8F93\u5165\u95EE\u9898\uFF09\u2192 \u6309\u53C2\u6570\u95EE\u9898\u6362\u503C\u91CD\u8BD5\uFF08revise \u914D\u5408\u89C1\u89C4\u5219 13\uFF09\u3002
-  \xB7 \u4E0D\u53EF\u5F52\u56E0\uFF0C\u6216\u9875\u9762\u8868\u73B0\u4E0E\u63A5\u53E3\u771F\u503C\u4E92\u76F8\u77DB\u76FE\u2014\u2014\u7591\u4F3C\u88AB\u6D4B\u9875\u9762 Bug\uFF1A\u8C03\u7528 ask_human \u6C42\u52A9\uFF08question \u5199\u660E\u300C\u7591\u4F3C\u88AB\u6D4B\u9875\u9762 Bug\u300D\uFF0C\u9644\u4E0A\u67E5\u8BC1\u5230\u7684\u63A5\u53E3\u771F\u5B9E\u54CD\u5E94\u4E0E\u9875\u9762\u5B9E\u9645\u8868\u73B0\uFF09\uFF0C\u4E0D\u8981\u76F2\u76EE\u91CD\u8BD5\uFF0C\u4E5F\u4E0D\u8981\u4E3A\u8FC1\u5C31 Bug \u4FEE\u6539\u6D4B\u8BD5\u76EE\u6807\u3002\u77DB\u76FE\u5F62\u6001\u4E0D\u9650\u4E8E\u4EE5\u4E0B\u4F8B\u5B50\uFF1A
+10. \u63D0\u4EA4\u7C7B\u64CD\u4F5C\uFF08\u70B9\u51FB \u786E\u5B9A/\u63D0\u4EA4/\u4FDD\u5B58/\u53D1\u5E03\uFF09\u540E\u82E5\u5F39\u7A97\u672A\u5173\u95ED\u3001\u9875\u9762\u65E0\u53D8\u5316\u6216\u7ED3\u679C\u5F02\u5E38\uFF1A\u8C03\u7528 api \u5DE5\u5177\u67E5\u770B\u6700\u8FD1\u7684\u63A5\u53E3\u8BF7\u6C42/\u54CD\u5E94\uFF08\u72B6\u6001\u7801\u4E0E\u54CD\u5E94\u4F53\uFF09\uFF0C\u5C06\u63A5\u53E3\u54CD\u5E94\u4E0E\u9875\u9762\u5B9E\u9645\u8868\u73B0\u4F5C\u4E3A\u8BC1\u636E\uFF0C\u5BF9\u7167\u5DF2\u786E\u8BA4\u9700\u6C42\u4EA4\u53C9\u6838\u5BF9\uFF08HTTP 200 \u4E0D\u7B49\u4E8E\u4E1A\u52A1\u6B63\u786E\uFF09\uFF0C\u518D\u51B3\u5B9A\u4E0B\u4E00\u6B65\uFF0C\u4E0D\u8981\u76F2\u76EE\u91CD\u590D\u70B9\u51FB\u3002\u5206\u6D41\u53EA\u770B\u4E00\u6761\u6807\u51C6\u2014\u2014\u5931\u8D25\u539F\u56E0\u662F\u5426\u88AB\u9875\u9762\u660E\u786E\u544A\u77E5\u3001\u4E14\u53EF\u5F52\u56E0\u4E8E\u8F93\u5165\uFF1A
+  \xB7 \u53EF\u5F52\u56E0\uFF08\u9875\u9762\u6709\u660E\u786E\u9519\u8BEF\u63D0\u793A/\u7EA2\u5B57\u6821\u9A8C\uFF0C\u4E14\u63A5\u53E3\u540C\u6837\u62A5\u9519\u3001\u6307\u5411\u53EF\u4FEE\u6B63\u7684\u8F93\u5165\u95EE\u9898\uFF09\u2192 \u5148\u5BF9\u7167\u6D4B\u8BD5\u610F\u56FE\uFF1B\u8D1F\u5411\u6D4B\u8BD5\u9A8C\u8BC1\u9884\u671F\u62D2\u7EDD\uFF0Cfixed \u6570\u636E\u4E0D\u5F97\u66F4\u6539\uFF1B\u4EC5\u6B63\u5411\u6D4B\u8BD5\u5141\u8BB8\u8C03\u6574 generated \u6570\u636E\u65F6\u624D\u6362\u503C\u91CD\u8BD5\uFF08revise \u914D\u5408\u89C1\u89C4\u5219 13\uFF09\u3002
+  \xB7 \u4E0D\u53EF\u5F52\u56E0\uFF0C\u6216\u9875\u9762\u8868\u73B0\u4E0E\u63A5\u53E3\u7ED3\u679C\u4E92\u76F8\u77DB\u76FE\u2014\u2014\u7591\u4F3C\u88AB\u6D4B\u9875\u9762 Bug\uFF1A\u8C03\u7528 ask_human \u6C42\u52A9\uFF08question \u5199\u660E\u300C\u7591\u4F3C\u88AB\u6D4B\u9875\u9762 Bug\u300D\uFF0C\u9644\u4E0A\u67E5\u8BC1\u5230\u7684\u63A5\u53E3\u54CD\u5E94\u4E0E\u9875\u9762\u5B9E\u9645\u8868\u73B0\uFF09\uFF0C\u4E0D\u8981\u76F2\u76EE\u91CD\u8BD5\uFF0C\u4E5F\u4E0D\u8981\u4E3A\u8FC1\u5C31 Bug \u4FEE\u6539\u6D4B\u8BD5\u76EE\u6807\u3002\u77DB\u76FE\u5F62\u6001\u4E0D\u9650\u4E8E\u4EE5\u4E0B\u4F8B\u5B50\uFF1A
     - \u63A5\u53E3\u62A5\u9519\u4F46 UI \u88C5\u4F5C\u6210\u529F\uFF1A\u5F39\u7A97/\u8868\u5355\u7167\u5E38\u5173\u95ED\uFF0C\u65E0\u4EFB\u4F55\u9519\u8BEF\u63D0\u793A\uFF08UI \u541E\u6389\u5931\u8D25\uFF09\uFF1B
     - \u63A5\u53E3\u6210\u529F\u4F46\u9875\u9762\u672A\u5448\u73B0\u7ED3\u679C\uFF1A\u5217\u8868\u65E0\u65B0\u6761\u76EE\u3001\u6570\u636E\u672A\u53D8\u5316\uFF1B
     - \u9875\u9762\u62A5\u9519\u4F46\u63A5\u53E3\u5B9E\u9645\u6210\u529F\uFF1A\u51FA\u73B0\u9519\u8BEF\u63D0\u793A\u6216\u72B6\u6001\u56DE\u6EDA\uFF0C\u800C\u63A5\u53E3\u54CD\u5E94\u6B63\u5E38\u3001\u6570\u636E\u5DF2\u751F\u6548\uFF1B
     - \u65E0\u58F0\u5931\u8D25\uFF1A\u6210\u529F/\u5931\u8D25\u63D0\u793A\u7686\u65E0\uFF0C\u63A5\u53E3\u4E5F\u65E0\u5BF9\u5E94\u8BF7\u6C42\uFF08\u70B9\u51FB\u672A\u89E6\u53D1\u4EFB\u4F55\u8C03\u7528\uFF09\u6216\u54CD\u5E94\u65E0\u6CD5\u5224\u65AD\u6210\u8D25\u3002
-11. \u5B8C\u6210\u6D4B\u8BD5\u610F\u56FE\u540E\uFF0C\u81F3\u5C11\u6DFB\u52A0\u4E00\u6761 assert \u65AD\u8A00\uFF08\u672B\u6B65\u5FC5\u987B\u662F\u65AD\u8A00\uFF09\uFF0C\u7136\u540E\u8C03\u7528 finish\u3002
+11. \u6BCF\u4E2A\u5FC5\u9A8C\u76EE\u6807\u90FD\u5FC5\u987B\u7531\u5B9E\u9645\u901A\u8FC7\u7684 assert \u8986\u76D6\uFF08\u643A\u5E26 criterionId\uFF0C\u4E25\u683C\u6CBF\u7528\u786E\u8BA4\u7684\u7C7B\u578B/\u9884\u671F/\u76EE\u6807\u8303\u56F4\uFF09\uFF1B\u672B\u6B65\u5FC5\u987B\u662F\u65AD\u8A00\uFF0C\u518D\u8C03\u7528 finish\u3002\u4E0D\u80FD\u7528\u6574\u9875\u901A\u7528\u6587\u6848\u4EE3\u66FF\u6307\u5B9A\u8BB0\u5F55\u7ED3\u679C\u3002\u5931\u8D25\u4FDD\u7559\u8BC1\u636E\u5E76\u6C42\u52A9\uFF0C\u4E0D\u5F97\u5F31\u5316\u65AD\u8A00\u3002
 12. \u73AF\u5883\u53D8\u91CF\u4EE5 {{key}} \u5360\u4F4D\u7B26\u5F15\u7528\uFF08fill \u7684 value \u91CC\u76F4\u63A5\u5199 {{key}}\uFF09\uFF0C\u4E0D\u8981\u5199\u6B7B\u771F\u5B9E\u503C\u3002
-13. \u4FEE\u6B63\u540E\u91CD\u505A\u63D0\u4EA4\u65F6\uFF0C\u82E5\u65E7\u63D0\u4EA4/\u586B\u5199\u64CD\u4F5C\u5DF2\u843D\u5E93\u4E3A\u811A\u672C\u6B65\u9AA4\uFF0C\u914D\u5408\u8C03\u7528 revise \u6E05\u7406\uFF0C\u56DE\u653E\u811A\u672C\u5E94\u662F\u6700\u77ED\u6210\u529F\u8DEF\u5F84\u3002\u4E24\u7C7B\u573A\u666F\uFF1A\u2460 \u63D0\u4EA4\u5931\u8D25\u539F\u56E0\u662F\u53C2\u6570\u95EE\u9898\uFF08\u5982\u624B\u673A\u53F7\u91CD\u590D\u3001\u540D\u79F0\u5DF2\u5B58\u5728\u3001\u503C\u4E0D\u5408\u6CD5\uFF09\u9700\u6362\u503C\u91CD\u8BD5\u2014\u2014\u5148 revise \u6539 value\u3001\u5220\u9664\u5197\u4F59\u7684\u65E7\u503C\u63D0\u4EA4/\u91CD\u586B\u94FE\uFF0C\u518D\u6267\u884C\u4FEE\u6B63\u52A8\u4F5C\uFF1B\u2461 \u70B9\u51FB\u63D0\u4EA4\u540E\u5F39\u7A97\u672A\u5173\u3001\u88AB\u5FC5\u586B\u6821\u9A8C\u62E6\u622A\uFF08\u63D0\u4EA4\u672A\u751F\u6548\uFF09\u2014\u2014\u8865\u586B\u7F3A\u5931\u5B57\u6BB5\u91CD\u65B0\u63D0\u4EA4\uFF0C\u6210\u529F\u540E\u8C03\u7528 revise \u5220\u9664\u5148\u524D\u843D\u7A7A\u7684\u65E7\u63D0\u4EA4\u6B65\u3002\u4E0D\u8981\u7559\u4E0B\u300C\u6CE8\u5B9A\u5931\u8D25\u7684\u63D0\u4EA4 + \u91CD\u586B\u300D\u7684\u5197\u4F59\u94FE\u8DEF\u3002\u6240\u6709\u6210\u529F\u6267\u884C\u7684\u64CD\u4F5C\u90FD\u4F1A\u5982\u5B9E\u843D\u5E93\uFF08\u542B\u6709\u610F\u91CD\u590D\uFF0C\u5982\u5FAA\u73AF\u9020\u6570\u7684\u591A\u6B21\u586B\u5199\u540C\u4E00\u8F93\u5165\u6846\uFF09\u2014\u2014\u843D\u5E93\u6B65\u9AA4\u4E0E\u6D4F\u89C8\u5668\u5B9E\u9645\u6267\u884C\u4E00\u4E00\u5BF9\u5E94\uFF0C\u4E0D\u8981\u91CD\u590D\u6267\u884C\u5DF2\u6210\u529F\u4E14\u5DF2\u843D\u5E93\u7684\u64CD\u4F5C\uFF1B\u5931\u8D25\u91CD\u8BD5\u4EA7\u751F\u7684\u5197\u4F59\u94FE\u8BF7\u7528 revise \u6E05\u7406\uFF0Cfinish \u65F6\u7CFB\u7EDF\u8FD8\u4F1A\u505A\u4E00\u6B21\u5168\u5C40\u811A\u672C\u5BA1\u67E5\u515C\u5E95\u3002`;
+13. \u4EE5\u4E0B\u6E05\u7406\u4EC5\u9002\u7528\u4E8E\u610F\u5916\u5931\u8D25\u91CD\u8BD5\uFF1B\u8D1F\u5411\u6D4B\u8BD5\u4E2D\u7684\u9519\u8BEF\u8F93\u5165\u3001\u5931\u8D25\u63D0\u4EA4\u3001\u62D2\u7EDD\u65AD\u8A00\u5747\u4E3A\u5FC5\u8981\u6B65\u9AA4\uFF0C\u5FC5\u987B\u4FDD\u7559\u3002\u4FEE\u6B63\u540E\u91CD\u505A\u63D0\u4EA4\u65F6\uFF0C\u82E5\u65E7\u63D0\u4EA4/\u586B\u5199\u64CD\u4F5C\u5DF2\u843D\u5E93\u4E3A\u811A\u672C\u6B65\u9AA4\uFF0C\u914D\u5408\u8C03\u7528 revise \u6E05\u7406\uFF0C\u56DE\u653E\u811A\u672C\u5E94\u4FDD\u7559\u5B8C\u6574\u3001\u53EF\u9A8C\u8BC1\u7684\u6210\u529F\u6D41\u7A0B\uFF0C\u4EC5\u6E05\u7406\u6709\u660E\u786E\u8BC1\u636E\u7684\u5931\u8D25\u91CD\u8BD5\u5197\u4F59\uFF0C\u4E0D\u4EE5\u6B65\u9AA4\u6700\u5C11\u4E3A\u76EE\u6807\u3002\u4E24\u7C7B\u573A\u666F\uFF1A\u2460 \u63D0\u4EA4\u5931\u8D25\u539F\u56E0\u662F\u53C2\u6570\u95EE\u9898\uFF08\u5982\u624B\u673A\u53F7\u91CD\u590D\u3001\u540D\u79F0\u5DF2\u5B58\u5728\u3001\u503C\u4E0D\u5408\u6CD5\uFF09\u9700\u6362\u503C\u91CD\u8BD5\u2014\u2014\u5148\u5B9E\u9645\u6267\u884C\u4FEE\u6B63\u52A8\u4F5C\u5E76\u9A8C\u8BC1\u6210\u529F\uFF0C\u518D revise \u540C\u6B65\u5DF2\u9A8C\u8BC1\u7684\u65B0\u503C\u3001\u5220\u9664\u6709\u660E\u786E\u8BC1\u636E\u7684\u65E7\u503C\u63D0\u4EA4/\u91CD\u586B\u5197\u4F59\u94FE\uFF1B\u2461 \u70B9\u51FB\u63D0\u4EA4\u540E\u5F39\u7A97\u672A\u5173\u3001\u88AB\u5FC5\u586B\u6821\u9A8C\u62E6\u622A\uFF08\u63D0\u4EA4\u672A\u751F\u6548\uFF09\u2014\u2014\u8865\u586B\u7F3A\u5931\u5B57\u6BB5\u91CD\u65B0\u63D0\u4EA4\uFF0C\u6210\u529F\u540E\u8C03\u7528 revise \u5220\u9664\u5148\u524D\u843D\u7A7A\u7684\u65E7\u63D0\u4EA4\u6B65\u3002\u4E0D\u8981\u7559\u4E0B\u300C\u6CE8\u5B9A\u5931\u8D25\u7684\u63D0\u4EA4 + \u91CD\u586B\u300D\u7684\u5197\u4F59\u94FE\u8DEF\u3002\u6240\u6709\u6210\u529F\u6267\u884C\u7684\u64CD\u4F5C\u90FD\u4F1A\u5982\u5B9E\u843D\u5E93\uFF08\u542B\u6709\u610F\u91CD\u590D\uFF0C\u5982\u5FAA\u73AF\u9020\u6570\u7684\u591A\u6B21\u586B\u5199\u540C\u4E00\u8F93\u5165\u6846\uFF09\u2014\u2014\u843D\u5E93\u6B65\u9AA4\u4E0E\u6D4F\u89C8\u5668\u5B9E\u9645\u6267\u884C\u4E00\u4E00\u5BF9\u5E94\uFF0C\u4E0D\u8981\u91CD\u590D\u6267\u884C\u5DF2\u6210\u529F\u4E14\u5DF2\u843D\u5E93\u7684\u64CD\u4F5C\uFF1B\u5931\u8D25\u91CD\u8BD5\u4EA7\u751F\u7684\u5197\u4F59\u94FE\u8BF7\u7528 revise \u6E05\u7406\uFF0Cfinish \u65F6\u7CFB\u7EDF\u8FD8\u4F1A\u505A\u4E00\u6B21\u5168\u5C40\u811A\u672C\u5BA1\u67E5\u515C\u5E95\u3002`;
 function assertFailSig(args) {
   return `${String(args.type ?? "")}|${String(args.expected ?? "")}|${String(args.selector ?? "")}`;
 }
@@ -6576,8 +7237,8 @@ async function runScriptReview(o) {
   const detail = o.steps.map((s, i) => {
     const label = s.kind === "assert" ? "\u65AD\u8A00" : s.action ?? s.kind;
     const loc = s.locator ? ` locator=${s.locator.strategy}:${s.locator.value}${s.locator.name ? `[${s.locator.name}]` : ""}` : "";
-    const param = s.kind === "navigate" ? ` url=${s.url}` : s.value != null ? ` value=${s.value}` : s.key != null ? ` key=${s.key}` : s.assertion?.expected != null ? ` expected=${s.assertion.expected}` : "";
-    return `${i + 1}. [${label}]${loc}${param} ${s.instruction}`;
+    const param = s.kind === "navigate" ? ` url=${s.url}` : s.value != null ? ` value=${s.value}` : s.action === "check" ? ` checked=${s.checked ?? true}` : s.key != null ? ` key=${s.key}` : s.assertion?.expected != null ? ` expected=${s.assertion.expected}` : "";
+    return `${i + 1}. [${label}]${s.criterionId ? ` criterionId=${s.criterionId}` : ""}${loc}${param} ${s.instruction}`;
   }).join("\n");
   try {
     const before = { ...getUsage(jobId) };
@@ -6586,7 +7247,7 @@ async function runScriptReview(o) {
       messages: [
         {
           role: "system",
-          content: '\u4F60\u662F\u56DE\u653E\u6D4B\u8BD5\u811A\u672C\u7684\u5BA1\u67E5\u5458\u3002\u5DF2\u843D\u6B65\u9AA4\u4E0E\u6D4F\u89C8\u5668\u5B9E\u9645\u6267\u884C\u4E00\u4E00\u5BF9\u5E94\u3002\u8BF7\u627E\u51FA\u300C\u5931\u8D25\u91CD\u8BD5/\u88AB\u540E\u7EED\u64CD\u4F5C\u66FF\u4EE3\u300D\u7684\u5197\u4F59\u6B65\u9AA4\u5E76\u6E05\u7406\uFF0C\u4F7F\u811A\u672C\u6210\u4E3A\u6700\u77ED\u6210\u529F\u56DE\u653E\u8DEF\u5F84\uFF1A\n- \u5220\u9664\uFF1A\u6CE8\u5B9A\u5931\u8D25\u6216\u5DF2\u843D\u7A7A\u7684\u64CD\u4F5C\u94FE\uFF08\u843D\u7A7A\u7684\u63D0\u4EA4\u3001\u65E7\u503C\u586B\u5199\u3001\u540C URL \u7684\u91CD\u590D\u5BFC\u822A\u7B49\uFF09\uFF1B\n- \u4FDD\u7559\uFF1A\u6709\u610F\u7684\u91CD\u590D\u64CD\u4F5C\uFF08\u5FAA\u73AF\u9020\u6570\u3001\u9010\u884C\u586B\u5199\u3001\u53CD\u590D\u5207\u6362\u7B49\uFF0C\u5373\u4F7F\u5143\u7D20\u4E0E\u503C\u5B8C\u5168\u76F8\u540C\uFF09\uFF1B\n- \u65AD\u8A00\u4E00\u822C\u4FDD\u7559\uFF1B\u552F\u4E00\u53EF\u5220\u4F8B\u5916\uFF1A\u4E24\u6761\u65AD\u8A00\u4E92\u4E3A\u5197\u4F59\uFF08\u540C\u4E00\u5B9A\u4F4D\u3001\u671F\u671B\u503C\u4E00\u65B9\u662F\u53E6\u4E00\u65B9\u7684\u524D\u7F00/\u5B50\u96C6\uFF0C\u5982\u6CDB\u5316 text=\u5BA2\u6237_ \u4E0E\u7CBE\u786E text=\u5BA2\u6237_1788703830578 \u5E76\u5B58\uFF0C\u4E0D\u8BBA\u8C01\u524D\u8C01\u540E\uFF09\uFF0C\u53EA\u5220\u5176\u4E2D\u4E00\u6761\u3001\u4FDD\u7559\u53E6\u4E00\u6761\uFF1B\u65E0\u8BBA\u5220\u5426\uFF0C\u5E94\u7528\u5168\u90E8 ops \u540E\u811A\u672C\u672B\u6B65\u5FC5\u987B\u662F\u65AD\u8A00\u2014\u2014\u82E5\u672B\u6B65\u65AD\u8A00\u4E0D\u5C5E\u4E8E\u5197\u4F59\u5BF9\uFF0C\u4EFB\u4F55\u5220\u9664\u90FD\u4E0D\u5F97\u89E6\u53CA\u5B83\uFF1B\n- \u4E0D\u786E\u5B9A\u65F6\u4FDD\u7559\uFF0C\u5B81\u591A\u52FF\u9519\u5220\uFF1B\u53EF\u7528 update \u4FEE\u6B63 value\uFF1Bops \u6309\u987A\u5E8F\u5E94\u7528\uFF0Cdelete \u4F1A\u4F7F\u4E4B\u540E\u7684\u539F\u5E8F\u53F7\u524D\u79FB\u2014\u2014\u8FDE\u7EED\u5220\u9664\u4E00\u6BB5\u8BF7\u5408\u5E76\u4E3A\u4E00\u4E2A\u8303\u56F4 op\uFF08from~to\uFF09\uFF0C\u5148\u5220\u540E\u6539\u65F6 update \u7684 step \u5E8F\u53F7\u6309\u5220\u9664\u540E\u7684\u65B0\u7F16\u53F7\u7ED9\u51FA\u3002\n\u8F93\u51FA JSON\uFF1A{"ops": [{"op":"delete","from":n,"to":m} \u6216 {"op":"update","step":n,"value":"\u65B0\u503C"}]}\uFF0Cops \u4E3A\u7A7A\u6570\u7EC4\u8868\u793A\u65E0\u9700\u4FEE\u8BA2\u3002\u53EA\u8F93\u51FA JSON\u3002'
+          content: '\u4F60\u662F\u56DE\u653E\u6D4B\u8BD5\u811A\u672C\u7684\u5BA1\u67E5\u5458\u3002\u5DF2\u843D\u6B65\u9AA4\u4E0E\u6D4F\u89C8\u5668\u5B9E\u9645\u6267\u884C\u4E00\u4E00\u5BF9\u5E94\u3002\u8BF7\u627E\u51FA\u300C\u5931\u8D25\u91CD\u8BD5/\u88AB\u540E\u7EED\u64CD\u4F5C\u66FF\u4EE3\u300D\u7684\u5197\u4F59\u6B65\u9AA4\u5E76\u6E05\u7406\uFF0C\u4FDD\u6301\u5DF2\u9A8C\u8BC1\u6D41\u7A0B\u7684\u884C\u4E3A\u7B49\u4EF7\uFF0C\u4EC5\u6E05\u7406\u6709\u660E\u786E\u8BC1\u636E\u7684\u5931\u8D25\u91CD\u8BD5\u5197\u4F59\uFF0C\u4E0D\u4EE5\u6B65\u9AA4\u6700\u5C11\u4E3A\u76EE\u6807\uFF1A\n- \u4FDD\u7559\uFF1A\u8D1F\u5411\u6D4B\u8BD5\u4E2D\u7684\u975E\u6CD5/\u91CD\u590D\u8F93\u5165\u3001\u5931\u8D25\u63D0\u4EA4\u548C\u9519\u8BEF\u63D0\u793A\u65AD\u8A00\uFF0C\u5B83\u4EEC\u662F\u6D4B\u8BD5\u76EE\u6807\uFF0C\u4E0D\u662F\u91CD\u8BD5\u5197\u4F59\uFF1B\n- \u5220\u9664\uFF1A\u5DF2\u786E\u8BA4\u672A\u751F\u6548\u4E14\u5DF2\u88AB\u6210\u529F\u91CD\u8BD5\u66FF\u4EE3\u7684\u64CD\u4F5C\u94FE\uFF1B\u4E0D\u5F97\u4EC5\u56E0 URL\u3001\u5143\u7D20\u6216\u503C\u76F8\u540C\u5C31\u5220\u9664\u91CD\u590D\u64CD\u4F5C\uFF0C\u91CD\u590D\u5BFC\u822A\u53EF\u80FD\u627F\u62C5\u5237\u65B0\u4F5C\u7528\uFF1B\n- \u4FDD\u7559\uFF1A\u6709\u610F\u7684\u91CD\u590D\u64CD\u4F5C\uFF08\u5FAA\u73AF\u9020\u6570\u3001\u9010\u884C\u586B\u5199\u3001\u53CD\u590D\u5207\u6362\u7B49\uFF0C\u5373\u4F7F\u5143\u7D20\u4E0E\u503C\u5B8C\u5168\u76F8\u540C\uFF09\uFF1B\n- \u65AD\u8A00\u4E00\u822C\u4FDD\u7559\uFF1B\u552F\u4E00\u53EF\u5220\u4F8B\u5916\uFF1A\u4E24\u6761\u65AD\u8A00\u4E92\u4E3A\u5197\u4F59\uFF08\u540C\u4E00\u5B9A\u4F4D\u3001\u671F\u671B\u503C\u4E00\u65B9\u662F\u53E6\u4E00\u65B9\u7684\u524D\u7F00/\u5B50\u96C6\uFF0C\u5982\u6CDB\u5316 text=\u5BA2\u6237_ \u4E0E\u7CBE\u786E text=\u5BA2\u6237_1788703830578 \u5E76\u5B58\uFF0C\u4E0D\u8BBA\u8C01\u524D\u8C01\u540E\uFF09\uFF0C\u53EA\u5220\u5176\u4E2D\u4E00\u6761\u3001\u4FDD\u7559\u53E6\u4E00\u6761\uFF1B\u65E0\u8BBA\u5220\u5426\uFF0C\u5E94\u7528\u5168\u90E8 ops \u540E\u811A\u672C\u672B\u6B65\u5FC5\u987B\u662F\u65AD\u8A00\u2014\u2014\u82E5\u672B\u6B65\u65AD\u8A00\u4E0D\u5C5E\u4E8E\u5197\u4F59\u5BF9\uFF0C\u4EFB\u4F55\u5220\u9664\u90FD\u4E0D\u5F97\u89E6\u53CA\u5B83\uFF1B\n- \u4E0D\u786E\u5B9A\u65F6\u4FDD\u7559\uFF0C\u5B81\u591A\u52FF\u9519\u5220\uFF1B\u4EC5\u5728\u5DF2\u5B9E\u9645\u6267\u884C\u5E76\u9A8C\u8BC1\u66FF\u4EE3\u503C\u540E\uFF0C\u624D\u53EF\u7528 update \u540C\u6B65\u4FEE\u6B63 value\uFF1B\u4E0D\u5F97\u4E3A\u901A\u8FC7\u6D4B\u8BD5\u800C\u5F31\u5316\u65AD\u8A00\u6216\u6539\u5199\u672A\u7ECF\u9A8C\u8BC1\u7684\u503C\u3002ops \u6309\u987A\u5E8F\u5E94\u7528\uFF0Cdelete \u4F1A\u4F7F\u4E4B\u540E\u7684\u539F\u5E8F\u53F7\u524D\u79FB\u2014\u2014\u8FDE\u7EED\u5220\u9664\u4E00\u6BB5\u8BF7\u5408\u5E76\u4E3A\u4E00\u4E2A\u8303\u56F4 op\uFF08from~to\uFF09\uFF0C\u5148\u5220\u540E\u6539\u65F6 update \u7684 step \u5E8F\u53F7\u6309\u5220\u9664\u540E\u7684\u65B0\u7F16\u53F7\u7ED9\u51FA\u3002\n\u8F93\u51FA JSON\uFF1A{"ops": [{"op":"delete","from":n,"to":m} \u6216 {"op":"update","step":n,"value":"\u65B0\u503C"}]}\uFF0Cops \u4E3A\u7A7A\u6570\u7EC4\u8868\u793A\u65E0\u9700\u4FEE\u8BA2\u3002\u53EA\u8F93\u51FA JSON\u3002'
         },
         { role: "user", content: `\u3010\u5DF2\u843D\u6B65\u9AA4\u3011
 ${detail}` }
@@ -6598,8 +7259,9 @@ ${detail}` }
       req.thinking = { type: "disabled" };
       req.temperature = 0;
     }
-    const res = await client.chat.completions.create(req);
-    const text = res.choices?.[0]?.message?.content ?? "";
+    const res = await client.chat.completions.create(req, o.signal ? { signal: o.signal } : void 0);
+    if (o.signal?.aborted) return;
+    const text = redactGenerationData(jobId, res.choices?.[0]?.message?.content ?? "");
     const usage = usageDelta(before, getUsage(jobId));
     const parsed = safeJsonParse2(stripFences(text));
     const ops = Array.isArray(parsed?.ops) ? parsed.ops : [];
@@ -6621,11 +7283,15 @@ ${detail}` }
       pubToolWithUsage(jobId, 0, "\u811A\u672C\u5BA1\u67E5", `\u5BA1\u67E5 ${o.steps.length} \u6B65`, "\u5BA1\u67E5\u901A\u8FC7\uFF1A\u65E0\u5197\u4F59\u6B65\u9AA4\u9700\u8981\u6E05\u7406", usage, reviewArgs);
     }
   } catch (e) {
-    console.warn(`[gen:${jobId}] \u811A\u672C\u5BA1\u67E5\u5931\u8D25\uFF0C\u8DF3\u8FC7\u6E05\u7406\uFF1A`, e);
+    if (!o.signal?.aborted) console.warn(`[gen:${jobId}] \u811A\u672C\u5BA1\u67E5\u5931\u8D25\uFF0C\u8DF3\u8FC7\u6E05\u7406\uFF1A`, redactGenerationData(jobId, String(e)));
   }
 }
 async function runGenerationLoop(o) {
   const { jobId, pwPage, page, client, cfg } = o;
+  const evidence = o.evidence ?? [];
+  const allSteps = () => [...o.baseSteps ?? [], ...o.steps];
+  const coverage = () => o.intent ? coverageStatus(o.intent, allSteps(), evidence) : [];
+  const compactCoverage = () => coverage().map(({ id, required, passed }) => ({ id, required, passed }));
   const pluginActions = await enabledActionVocabulary(o.projectId ?? null);
   const network = new NetworkCapture();
   network.attach(pwPage);
@@ -6675,6 +7341,16 @@ ${lines.join("\n")}`;
   };
   const ctx = {
     jobId,
+    intent: o.intent,
+    onAssertionPassed: (step) => {
+      const criterion = o.intent?.criteria.find((c) => c.id === step.criterionId);
+      if (!criterion) return;
+      const steps = allSteps();
+      const signature = evidenceSignature(steps, steps.length - 1, criterion);
+      if (!evidence.some((e) => e.signature === signature)) evidence.push({ criterionId: criterion.id, signature, verifiedAt: (/* @__PURE__ */ new Date()).toISOString() });
+      pub({ type: "gen:coverage", jobId, coverage: coverage() });
+    },
+    signal: o.signal,
     page,
     stagehand: o.stagehand,
     pwPage,
@@ -6697,21 +7373,22 @@ ${lines.join("\n")}`;
   const manualCapture = createManualCapture({ jobId, pwPage, emit: emitStep, isCancelled: o.isCancelled });
   const assistFollowup = async (decision, context) => {
     if (decision?.decision === "manual") return manualCapture(context);
+    if (decision?.decision === "skip" && o.intent) return "\u7528\u6237\u8981\u6C42\u8DF3\u8FC7\u5F53\u524D\u64CD\u4F5C\uFF0C\u8BF7\u7EE7\u7EED\u5176\u4F59\u76EE\u6807\uFF1B\u82E5\u6D89\u53CA\u5FC5\u9A8C\u9879\uFF0C\u8BE5\u9879\u4FDD\u6301\u672A\u9A8C\u8BC1\uFF0C\u4E0D\u80FD\u62A5\u544A\u5B8C\u6574\u5B8C\u6210\u3002";
     return assistResultText(decision, context);
   };
   let scriptReviewed = false;
   const reviewScriptSteps = async () => {
     if (scriptReviewed) return;
     scriptReviewed = true;
-    await runScriptReview({ jobId, client, model: cfg.openaiModel, reasoningEffort: cfg.reasoningEffort, steps: o.steps, revise });
+    await runScriptReview({ jobId, client, model: cfg.openaiModel, reasoningEffort: cfg.reasoningEffort, steps: o.steps, revise, signal: o.signal });
   };
   const finishValidate = async () => {
-    const last = o.steps[o.steps.length - 1];
-    if (!last || last.kind !== "assert") {
-      return "\u811A\u672C\u5FC5\u987B\u4EE5\u65AD\u8A00\u6B65\u9AA4\u7ED3\u5C3E\uFF08\u9A8C\u8BC1\u6D4B\u8BD5\u7ED3\u679C\uFF09\u3002\u8BF7\u5148\u8C03\u7528 assert \u5DE5\u5177\u6DFB\u52A0\u65AD\u8A00\uFF0C\u518D\u8C03\u7528 finish\u3002";
-    }
+    const error = completionError(o.intent, allSteps(), evidence);
+    if (error) return error;
     await reviewScriptSteps();
-    return null;
+    const reviewedError = completionError(o.intent, allSteps(), evidence);
+    pub({ type: "gen:coverage", jobId, coverage: coverage() });
+    return reviewedError;
   };
   const askHuman = async (question) => {
     const context = `Agent \u4E3B\u52A8\u6C42\u52A9\uFF1A${question.slice(0, 200)}`;
@@ -6725,6 +7402,56 @@ ${lines.join("\n")}`;
     return await assistFollowup(decision, context) ?? "\u7528\u6237\u672A\u7ED9\u51FA\u6709\u6548\u51B3\u7B56\uFF0C\u8BF7\u81EA\u884C\u51B3\u5B9A\u4E0B\u4E00\u6B65\uFF08\u6362\u8DEF\u5F84\u3001\u8DF3\u8FC7\u8BE5\u9879\u6216\u5982\u5B9E finish\uFF09\u3002";
   };
   const tools = buildGenTools(ctx, finishValidate, askHuman);
+  tools.push({
+    name: "read_coverage",
+    description: "\u5206\u9875\u8BFB\u53D6\u5DF2\u786E\u8BA4\u9A8C\u6536\u76EE\u6807\u3001\u9884\u671F\u53CA\u8BC1\u636E\u8986\u76D6\uFF1Boffset \u4E3A\u5B57\u7B26\u504F\u79FB\u3002\u4E0D\u8C03\u7528\u6A21\u578B\u3001\u4E0D\u64CD\u4F5C\u9875\u9762\u3002",
+    parameters: { type: "object", properties: { offset: { type: "integer", minimum: 0 } } },
+    stateful: "coverage",
+    execute: async (a) => {
+      const full = JSON.stringify({ coverage: compactCoverage(), criteria: o.intent?.criteria ?? [] });
+      const offset = Math.max(0, Math.floor(Number(a.offset) || 0));
+      return `${offset}~${Math.min(full.length, offset + 1e4)}/${full.length} \u5B57\u7B26
+${full.slice(offset, offset + 1e4)}`;
+    }
+  });
+  tools.push({
+    name: "read_goal",
+    description: "\u5206\u9875\u8BFB\u53D6\u5B8C\u6574\u6D4B\u8BD5\u76EE\u6807/\u9644\u4EF6\u548C\u786E\u8BA4\u7684\u5927\u7EB2\uFF1B\u521D\u59CB\u5185\u5BB9\u88AB\u7701\u7565\u65F6\u5148\u8BFB\u53D6\u76F8\u5173\u90E8\u5206\u3002",
+    parameters: { type: "object", properties: { offset: { type: "integer", minimum: 0 }, query: { type: "string" } } },
+    stateful: "goal",
+    execute: async (a) => {
+      const full = `${o.goalText}
+\u3010\u5DF2\u786E\u8BA4\u6D4B\u8BD5\u610F\u56FE\u3011
+${JSON.stringify(o.intent ?? null)}
+\u3010\u5F53\u524D\u9A8C\u6536\u8986\u76D6\u3011
+${JSON.stringify(coverage())}
+\u3010\u53C2\u8003\u5927\u7EB2\u3011
+${JSON.stringify(o.outline)}`;
+      const found = a.query ? full.toLowerCase().indexOf(String(a.query).toLowerCase()) : -1;
+      const offset = Math.max(0, found >= 0 ? found - 200 : Math.floor(Number(a.offset) || 0));
+      return `${offset}~${Math.min(full.length, offset + 1e4)}/${full.length} \u5B57\u7B26
+${full.slice(offset, offset + 1e4)}`;
+    }
+  });
+  tools.push({
+    name: "read_script",
+    description: "\u5206\u9875\u8BFB\u53D6\u5F53\u524D\u5DF2\u4FDD\u5B58\u811A\u672C\uFF0C\u5E8F\u53F7\u4E0E revise \u4E00\u81F4\uFF1B\u4FEE\u8BA2\u524D\u53EF\u6838\u5BF9\u3002",
+    parameters: { type: "object", properties: { offset: { type: "integer", minimum: 0 } } },
+    stateful: "script",
+    execute: async (a) => {
+      const offset = Math.max(0, Math.floor(Number(a.offset) || 0));
+      const items = [];
+      let size = 0;
+      for (let i = offset; i < o.steps.length && items.length < 20; i++) {
+        const line = `${i + 1}. ${JSON.stringify(o.steps[i])}`;
+        if (size + line.length > 12e3 && items.length) break;
+        items.push(line);
+        size += line.length;
+      }
+      return `${items.join("\n")}
+\u5F53\u524D ${offset + items.length}/${o.steps.length} \u6B65\uFF1Boffset=${offset + items.length} \u8BFB\u53D6\u540E\u7EED`;
+    }
+  });
   const outlineText = o.outline.length ? o.outline.map((s, i) => `${i + 1}. [${s.kind === "assert" ? "\u65AD\u8A00" : s.action ?? "\u64CD\u4F5C"}] ${s.instruction}`).join("\n") : "\uFF08\u7528\u6237\u672A\u786E\u8BA4\u5177\u4F53\u5927\u7EB2\uFF0C\u8BF7\u81EA\u884C\u89C4\u5212\u6B65\u9AA4\uFF09";
   const pluginHint = pluginActions.length ? `
 
@@ -6743,6 +7470,31 @@ ${o.goalText}
 ${outlineText}`
     }
   ];
+  if (messages[1]?.role === "user" && typeof messages[1].content === "string" && messages[1].content.length > 16e3) {
+    messages[1].content = messages[1].content.slice(0, 12e3) + "\n\u3010\u540E\u7EED\u76EE\u6807/\u9644\u4EF6\u5DF2\u7701\u7565\uFF0C\u8BF7\u5148\u4F7F\u7528 read_goal \u5206\u9875\u8BFB\u53D6\u5B8C\u6574\u8981\u6C42\u3011";
+  }
+  const intentText = JSON.stringify(o.intent ?? null);
+  if (o.intent) messages.push({ role: "user", content: `\u3010\u5DF2\u786E\u8BA4\u6D4B\u8BD5\u610F\u56FE\uFF1A\u6267\u884C\u8DEF\u7EBF\u53EF\u8C03\u6574\uFF0C\u9A8C\u6536\u9884\u671F\u4E0D\u5F97\u64C5\u81EA\u66F4\u6539\u3011
+${intentText.slice(0, 12e3)}${intentText.length > 12e3 ? "\n\u3010\u540E\u7EED\u7EA6\u5B9A\u5DF2\u7701\u7565\uFF0C\u6267\u884C\u524D\u7528 read_goal / read_coverage \u8BFB\u53D6\u5B8C\u6574\u8981\u6C42\u3011" : ""}
+\u3010\u5F53\u524D\u8986\u76D6\u3011${JSON.stringify(compactCoverage())}
+\u5BF9\u6BCF\u4E2A\u9A8C\u6536\u76EE\u6807\u8C03\u7528 assert \u65F6\u643A\u5E26 criterionId\uFF0C\u4E25\u683C\u4F7F\u7528\u8BE5\u76EE\u6807\u7684 type/expected\uFF0C\u5E76\u5B9A\u4F4D target \u8303\u56F4\u3002\u8D1F\u5411\u6D4B\u8BD5\u4FDD\u7559\u9519\u8BEF\u8F93\u5165\u53CA\u9A8C\u8BC1\u62D2\u7EDD\u7684\u6B65\u9AA4\uFF1Bfixed \u6570\u636E\u4E0D\u53EF\u64C5\u81EA\u66FF\u6362\u3002\u7ED3\u675F\u524D\u7528 read_coverage \u68C0\u67E5\u9057\u6F0F\u3002` });
+  if (o.resumeMessages) {
+    const ids = /* @__PURE__ */ new Set();
+    for (const m of messages) if (m.role === "assistant") for (const tc of m.tool_calls ?? []) {
+      if (["snapshot", "see", "page_tree", "api", "readText"].includes(tc.function?.name)) ids.add(tc.id);
+    }
+    for (const m of messages) {
+      if (m.role === "tool" && (ids.has(m.tool_call_id) || m.__ttStateKind) || m.role === "user" && m.__ttSlotKind) m.content = "\uFF08\u6682\u505C\u524D\u89C2\u6D4B\u5DF2\u8FC7\u671F\uFF0C\u8BF7\u4EE5\u7EED\u8DD1\u65F6\u7684\u65B0\u72B6\u6001\u4E3A\u51C6\uFF09";
+    }
+    try {
+      const snapshot = await tools.find((t) => t.name === "snapshot").execute({});
+      messages.push({ role: "user", content: `\u3010\u7EED\u8DD1\u5F53\u524D\u9875\u9762\u3011
+${typeof snapshot === "string" ? snapshot : snapshot.text}`, __ttSlotKind: "snapshot", __ttSlotRound: 0 });
+    } catch {
+      messages.push({ role: "user", content: "\u7EED\u8DD1\u89C2\u6D4B\u5C1A\u4E0D\u53EF\u7528\uFF0C\u8BF7\u5148\u83B7\u53D6 snapshot\uFF0C\u7981\u6B62\u4F7F\u7528\u6682\u505C\u524D\u7684\u7F16\u53F7\u3002" });
+    }
+  }
+  messages.splice(0, messages.length, ...redactGenerationData(jobId, messages));
   let failStreak = 0;
   const onSuccess = (name) => {
     if (!GEN_OBSERVATION_TOOLS.has(name)) failStreak = 0;
@@ -6779,24 +7531,15 @@ ${outlineText}`
     return assistFollowup(decision, context);
   };
   const onStuck = async (name, args, count, kind, detail) => {
-    const context = kind === "observe" ? `\u8FDE\u7EED ${count} \u6B21\u89C6\u89C9\u89C2\u5BDF\u65E0\u8FDB\u5C55` : kind === "linkage" ? `\u7591\u4F3C\u8054\u52A8\u5B57\u6BB5\u7684\u7EC4\u5408\u5DF2\u4EA4\u66FF\u91CD\u8BD5 ${count} \u8F6E` : `\u76F8\u540C\u64CD\u4F5C\u5DF2\u91CD\u590D ${count} \u6B21\u65E0\u8FDB\u5C55`;
+    const context = kind === "observe" ? `\u8FDE\u7EED ${count} \u6B21\u89C2\u5BDF\u65E0\u8FDB\u5C55` : kind === "linkage" ? `\u7591\u4F3C\u8054\u52A8\u5B57\u6BB5\u7684\u7EC4\u5408\u5DF2\u4EA4\u66FF\u91CD\u8BD5 ${count} \u8F6E` : `\u76F8\u540C\u64CD\u4F5C\u5DF2\u91CD\u590D ${count} \u6B21\u65E0\u8FDB\u5C55`;
     const decision = await askUser(jobId, {
       stepIndex: o.steps.length,
       kind: "tool",
-      instruction: kind === "observe" ? `\u89C2\u5BDF\u7A7A\u8F6C\u4FDD\u62A4\uFF1A\u5DF2\u8FDE\u7EED ${count} \u6B21\u89C6\u89C9\u89C2\u5BDF\uFF08see\uFF09\u4ECD\u65E0\u8FDB\u5C55\uFF0C\u7591\u4F3C\u627E\u4E0D\u5230\u76EE\u6807\u5165\u53E3` : kind === "linkage" ? `\u8054\u52A8\u6B7B\u9501\u4FDD\u62A4\uFF1A${detail ?? "\u4E24\u4E2A\u4E0B\u62C9\u5B57\u6BB5"}\u5DF2\u4EA4\u66FF\u6210\u529F\u9009\u62E9 ${count} \u8F6E\uFF0C\u9009\u62E9\u5176\u4E00\u540E\u53E6\u4E00\u4E2A\u88AB\u9875\u9762\u56DE\u8BBE\uFF0C\u7591\u4F3C\u8054\u52A8\u5B57\u6BB5\uFF08\u5F53\u524D\u7EC4\u5408\u4E0D\u88AB\u9875\u9762\u63A5\u53D7\uFF09` : `\u7A7A\u8F6C\u4FDD\u62A4\uFF1A\u5DE5\u5177\u300C${name}\u300D\u76F8\u540C\u64CD\u4F5C\u5DF2\u91CD\u590D ${count} \u6B21\u65E0\u8FDB\u5C55`,
+      instruction: kind === "observe" ? `\u89C2\u5BDF\u7A7A\u8F6C\u4FDD\u62A4\uFF1A\u5DF2\u8FDE\u7EED ${count} \u6B21\u89C2\u5BDF\u4ECD\u65E0\u8FDB\u5C55\uFF0C\u7591\u4F3C\u627E\u4E0D\u5230\u76EE\u6807\u5165\u53E3` : kind === "linkage" ? `\u8054\u52A8\u6B7B\u9501\u4FDD\u62A4\uFF1A${detail ?? "\u4E24\u4E2A\u4E0B\u62C9\u5B57\u6BB5"}\u5DF2\u4EA4\u66FF\u6210\u529F\u9009\u62E9 ${count} \u8F6E\uFF0C\u9009\u62E9\u5176\u4E00\u540E\u53E6\u4E00\u4E2A\u88AB\u9875\u9762\u56DE\u8BBE\uFF0C\u7591\u4F3C\u8054\u52A8\u5B57\u6BB5\uFF08\u5F53\u524D\u7EC4\u5408\u4E0D\u88AB\u9875\u9762\u63A5\u53D7\uFF09` : `\u7A7A\u8F6C\u4FDD\u62A4\uFF1A\u5DE5\u5177\u300C${name}\u300D\u76F8\u540C\u64CD\u4F5C\u5DF2\u91CD\u590D ${count} \u6B21\u65E0\u8FDB\u5C55`,
       canManual: true
     });
     if (o.isCancelled()) return null;
     return assistFollowup(decision, context);
-  };
-  let lastStepCount = ctx.stepCount();
-  const isProgress = (name) => {
-    const cur = ctx.stepCount();
-    if (cur > lastStepCount) {
-      lastStepCount = cur;
-      return true;
-    }
-    return name === "goto";
   };
   const loop = await runToolLoop({
     client,
@@ -6813,9 +7556,9 @@ ${outlineText}`
     onFailure,
     onSuccess,
     onStuck,
-    isProgress,
+    workingMemory: () => buildWorkingMemory(o.steps, o.goalText) + "\n\u3010\u9A8C\u6536\u8986\u76D6\u3011" + JSON.stringify(compactCoverage()) + "\n\u7528 read_coverage \u8BFB\u53D6\u5B8C\u6574\u9A8C\u6536\u9884\u671F\uFF1B\u4E0D\u5141\u8BB8\u5F31\u5316\u65AD\u8A00\u3002",
     onStep: ({ index, name, args, result, usageDelta: ud }) => {
-      const label = { snapshot: "\u5FEB\u7167", page_tree: "\u7ED3\u6784\u6811", goto: "\u5BFC\u822A", click: "\u70B9\u51FB", fill: "\u586B\u5199", press: "\u6309\u952E", check: "\u52FE\u9009", select: "\u9009\u62E9", wait: "\u7B49\u5F85", readText: "\u8BFB\u53D6\u6587\u672C", assert: "\u65AD\u8A00", act: "AI \u515C\u5E95", see: "\u89C6\u89C9\u89C2\u5BDF", api: "\u7F51\u7EDC\u8BF7\u6C42", component_action: "\u7EC4\u4EF6\u52A8\u4F5C", ask_human: "\u4EBA\u5DE5\u6C42\u52A9", finish: "\u5B8C\u6210" }[name] ?? name;
+      const label = { snapshot: "\u5FEB\u7167", page_tree: "\u7ED3\u6784\u6811", goto: "\u5BFC\u822A", click: "\u70B9\u51FB", fill: "\u586B\u5199", press: "\u6309\u952E", check: "\u52FE\u9009", select: "\u9009\u62E9", wait: "\u7B49\u5F85", readText: "\u8BFB\u53D6\u6587\u672C", assert: "\u65AD\u8A00", act: "AI \u515C\u5E95", see: "\u89C6\u89C9\u89C2\u5BDF", api: "\u7F51\u7EDC\u8BF7\u6C42", component_action: "\u7EC4\u4EF6\u52A8\u4F5C", batch_actions: "\u6279\u91CF\u586B\u5199", read_goal: "\u8BFB\u53D6\u76EE\u6807", read_script: "\u8BFB\u53D6\u811A\u672C", read_coverage: "\u9A8C\u6536\u8986\u76D6", ask_human: "\u4EBA\u5DE5\u6C42\u52A9", finish: "\u5B8C\u6210" }[name] ?? name;
       let detail = "";
       try {
         detail = JSON.stringify(args ?? {}).slice(0, 160);
@@ -6829,6 +7572,7 @@ ${outlineText}`
   }).finally(() => {
     revokeHandlers.delete(jobId);
     network.dispose();
+    o.onCheckpoint?.(messages);
   });
   if (o.isCancelled()) return { ok: false, messages };
   if (!loop.finished) {
@@ -6840,11 +7584,29 @@ ${outlineText}`
 
 // src/services/generationService.ts
 async function generate(jobId, params) {
+  const owner = claimJob(jobId);
+  if (!owner) throw new Error("\u8BE5\u4EFB\u52A1\u6B63\u5728\u6267\u884C\u6216\u6682\u505C\u6536\u5C3E\uFF0C\u8BF7\u7A0D\u540E\u7EE7\u7EED");
+  try {
+    await generateOwned(jobId, params);
+  } finally {
+    releaseJobSlot(jobId, owner);
+  }
+}
+async function persistPausedCheckpoint(jobId, checkpoint) {
+  try {
+    await saveCheckpoint(jobId, checkpoint);
+  } catch {
+    pub({ type: "gen:status", jobId, message: "\u68C0\u67E5\u70B9\u5199\u5165\u6570\u636E\u5E93\u5931\u8D25\uFF0C\u5DF2\u4FDD\u7559\u5185\u5B58\u72B6\u6001\uFF0C\u53EF\u5728\u5F53\u524D\u4F1A\u8BDD\u7EE7\u7EED\u751F\u6210" });
+  }
+}
+async function generateOwned(jobId, params) {
   if (!isConfigured()) {
     pub({ type: "gen:error", jobId, message: "\u8BF7\u5148\u5728\u300C\u8BBE\u7F6E\u300D\u4E2D\u914D\u7F6E\u7F51\u5173\u5730\u5740\u4E0E\u5BC6\u94A5" });
     return;
   }
   const cfg = getConfig();
+  setGenerationEnvironment(jobId, params.envMap ?? {});
+  params = { ...params, nl: redactGenerationText(jobId, params.nl), startUrl: params.startUrl ? redactGenerationText(jobId, params.startUrl) : void 0 };
   initUsage(jobId);
   const logId = await upsertLog(jobId, {
     projectId: params.projectId ?? null,
@@ -6869,6 +7631,8 @@ async function generate(jobId, params) {
   }
   const job = createJobRuntime(jobId);
   const { abortCtrl } = job;
+  const substitution = createSubstituter(params.envMap ?? {}, Date.now());
+  const checkpoint = { messages: [], steps: [], goalText: params.nl, outline: [], substitution: substitution.state };
   try {
     const envMap = params.envMap ?? {};
     const envVarHint = buildEnvVarHint(envMap);
@@ -6876,6 +7640,8 @@ async function generate(jobId, params) {
     const att = loadGenAttachments(jobId, params.attachments ?? []);
     if (!att) return;
     const { text: attachmentText, images: attachmentImages } = att;
+    checkpoint.goalText = `${params.nl}${attachmentText}${params.startUrl ? `
+\u8D77\u59CB\u5730\u5740\uFF1A${params.startUrl}` : ""}`;
     let stagehand;
     let pwBrowser = null;
     let pwPage = null;
@@ -6895,12 +7661,13 @@ async function generate(jobId, params) {
       return;
     }
     onSessionBrowserClosed(jobId, () => job.cancel("\u6D4F\u89C8\u5668\u5DF2\u88AB\u5173\u95ED\uFF0C\u751F\u6210\u5DF2\u53D6\u6D88"));
-    const steps = [];
-    const { sub: sub2 } = createSubstituter(envMap, Date.now());
+    const steps = checkpoint.steps;
+    const { sub: sub2 } = substitution;
     const emit = createStepEmitter(jobId, steps, () => 0);
     try {
       const page = await sessionPage(stagehand);
       if (!page) throw new Error("\u6D4F\u89C8\u5668\u9875\u9762\u4E0D\u53EF\u7528");
+      if (job.isCancelled()) return;
       const setup = await setupGenPage(jobId, page, params.projectId);
       if (setup.error) {
         if (!job.isCancelled()) pub({ type: "gen:error", jobId, message: setup.error, usage: getUsage(jobId) });
@@ -6908,6 +7675,7 @@ async function generate(jobId, params) {
       }
       pwBrowser = setup.pwBrowser;
       pwPage = setup.pwPage;
+      if (job.isCancelled()) return;
       if (params.startUrl) {
         const realUrl = sub2(params.startUrl) ?? params.startUrl;
         await page.goto(realUrl);
@@ -6929,20 +7697,23 @@ async function generate(jobId, params) {
 ${params.nl}${attachmentText}${params.startUrl ? `
 
 \u8D77\u59CB\u5730\u5740\uFF1A${params.startUrl}` : ""}${pageCtx}`;
-      const split = await preSplit(client, cfg.openaiModel, await splitSystemWithVocab(systemContent, params.projectId), userContent, envVarHint, cfg.reasoningEffort, logId, jobId, attachmentImages);
+      const split = await preSplit(client, cfg.openaiModel, await splitSystemWithVocab(systemContent, params.projectId), userContent, envVarHint, cfg.reasoningEffort, logId, jobId, attachmentImages, abortCtrl.signal);
       if (job.isCancelled()) return;
       const plan = split.steps;
       if (!plan || !plan.length) {
         pub({ type: "gen:error", jobId, message: "\u9884\u62C6\u5206\u672A\u5F97\u5230\u6709\u6548\u6B65\u9AA4\uFF0C\u8BF7\u8865\u5145\u66F4\u8BE6\u7EC6\u7684\u63CF\u8FF0\u540E\u91CD\u8BD5", usage: getUsage(jobId) });
         return;
       }
-      const confirmed = await awaitPlanConfirm(jobId, plan, split.usage);
+      const confirmed = await awaitPlanConfirm(jobId, plan, split.usage, split.intent);
       if (job.isCancelled()) return;
-      if (!confirmed || !confirmed.length) {
+      if (!confirmed || !confirmed.steps.length) {
         if (!job.isCancelled()) pub({ type: "gen:error", jobId, message: "\u672A\u6536\u5230\u8BA1\u5212\u786E\u8BA4\u6216\u7B49\u5F85\u8D85\u65F6", usage: getUsage(jobId) });
         return;
       }
-      pub({ type: "gen:status", jobId, message: `\u5927\u7EB2\u5DF2\u786E\u8BA4\uFF08${confirmed.length} \u6B65\u53C2\u8003\uFF09\uFF0C\u5F00\u59CB\u667A\u80FD\u4F53\u751F\u6210\u2026` });
+      pub({ type: "gen:status", jobId, message: `\u5927\u7EB2\u5DF2\u786E\u8BA4\uFF08${confirmed.steps.length} \u6B65\u53C2\u8003\uFF09\uFF0C\u5F00\u59CB\u667A\u80FD\u4F53\u751F\u6210\u2026` });
+      checkpoint.outline = confirmed.steps;
+      checkpoint.intent = confirmed.intent;
+      checkpoint.evidence = [];
       const loopResult = await runGenerationLoop({
         jobId,
         page,
@@ -6958,27 +7729,17 @@ ${params.nl}${attachmentText}${params.startUrl ? `
         steps,
         goalText: `${params.nl}${attachmentText}${params.startUrl ? `
 \u8D77\u59CB\u5730\u5740\uFF1A${params.startUrl}` : ""}`,
-        outline: confirmed,
+        outline: confirmed.steps,
+        intent: confirmed.intent,
+        evidence: checkpoint.evidence,
         projectId: params.projectId ?? null,
         logId,
         isCancelled: job.isCancelled,
-        signal: abortCtrl.signal
+        signal: abortCtrl.signal,
+        onCheckpoint: (messages) => {
+          checkpoint.messages = messages;
+        }
       });
-      if (job.isPaused() && loopResult.messages.length) {
-        await prisma.generationLog.update({
-          where: { jobId },
-          data: {
-            loopState: {
-              messages: loopResult.messages,
-              goalText: `${params.nl}${attachmentText}`,
-              envVarHint,
-              outline: confirmed,
-              projectId: params.projectId ?? null
-            }
-          }
-        }).catch(() => {
-        });
-      }
       if (job.isCancelled()) return;
       if (!loopResult.ok) return;
       if (job.isCancelled()) return;
@@ -6986,7 +7747,7 @@ ${params.nl}${attachmentText}${params.startUrl ? `
         pub({ type: "gen:error", jobId, message: "\u672A\u751F\u6210\u4EFB\u4F55\u6B65\u9AA4", usage: getUsage(jobId) });
         return;
       }
-      const script = { name: "\u751F\u6210\u811A\u672C", steps };
+      const script = { name: "\u751F\u6210\u811A\u672C", intent: checkpoint?.intent, steps };
       pub({ type: "gen:done", jobId, script, usage: getUsage(jobId) });
     } catch (e) {
       if (!job.isCancelled()) pub({ type: "gen:error", jobId, message: `\u6267\u884C\u5931\u8D25\uFF1A${String(e)}`, usage: getUsage(jobId) });
@@ -6994,10 +7755,20 @@ ${params.nl}${attachmentText}${params.startUrl ? `
       await finalizeGenJob(jobId, { paused: job.isPaused(), pwBrowser, logId });
     }
   } finally {
+    if (job.isPaused()) await persistPausedCheckpoint(jobId, checkpoint);
     releaseJob(jobId, job.isPaused());
   }
 }
 async function continueGenerate(jobId, params) {
+  const owner = claimJob(jobId);
+  if (!owner) throw new Error("\u8BE5\u4EFB\u52A1\u6B63\u5728\u6267\u884C\u6216\u6682\u505C\u6536\u5C3E\uFF0C\u8BF7\u7A0D\u540E\u7EE7\u7EED");
+  try {
+    await continueGenerateOwned(jobId, params);
+  } finally {
+    releaseJobSlot(jobId, owner);
+  }
+}
+async function continueGenerateOwned(jobId, params) {
   if (!isConfigured()) {
     pub({ type: "gen:error", jobId, message: "\u8BF7\u5148\u5728\u300C\u8BBE\u7F6E\u300D\u4E2D\u914D\u7F6E\u7F51\u5173\u5730\u5740\u4E0E\u5BC6\u94A5" });
     return;
@@ -7009,6 +7780,8 @@ async function continueGenerate(jobId, params) {
   }
   cancelSessionGc(jobId);
   const cfg = getConfig();
+  setGenerationEnvironment(jobId, params.envMap ?? {});
+  params = { ...params, nl: redactGenerationText(jobId, params.nl), baseSteps: redactGenerationData(jobId, params.baseSteps) };
   ensureUsage(jobId);
   const continueLogId = await upsertLog(jobId, {
     projectId: params.projectId ?? null,
@@ -7028,8 +7801,12 @@ async function continueGenerate(jobId, params) {
   let pwPage = null;
   const job = createJobRuntime(jobId);
   const { abortCtrl } = job;
+  let checkpoint = null;
   onSessionBrowserClosed(jobId, () => job.cancel("\u6D4F\u89C8\u5668\u5DF2\u88AB\u5173\u95ED\uFF0C\u751F\u6210\u5DF2\u53D6\u6D88"));
   try {
+    const saved = await loadCheckpoint(jobId);
+    const substitution = createSubstituter(params.envMap ?? {}, Date.now(), saved?.substitution);
+    checkpoint = { messages: [], steps: params.baseSteps, goalText: params.nl, outline: [], substitution: substitution.state };
     const envMap = params.envMap ?? {};
     const envVarHint = buildEnvVarHint(envMap);
     const att = loadGenAttachments(jobId, params.attachments ?? []);
@@ -7044,8 +7821,9 @@ async function continueGenerate(jobId, params) {
     }
     pwBrowser = setup.pwBrowser;
     pwPage = setup.pwPage;
+    if (job.isCancelled()) return;
     const steps = [];
-    const { sub: sub2 } = createSubstituter(envMap, Date.now());
+    const { sub: sub2 } = substitution;
     const emit = createStepEmitter(jobId, steps, () => params.baseSteps.length);
     try {
       let title = "";
@@ -7057,9 +7835,15 @@ async function continueGenerate(jobId, params) {
       }
       const client = createGatewayClient(jobId);
       if (params.resumeLoop) {
-        const saved = await prisma.generationLog.findUnique({ where: { jobId }, select: { loopState: true } });
-        const st = saved?.loopState;
+        const st = saved;
         if (st?.messages?.length) {
+          checkpoint.goalText = st.goalText ?? params.nl;
+          checkpoint.outline = st.outline ?? [];
+          checkpoint.intent = st.intent;
+          checkpoint.evidence = st.evidence ?? [];
+          const resumeMessages = [...st.messages, { role: "user", content: `\u3010\u7EED\u8DD1\u72B6\u6001\u3011\u4EE5\u4E0B\u4E3A\u7528\u6237\u5F53\u524D\u4FDD\u7559\u7684\u5B8C\u6574\u811A\u672C\uFF0C\u8BF7\u4EE5\u6B64\u4E3A\u51C6\uFF0C\u4E0D\u8981\u91CD\u590D\u5DF2\u5B8C\u6210\u64CD\u4F5C\u3002\u5148 snapshot \u786E\u8BA4\u9875\u9762\uFF0C\u65E7\u5143\u7D20\u7F16\u53F7\u4E0D\u518D\u6709\u6548\u3002
+${JSON.stringify(params.baseSteps)}
+\u3010\u8865\u5145\u8BF4\u660E\u3011${params.nl}` }];
           const resumeResult = await runGenerationLoop({
             jobId,
             page,
@@ -7074,6 +7858,8 @@ async function continueGenerate(jobId, params) {
             emit,
             steps,
             goalText: String(st.goalText ?? params.nl),
+            intent: checkpoint.intent,
+            evidence: checkpoint.evidence,
             outline: Array.isArray(st.outline) ? st.outline : [],
             // 续跑的大纲是完整原大纲，baseSteps 里已落库的断言计入对齐基数，避免等待步重复补插
             outlineAssertBase: params.baseSteps.filter((s) => s.kind === "assert").length,
@@ -7082,11 +7868,15 @@ async function continueGenerate(jobId, params) {
             logId: continueLogId,
             isCancelled: job.isCancelled,
             signal: abortCtrl.signal,
-            resumeMessages: st.messages
+            resumeMessages,
+            onCheckpoint: (messages) => {
+              checkpoint.messages = messages;
+              checkpoint.steps = [...params.baseSteps, ...steps];
+            }
           });
           if (job.isCancelled()) return;
           if (!resumeResult.ok) return;
-          const script2 = { name: "\u751F\u6210\u811A\u672C", steps: [...params.baseSteps, ...steps] };
+          const script2 = { name: "\u751F\u6210\u811A\u672C", intent: checkpoint?.intent, steps: [...params.baseSteps, ...steps] };
           pub({ type: "gen:done", jobId, script: script2, usage: getUsage(jobId) });
           return;
         }
@@ -7103,20 +7893,24 @@ ${params.nl}${attachmentText}
 ${doneSummary || "\uFF08\u65E0\uFF09"}
 
 \u3010\u5F53\u524D\u9875\u9762\u3011\u6807\u9898\uFF1A${title}\uFF1BURL\uFF1A${url}`;
-      const split = await preSplit(client, cfg.openaiModel, await splitSystemWithVocab(systemContent, params.projectId), userContent, envVarHint, cfg.reasoningEffort, continueLogId, jobId, attachmentImages);
+      const split = await preSplit(client, cfg.openaiModel, await splitSystemWithVocab(systemContent, params.projectId), userContent, envVarHint, cfg.reasoningEffort, continueLogId, jobId, attachmentImages, abortCtrl.signal);
       if (job.isCancelled()) return;
       const plan = split.steps;
       if (!plan || !plan.length) {
         pub({ type: "gen:error", jobId, message: "\u8FFD\u52A0\u62C6\u5206\u672A\u5F97\u5230\u6709\u6548\u6B65\u9AA4\uFF0C\u8BF7\u8865\u5145\u66F4\u8BE6\u7EC6\u7684\u63CF\u8FF0\u540E\u91CD\u8BD5", usage: getUsage(jobId) });
         return;
       }
-      const confirmed = await awaitPlanConfirm(jobId, plan, split.usage);
+      const confirmed = await awaitPlanConfirm(jobId, plan, split.usage, split.intent);
       if (job.isCancelled()) return;
-      if (!confirmed || !confirmed.length) {
+      if (!confirmed || !confirmed.steps.length) {
         if (!job.isCancelled()) pub({ type: "gen:error", jobId, message: "\u672A\u6536\u5230\u8BA1\u5212\u786E\u8BA4\u6216\u7B49\u5F85\u8D85\u65F6", usage: getUsage(jobId) });
         return;
       }
-      pub({ type: "gen:status", jobId, message: `\u5927\u7EB2\u5DF2\u786E\u8BA4\uFF08${confirmed.length} \u6B65\u53C2\u8003\uFF09\uFF0C\u7EE7\u7EED\u667A\u80FD\u4F53\u751F\u6210\u2026` });
+      pub({ type: "gen:status", jobId, message: `\u5927\u7EB2\u5DF2\u786E\u8BA4\uFF08${confirmed.steps.length} \u6B65\u53C2\u8003\uFF09\uFF0C\u7EE7\u7EED\u667A\u80FD\u4F53\u751F\u6210\u2026` });
+      checkpoint.goalText = `\u3010\u8FFD\u52A0\u76EE\u6807\u3011${params.nl}${attachmentText}`;
+      checkpoint.outline = confirmed.steps;
+      checkpoint.intent = confirmed.intent;
+      checkpoint.evidence = [];
       const loopResult = await runGenerationLoop({
         jobId,
         page,
@@ -7131,12 +7925,18 @@ ${doneSummary || "\uFF08\u65E0\uFF09"}
         emit,
         steps,
         goalText: `\u3010\u8FFD\u52A0\u76EE\u6807\u3011${params.nl}${attachmentText}`,
-        outline: confirmed,
+        outline: confirmed.steps,
+        intent: confirmed.intent,
+        evidence: checkpoint.evidence,
         baseSteps: params.baseSteps,
         projectId: params.projectId ?? null,
         logId: continueLogId,
         isCancelled: job.isCancelled,
-        signal: abortCtrl.signal
+        signal: abortCtrl.signal,
+        onCheckpoint: (messages) => {
+          checkpoint.messages = messages;
+          checkpoint.steps = [...params.baseSteps, ...steps];
+        }
       });
       if (job.isCancelled()) return;
       if (!loopResult.ok) return;
@@ -7145,15 +7945,18 @@ ${doneSummary || "\uFF08\u65E0\uFF09"}
         pub({ type: "gen:error", jobId, message: "\u672A\u751F\u6210\u4EFB\u4F55\u65B0\u6B65\u9AA4", usage: getUsage(jobId) });
         return;
       }
-      const script = { name: "\u751F\u6210\u811A\u672C", steps: [...params.baseSteps, ...steps] };
+      const script = { name: "\u751F\u6210\u811A\u672C", intent: checkpoint?.intent, steps: [...params.baseSteps, ...steps] };
       pub({ type: "gen:done", jobId, script, usage: getUsage(jobId) });
     } catch (e) {
       if (!job.isCancelled()) pub({ type: "gen:error", jobId, message: `\u6267\u884C\u5931\u8D25\uFF1A${String(e)}`, usage: getUsage(jobId) });
-    } finally {
-      await finalizeGenJob(jobId, { paused: job.isPaused(), pwBrowser, logId: continueLogId });
     }
   } finally {
-    releaseJob(jobId, job.isPaused());
+    try {
+      await finalizeGenJob(jobId, { paused: job.isPaused(), pwBrowser, logId: continueLogId });
+    } finally {
+      if (job.isPaused() && checkpoint) await persistPausedCheckpoint(jobId, checkpoint);
+      releaseJob(jobId, job.isPaused());
+    }
   }
 }
 
@@ -7176,11 +7979,12 @@ async function generateRoutes(app2) {
   });
   app2.post("/api/generate/:jobId/confirm", async (req) => {
     const { jobId } = req.params;
-    const { steps } = req.body ?? {};
+    const { steps, intent } = req.body ?? {};
     if (!Array.isArray(steps) || !steps.length || !steps.every((s) => s && typeof s.instruction === "string" && s.instruction.trim())) {
       return { error: "\u7F3A\u5C11\u6709\u6548\u7684\u6B65\u9AA4\u5217\u8868" };
     }
-    const ok = confirmPlan(jobId, steps);
+    const ok = confirmPlan(jobId, steps, intent);
+    if (typeof ok === "string") return { error: ok };
     if (!ok) return { error: "\u8BE5\u4EFB\u52A1\u4E0D\u5728\u7B49\u5F85\u8BA1\u5212\u786E\u8BA4\u72B6\u6001" };
     return { ok: true };
   });
@@ -7218,6 +8022,7 @@ async function generateRoutes(app2) {
       const vars = await prisma.envVar.findMany({ where: { projectId }, select: { key: true, value: true } });
       for (const v of vars) envMap[v.key] = v.value;
     }
+    if (isJobRunning(jobId)) return { error: "\u8BE5\u4EFB\u52A1\u6B63\u5728\u6267\u884C\u6216\u6682\u505C\u6536\u5C3E\uFF0C\u8BF7\u7A0D\u540E\u7EE7\u7EED" };
     continueGenerate(jobId, {
       nl,
       envMap,
@@ -7269,7 +8074,9 @@ function buildActionStep(method, args, loc, line) {
     case "press":
       return { kind: "action", action: "press", locator: loc, key: firstQuoted(args), description: line };
     case "check":
-      return { kind: "action", action: "check", locator: loc, description: line };
+    case "uncheck":
+    case "setChecked":
+      return { kind: "action", action: "check", checked: method === "check" || method === "setChecked" && args.trim().startsWith("true"), locator: loc, description: line };
     case "selectOption":
       return { kind: "action", action: "select", locator: loc, value: firstQuoted(args), description: line };
     default:

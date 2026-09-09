@@ -6,32 +6,13 @@ export type ReasoningEffort = '' | 'low' | 'high' | 'max';
 export const REASONING_EFFORTS: ReasoningEffort[] = ['', 'low', 'high', 'max'];
 
 /** 预拆分 system prompt 的默认值（设置页可查看/修改/恢复）。流程：先把用户描述预拆分为有序步骤计划，确认后再逐步用 act/observe 定位执行。 */
-export const DEFAULT_SPLIT_SYSTEM_PROMPT = `你是一名资深 Web 测试工程师。用户会给出一条测试流程的自然语言描述（可能附有页面截图/视觉说明与附件内容），请你据此把整个测试过程预拆分为一份**有序的可执行步骤计划**，后续会在真实浏览器里逐步执行并回放。
+export const DEFAULT_SPLIT_SYSTEM_PROMPT = `你是一名具备前端知识的 Web 测试工程师。根据用户描述及附件设计有序的可执行测试计划，明确前置条件、数据约束和可验证的业务结果。
+每步必须带 kind（action/assert）和 instruction；UI 动作必须带 "action" 字段（click/fill/press/select/check），fill/select 带 value，press 带 key。goto 带 url，wait 带 value 毫秒数。目标用自然语言描述，不提供选择器。
+预期结果以用户需求或已确认验收标准为依据。正向流程验证成功结果；负向流程保留错误输入并验证预期拒绝，不能把负向验证删作失败重试。固定数据不能擅自替换。
+优先验证指定记录的完整字段和持久页面内容，避免整页通用文案、标题前缀或单个成功提示造成错误通过。页面和接口响应都是实际结果的证据，均需对照需求。
+数据需要唯一值时使用 {{systemTime}}、{{randomNumber[:6]}}、{{randomPhone}}、{{randomEmail}} 等系统变量；环境变量也使用 {{key}}，不得写出密钥。一次运行中同一占位符引用同一值。
+步骤按真实顺序排列，只覆盖用户要求，计划末步必须为断言。平台随后提供结构化测试意图的 JSON 输出协议，请严格遵守。`;
 
-输出要求：
-- 只输出一个 JSON 对象，格式为 {"steps": [ ... ]}，不要输出其他文字或 markdown 围栏。
-- 每个步骤是一个对象：
-  · "kind": "action"（动作）或 "assert"（断言），必填。
-  · "instruction": 用自然语言写清「操作哪个元素、期望什么」，必填。这是后续用 act/observe 定位与回放自愈的依据，越具体越好，如「点击页面右上角『登录』按钮」「在『用户名』输入框输入 admin」「断言页面右上角显示用户名 admin」。
-  · 动作步："action" 可为 goto（需带 "url"）、wait（需带 "value" 毫秒数）；click/fill/press/select/check 等 UI 动作**必须带 "action" 字段**（fill/select 需带 "value" 指定要填入/选中的值，press 可带 "key"），但**不要提供选择器**——目标元素写在 instruction 里，执行时由浏览器自动定位。select 步的 value 写目标选项的可见文本；若不确定页面实际有哪些选项，按语义写近似描述即可——该值仅供参考，执行 Agent 会以页面实际可选列表为准自动修正。
-  · 断言步："assertion" 对象：UI 断言用 {"type":"visible"|"hidden"|"text","expected":"..."}，目标元素在 instruction 里用自然语言描述（observe 会去定位）；接口断言用 {"type":"response_status"|"response_body"|"response_json","urlMatch":"/api/xxx","expected":"...","jsonPath":"data.id"}；WebSocket 断言用 {"type":"ws_sent"|"ws_received","urlMatch":"/ws/xxx"}。urlMatch 是 URL 关键词子串，不是完整 URL 或 CSS 选择器。
-  · 断言证据要**持久、可复现**：不要断言 toast/浮层等几秒后自动消失的瞬态提示（如「登录成功」「保存成功」「发布成功」）——回放时极易因提示消失时机不确定而误报失败。优先断言**接口响应**（操作基本都有对应接口，response_status/response_json 最稳）；其次断言**操作后的持久页面内容**（列表新增的行、详情页字段、跳转后稳定展示的元素）。若结果只能靠瞬态提示体现，就改断言它带来的持久效果（如列表/详情出现新数据、URL 发生跳转）。
-- 步骤按用户操作的真实顺序排列；只保留与测试目标相关的步骤，探查性动作不要。
-- 需要唯一/随机测试数据的字段（临时用户名、编号、标题、手机号、邮箱、身份证等）把系统变量拼进 instruction/value 里，写法与环境变量相同都是双花括号：{{systemTime}}（当前时间戳）、{{randomNumber[:n]}}（随机数字）、{{randomChinese[:n]}}（随机汉字）、{{randomPhone}}（随机手机号）、{{randomEmail}}（随机邮箱）、{{randomIdCard}}（随机 18 位身份证号）。系统变量是运行期内置的、无需在项目里定义；只有当项目环境变量恰好定义了同名变量时才以环境变量为准。跨环境复用的值（根域名、通用账号密码）用 {{变量名}} 占位（需在项目设置里定义）；一次性测试数据直接写真实值。
-- 计划必须**以一条断言步骤结尾**，验证测试目标已达成（关键结果出现、目标页面元素可见、接口返回成功等）。
-
-【拆步示例】
-输入描述：在系统里新增一个公告并验证发布成功。
-输出：
-{"steps":[
-  {"kind":"action","action":"click","instruction":"点击左侧菜单「公告管理」"},
-  {"kind":"action","action":"click","instruction":"点击「新建公告」按钮"},
-  {"kind":"action","action":"fill","instruction":"在「标题」输入框输入 公告_{{randomNumber[:6]}}","value":"公告_{{randomNumber[:6]}}"},
-  {"kind":"action","action":"fill","instruction":"在「内容」输入框输入 这是一条测试公告","value":"这是一条测试公告"},
-  {"kind":"action","action":"click","instruction":"点击「发布」按钮"},
-  {"kind":"assert","instruction":"断言公告列表出现标题以 公告_ 开头的新条目","assertion":{"type":"text","expected":"公告_"}},
-  {"kind":"assert","instruction":"断言公告列表接口返回的最新标题包含新标题前缀","assertion":{"type":"response_json","urlMatch":"/api/announcements","expected":"公告_","jsonPath":"data[0].title"}}
-]}`;
 
 /** 定位失败时的修正助手：给定最新页面结构与失败步骤，输出改述后的指令或直接给选择器。 */
 export const CORRECT_STEP_SYSTEM_PROMPT = `你是测试脚本生成器的定位修正助手。给定「当前页面结构」和「一个未能定位的步骤」，请修正它以便重新定位。

@@ -167,14 +167,16 @@ async function generateOwned(jobId: string, params: GenerateParams): Promise<voi
         return;
       }
 
-      const confirmed = await awaitPlanConfirm(jobId, plan, split.usage);
+      const confirmed = await awaitPlanConfirm(jobId, plan, split.usage, split.intent);
       if (job.isCancelled()) return;
-      if (!confirmed || !confirmed.length) {
+      if (!confirmed || !confirmed.steps.length) {
         if (!job.isCancelled()) pub({ type: 'gen:error', jobId, message: '未收到计划确认或等待超时', usage: getUsage(jobId) });
         return;
       }
-      pub({ type: 'gen:status', jobId, message: `大纲已确认（${confirmed.length} 步参考），开始智能体生成…` });
-      checkpoint.outline = confirmed;
+      pub({ type: 'gen:status', jobId, message: `大纲已确认（${confirmed.steps.length} 步参考），开始智能体生成…` });
+      checkpoint.outline = confirmed.steps;
+      checkpoint.intent = confirmed.intent;
+      checkpoint.evidence = [];
 
       // ---- Phase B：function call 循环（LLM 在回路自主选择工具；动作成功即语义化落库）----
       // 大纲降级为软约束（拼进 system）；后续循环由 continueGenerate（续跑/常规继续）承接。
@@ -192,7 +194,9 @@ async function generateOwned(jobId: string, params: GenerateParams): Promise<voi
         emit,
         steps,
         goalText: `${params.nl}${attachmentText}${params.startUrl ? `\n起始地址：${params.startUrl}` : ''}`,
-        outline: confirmed,
+        outline: confirmed.steps,
+        intent: confirmed.intent,
+        evidence: checkpoint.evidence,
         projectId: params.projectId ?? null,
         logId,
         isCancelled: job.isCancelled,
@@ -207,7 +211,7 @@ async function generateOwned(jobId: string, params: GenerateParams): Promise<voi
         pub({ type: 'gen:error', jobId, message: '未生成任何步骤', usage: getUsage(jobId) });
         return;
       }
-      const script: TestScript = { name: '生成脚本', steps };
+      const script: TestScript = { name: '生成脚本', intent: checkpoint?.intent, steps };
       pub({ type: 'gen:done', jobId, script, usage: getUsage(jobId) });
     } catch (e) {
       if (!job.isCancelled()) pub({ type: 'gen:error', jobId, message: `执行失败：${String(e)}`, usage: getUsage(jobId) });
@@ -322,6 +326,8 @@ async function continueGenerateOwned(jobId: string, params: ContinueParams): Pro
         if (st?.messages?.length) {
           checkpoint.goalText = st.goalText ?? params.nl;
           checkpoint.outline = st.outline ?? [];
+          checkpoint.intent = st.intent;
+          checkpoint.evidence = st.evidence ?? [];
           // 用户暂停期间可能修改步骤；旧编号和旧脚本摘要不得被当作当前状态。
           const resumeMessages = [...st.messages, { role: 'user' as const, content: `【续跑状态】以下为用户当前保留的完整脚本，请以此为准，不要重复已完成操作。先 snapshot 确认页面，旧元素编号不再有效。\n${JSON.stringify(params.baseSteps)}\n【补充说明】${params.nl}` }];
           const resumeResult = await runGenerationLoop({
@@ -338,6 +344,8 @@ async function continueGenerateOwned(jobId: string, params: ContinueParams): Pro
             emit,
             steps,
             goalText: String(st.goalText ?? params.nl),
+            intent: checkpoint.intent,
+            evidence: checkpoint.evidence,
             outline: Array.isArray(st.outline) ? (st.outline as PlanStep[]) : [],
             // 续跑的大纲是完整原大纲，baseSteps 里已落库的断言计入对齐基数，避免等待步重复补插
             outlineAssertBase: params.baseSteps.filter((s) => s.kind === 'assert').length,
@@ -351,7 +359,7 @@ async function continueGenerateOwned(jobId: string, params: ContinueParams): Pro
           });
           if (job.isCancelled()) return;
           if (!resumeResult.ok) return;
-          const script: TestScript = { name: '生成脚本', steps: [...params.baseSteps, ...steps] };
+          const script: TestScript = { name: '生成脚本', intent: checkpoint?.intent, steps: [...params.baseSteps, ...steps] };
           pub({ type: 'gen:done', jobId, script, usage: getUsage(jobId) });
           return;
         }
@@ -372,15 +380,17 @@ async function continueGenerateOwned(jobId: string, params: ContinueParams): Pro
         return;
       }
 
-      const confirmed = await awaitPlanConfirm(jobId, plan, split.usage);
+      const confirmed = await awaitPlanConfirm(jobId, plan, split.usage, split.intent);
       if (job.isCancelled()) return;
-      if (!confirmed || !confirmed.length) {
+      if (!confirmed || !confirmed.steps.length) {
         if (!job.isCancelled()) pub({ type: 'gen:error', jobId, message: '未收到计划确认或等待超时', usage: getUsage(jobId) });
         return;
       }
-      pub({ type: 'gen:status', jobId, message: `大纲已确认（${confirmed.length} 步参考），继续智能体生成…` });
+      pub({ type: 'gen:status', jobId, message: `大纲已确认（${confirmed.steps.length} 步参考），继续智能体生成…` });
       checkpoint.goalText = `【追加目标】${params.nl}${attachmentText}`;
-      checkpoint.outline = confirmed;
+      checkpoint.outline = confirmed.steps;
+      checkpoint.intent = confirmed.intent;
+      checkpoint.evidence = [];
 
       // ---- Phase B（续）：function call 循环（LLM 在回路自主选择工具；动作成功即语义化落库）----
       const loopResult = await runGenerationLoop({
@@ -397,7 +407,9 @@ async function continueGenerateOwned(jobId: string, params: ContinueParams): Pro
         emit,
         steps,
         goalText: `【追加目标】${params.nl}${attachmentText}`,
-        outline: confirmed,
+        outline: confirmed.steps,
+        intent: confirmed.intent,
+        evidence: checkpoint.evidence,
         baseSteps: params.baseSteps,
         projectId: params.projectId ?? null,
         logId: continueLogId,
@@ -413,7 +425,7 @@ async function continueGenerateOwned(jobId: string, params: ContinueParams): Pro
         pub({ type: 'gen:error', jobId, message: '未生成任何新步骤', usage: getUsage(jobId) });
         return;
       }
-      const script: TestScript = { name: '生成脚本', steps: [...params.baseSteps, ...steps] };
+      const script: TestScript = { name: '生成脚本', intent: checkpoint?.intent, steps: [...params.baseSteps, ...steps] };
       pub({ type: 'gen:done', jobId, script, usage: getUsage(jobId) });
     } catch (e) {
       if (!job.isCancelled()) pub({ type: 'gen:error', jobId, message: `执行失败：${String(e)}`, usage: getUsage(jobId) });

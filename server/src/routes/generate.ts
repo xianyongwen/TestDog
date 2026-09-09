@@ -1,3 +1,4 @@
+import type { TestIntent } from '../shared/testIntent';
 import type { FastifyInstance } from 'fastify';
 import { randomUUID } from 'node:crypto';
 import { isConfigured } from '../config';
@@ -37,11 +38,12 @@ export default async function generateRoutes(app: FastifyInstance) {
   /** 预拆分完成后，用户确认/修改步骤计划并继续执行。 */
   app.post('/api/generate/:jobId/confirm', async (req) => {
     const { jobId } = req.params as { jobId: string };
-    const { steps } = (req.body ?? {}) as { steps?: PlanStep[] };
+    const { steps, intent } = (req.body ?? {}) as { steps?: PlanStep[]; intent?: TestIntent };
     if (!Array.isArray(steps) || !steps.length || !steps.every((s) => s && typeof s.instruction === 'string' && s.instruction.trim())) {
       return { error: '缺少有效的步骤列表' };
     }
-    const ok = confirmPlan(jobId, steps);
+    const ok = confirmPlan(jobId, steps, intent);
+    if (typeof ok === 'string') return { error: ok };
     if (!ok) return { error: '该任务不在等待计划确认状态' };
     return { ok: true };
   });

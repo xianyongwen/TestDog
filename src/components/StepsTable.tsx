@@ -1,3 +1,4 @@
+import { browserAssertionTypes, expectedAssertionTypes } from '@shared/testIntent';
 import { useEffect, useRef, useState } from 'react';
 import { App, Button, Input, Modal, Select, Space, Tag, Tooltip } from 'antd';
 import { AimOutlined, ArrowDownOutlined, ArrowUpOutlined, CloseCircleOutlined, DeleteOutlined, LoadingOutlined, PlusOutlined } from '@ant-design/icons';
@@ -407,13 +408,8 @@ export default function StepsTable({ steps, onChange, extra, envVarKeys, pickSta
                   { value: 'ws_received', label: t('stepsTable.received') },
                   { value: 'ws_sent', label: t('stepsTable.sent') },
                 ]
-              : [
-                  { value: 'visible', label: t('stepsTable.visible') },
-                  { value: 'hidden', label: t('stepsTable.hidden') },
-                  { value: 'text', label: t('stepsTable.text') },
-                  { value: 'url', label: t('stepsTable.url') },
-                ];
-          const showExpected = isResp || isWs || r.assertion?.type === 'text' || r.assertion?.type === 'url';
+              : browserAssertionTypes.map(type => ({ value: type, label: t(`generate.assertTypes.${type}`) }));
+          const showExpected = isResp || isWs || expectedAssertionTypes.includes(r.assertion?.type ?? '');
           const showJsonPath = r.assertion?.type === 'response_json' || isWs;
           const defaultType = isResp ? 'response_status' : isWs ? 'ws_received' : 'visible';
           const jsonPlaceholder = isWs ? t('stepsTable.jsonPlaceholderWs') : t('stepsTable.jsonPlaceholder');

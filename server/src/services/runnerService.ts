@@ -620,8 +620,8 @@ async function runAssertion(page: Page, step: TestStep, networkEntries: NetworkE
   }
   // 无定位器的历史 hidden 断言保持兼容。
   if (a.type === 'hidden' && !step.locator) return;
-  const loc = step.locator && a.type !== 'url' ? buildLocator(page, step.locator) : undefined;
-  await waitForBrowserAssertion({ page, locator: loc, type: a.type, expected: a.expected, timeoutMs: 10000 });
+  const loc = step.locator && !['url', 'url_exact'].includes(a.type) ? buildLocator(page, step.locator) : undefined;
+  await waitForBrowserAssertion({ page, locator: loc, scope: step.locator?.scope ? resolveQuery(page, step.locator.scope) : undefined, type: a.type, expected: a.expected, timeoutMs: 10000 });
 }
 
 /**
@@ -759,25 +759,9 @@ async function selfHealStep(stagehand: any, shPage: any, page: Page, step: TestS
   const semantic = async (sel: string | undefined): Promise<Locator | undefined> =>
     sel ? semanticizeLocator(page, sel, { mode: 'playwright' }) : undefined;
   try {
-    // 断言步：用 observe 重新定位（只查找不执行动作）。找到可见元素才自愈通过；
-    // 找不到说明元素确实不存在，保持失败。若改用 act 会去点击/操作元素，既会误判通过又会污染页面状态。
-    if (step.action === 'assert') {
-      if (step.assertion?.type === 'url') return { healed: false }; // URL 断言为确定性比较，不自愈
-      if (step.assertion?.type === 'hidden') return { healed: false }; // 不可见断言：期望元素不存在/隐藏，AI 重新定位会反向操作，不自愈
-      const { data: actions } = await stagehand.observe(step.instruction, { page: shPage });
-      if (Array.isArray(actions) && actions.length > 0) {
-        const locator = await semantic(actions[0]?.selector);
-        // text 断言：自愈只重定位，文本包含校验仍要硬做——observe 按指令语义选中的元素未必含期望文本，
-        // 不比对会把真实断言失败误报成「已自愈」。语义化产物是描述符，需 buildLocator 还原为 Playwright 定位器；
-        // 异常抛给外层 catch → healed:false。
-        if (step.assertion?.type === 'text' && step.assertion.expected && locator) {
-          const text = (await buildLocator(page, locator).textContent()) ?? '';
-          if (!text.includes(step.assertion.expected)) return { healed: false };
-        }
-        return { healed: true, locator };
-      }
-      return { healed: false };
-    }
+    // 断言失败可能是产品缺陷，自动换目标会改变测试含义；动作仍保留原有自愈。
+    if (step.action === 'assert') return { healed: false }; // 断言失败保留证据，不通过 AI 换目标将真实缺陷变成通过。
+
     // act 找不到定位器时不抛异常，而是返回 data.success:false 且 actions 为空，
     // 必须据此判失败，否则会误报"已自愈"而步骤其实未执行。
     const res = await stagehand.act(step.instruction, { page: shPage });

@@ -41,6 +41,9 @@ function logFromWsEvent(msg: ServerMsg, logId: string): void {
         message: `预拆分完成，请确认步骤计划（${Array.isArray(msg.steps) ? msg.steps.length : 0} 步）`,
       });
       return;
+    case 'gen:coverage':
+      appendStep(logId, { type: STEP_TYPE.STATUS, message: '验收覆盖已更新', args: { coverage: msg.coverage } });
+      return;
     case 'gen:revoke':
       appendStep(logId, {
         type: STEP_TYPE.REVOKE,
@@ -78,7 +81,7 @@ function logFromWsEvent(msg: ServerMsg, logId: string): void {
       appendStep(logId, {
         type: STEP_TYPE.DONE,
         message: `生成完成，共 ${stepCount} 步`,
-        args: { stepCount },
+        args: { stepCount, intent: (msg.script as any)?.intent },
       });
       if (msg.jobId) {
         markFinished(msg.jobId as string, 'DONE', {

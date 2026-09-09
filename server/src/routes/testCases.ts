@@ -1,3 +1,4 @@
+import { testIntentSchema } from '../shared/testIntent';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../db';
@@ -33,18 +34,21 @@ export default async function testCaseRoutes(app: FastifyInstance) {
       title?: string;
       description?: string;
       naturalLanguage?: string;
+      intent?: unknown;
       steps?: unknown;
       rawCode?: string;
     };
     if (!body.title) return reply.code(400).send({ error: '缺少用例标题' });
     const stepsResult = z.array(testStepSchema).safeParse(body.steps);
     if (!stepsResult.success) return reply.code(400).send({ error: '步骤数据格式不正确' });
+    const intentResult = testIntentSchema.nullish().transform(value => value ?? undefined).safeParse(body.intent);
+    if (!intentResult.success) return reply.code(400).send({ error: '测试意图格式不正确' });
     return prisma.$transaction(async (tx) => {
       const tc = await tx.testCase.create({
         data: { projectId, title: body.title!, description: body.description ?? null, naturalLanguage: body.naturalLanguage ?? null },
       });
       await tx.testScript.create({
-        data: { testCaseId: tc.id, version: 1, steps: stepsResult.data, rawCode: body.rawCode ?? null },
+        data: { testCaseId: tc.id, version: 1, steps: stepsResult.data, intent: intentResult.data, rawCode: body.rawCode ?? null },
       });
       return tc;
     });

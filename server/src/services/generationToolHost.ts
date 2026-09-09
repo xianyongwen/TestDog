@@ -9,7 +9,11 @@
 import type OpenAI from 'openai';
 import type { AgentTool, AgentToolResult } from './toolLoop';
 import type { TestStep, ReviseOp, EmitOutcome } from '../shared/testScript';
-import { semanticizeLocator } from './locatorVerifier';
+import { locatorSchema } from '../shared/testScript';
+import { browserAssertionTypes } from '../shared/testIntent';
+import type { TestIntent } from '../shared/testIntent';
+import { assertionContractError } from './generation/intentCoverage';
+import { resolveQuery, semanticizeLocator } from './locatorVerifier';
 import { analyzeElement } from './locatorCandidateScript';
 import { executeLocatorAction, observedAction, waitForBrowserAssertion } from './browserExecution';
 import { captureObservation, observationText, stateFingerprint, batchBoundary, type BrowserObservation } from './browserObservation';
@@ -23,6 +27,8 @@ import { redactGenerationData, redactGenerationText } from './generation/privacy
 
 export interface GenToolContext {
   jobId: string;
+  intent?: TestIntent;
+  onAssertionPassed?: (step: TestStep) => void;
   signal?: AbortSignal;
   snapshotVersion?: string;
   lastObservation?: BrowserObservation;
@@ -356,11 +362,13 @@ export function buildGenTools(
     },
     {
       name: 'assert',
-      description: '断言：type=visible(元素可见)|text(页面含文本)|url(URL 匹配)。args.type + args.selector?/args.expected? + args.instruction（必填）。脚本必须以至少一条断言结尾。',
+      description: '验证结果并记录证据。text=包含、text_exact=规范化空白后全文相等、value=字段值相等、checked/unchecked、enabled/disabled、count=匹配数量（含隐藏节点）、visible/hidden、url=包含/url_exact=相等。验收目标必须带 criterionId，严格沿用已确认类型和 expected，并定位 target 范围。count/hidden 可用稳定 locator 描述符匹配多个或尚不存在的元素；不要用临时编号表示集合/不存在目标。',
       parameters: {
         type: 'object',
         properties: {
-          type: { type: 'string', enum: ['visible', 'text', 'url'] },
+          type: { type: 'string', enum: [...browserAssertionTypes] },
+          criterionId: { type: 'string' },
+          locator: { type: 'object', properties: { strategy: { type: 'string', enum: ['role', 'label', 'text', 'placeholder', 'testid', 'alt', 'title', 'css', 'xpath'] }, value: { type: 'string' }, role: { type: 'string' }, name: { type: 'string' }, scope: { type: 'object', properties: { strategy: { type: 'string', enum: ['role', 'testid', 'text', 'css'] }, value: { type: 'string' }, role: { type: 'string' }, name: { type: 'string' } }, required: ['strategy', 'value'] } }, required: ['strategy', 'value'] },
           selector: { type: 'string' },
           timeoutMs: { type: 'integer', minimum: 0, maximum: 30000 },
           expected: { type: 'string' },
@@ -371,14 +379,50 @@ export function buildGenTools(
       execute: async (a) => {
         const type = String(a.type);
         const instruction = String(a.instruction ?? '').trim() || `断言 ${type}`;
-        const expect = String(a.expected ?? '');
-        const loc = a.selector ? await resolveLocator(ctx, String(a.selector), a.snapshotVersion) : undefined;
-        await waitForBrowserAssertion({ page: { url: () => ctx.page.url(), locator: (selector: string) => ctx.pwPage.locator(selector) }, locator: loc, type, expected: sub(ctx, expect), timeoutMs: a.timeoutMs == null ? 10000 : Number(a.timeoutMs), signal: ctx.signal });
-        // 断言不改变页面；先等待异步挂载，再采集已验证目标的回放定位。
-        const assertSem = loc ? await semanticizeLocator(ctx.pwPage, semanticSource(sub(ctx, String(a.selector)) ?? String(a.selector)), { mode: 'playwright', noRawFallback: true }) : undefined;
+        const expect = a.expected == null ? undefined : String(a.expected);
+        const criterionId = a.criterionId == null ? undefined : String(a.criterionId);
+        const criterion = ctx.intent?.criteria.find(c => c.id === criterionId);
+        if (criterionId && !criterion) throw new Error(`未知验收目标：${criterionId}`);
+        const isUrl = type === 'url' || type === 'url_exact';
+        let assertSem: TestStep['locator'];
+        let loc: any;
+        let scope: any;
+        if (!isUrl) {
+          if (a.locator) {
+            const descriptor = locatorSchema.parse(a.locator);
+            if (descriptor.strategy === 'role' && !descriptor.role) descriptor.role = descriptor.value;
+            if (descriptor.scope?.strategy === 'role' && !descriptor.scope.role) descriptor.scope.role = descriptor.scope.value;
+            if (['response', 'websocket'].includes(descriptor.strategy) || !descriptor.value.trim() ||
+                JSON.stringify(descriptor).includes('data-tt-idx')) throw new Error('请提供稳定的浏览器定位描述符');
+            const resolved = JSON.parse(JSON.stringify(descriptor), (_key, v) => typeof v === 'string' ? sub(ctx, v) : v);
+            const root = resolved.scope ? resolveQuery(ctx.pwPage, resolved.scope) : ctx.pwPage;
+            if (resolved.scope && await root.count() !== 1) throw new Error('断言作用域必须唯一存在，避免空范围造成错误通过');
+            scope = resolved.scope ? root : undefined;
+            loc = resolveQuery(root, resolved);
+            assertSem = descriptor;
+          } else if (a.selector) {
+            loc = await resolveLocator(ctx, String(a.selector), a.snapshotVersion);
+            if (type === 'count' || type === 'hidden') {
+              const selector = String(a.selector).trim();
+              if (/^\d+$/.test(selector) || selector.includes('data-tt-idx')) throw new Error('数量/隐藏断言请使用稳定 locator，不能使用临时编号');
+              assertSem = { strategy: 'css', value: selector };
+            }
+          }
+        }
+        const assertion = { type: type as NonNullable<TestStep['assertion']>['type'], expected: expect };
+        if (criterion) {
+          const error = assertionContractError(criterion, { assertion, locator: assertSem ?? (loc ? { strategy: 'css', value: String(a.selector) } : undefined) }, ctx.sub);
+          if (error) throw new Error(error);
+        }
+        await waitForBrowserAssertion({ page: { url: () => ctx.page.url(), locator: (selector: string) => ctx.pwPage.locator(selector) }, locator: loc, scope, type, expected: sub(ctx, expect), timeoutMs: a.timeoutMs == null ? 10000 : Number(a.timeoutMs), signal: ctx.signal });
+        // 单元素等待挂载后再采集；集合/不存在断言保留经过校验的稳定查询，不能强制唯一命中。
+        if (loc && !assertSem) assertSem = await semanticizeLocator(ctx.pwPage, semanticSource(sub(ctx, String(a.selector)) ?? String(a.selector)), { mode: 'playwright', noRawFallback: true });
         if (loc && !assertSem) throw new Error('断言定位器未通过唯一性验证');
-        const oc = await ctx.emit({ kind: 'assert', action: 'assert', assertion: { type: type as any, expected: expect || undefined }, ...(assertSem ? { locator: assertSem } : {}), instruction, description: instruction });
-        return { status: 'success', progressed: true, recordedStep: oc.index, text: `断言通过（${type}）。${落库提示(ctx, oc)}` };
+        const step: TestStep = { kind: 'assert', action: 'assert', assertion, criterionId, ...(assertSem ? { locator: assertSem } : {}), instruction, description: instruction };
+        const oc = await ctx.emit(step);
+        ctx.onAssertionPassed?.(step);
+        return { status: 'success', progressed: true, recordedStep: oc.index, text: `断言通过（${type}${criterionId ? `，目标 ${criterionId}` : ''}）。${落库提示(ctx, oc)}` };
+
       },
     },
     {
@@ -564,7 +608,7 @@ export function buildGenTools(
 
   tools.push({
     name: 'finish',
-    description: '完成脚本生成。必须已有至少一条断言步骤（末步为断言）。args.message 可选总结。',
+    description: '完成脚本生成。所有必验目标必须有与当前脚本一致的实际通过证据，且末步为断言；不能用总结文字代替验证。args.message 可选总结。',
     parameters: {
       type: 'object',
       properties: { message: { type: 'string' } },

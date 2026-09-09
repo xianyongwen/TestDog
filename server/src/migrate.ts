@@ -221,6 +221,10 @@ const MIGRATIONS: Migration[] = [
       addColumn(db, 'Project', 'viewport', 'JSONB');
     },
   },
+  {
+    name: '20260909000000_add_test_script_intent',
+    run: (db) => addColumn(db, 'TestScript', 'intent', 'JSONB'),
+  },
 ];
 
 /** 从 Prisma 的 DATABASE_URL 解析出 SQLite 文件路径（file:./dev.db 或 file:/abs/app.db）。 */
