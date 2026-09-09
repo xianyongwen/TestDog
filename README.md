@@ -1,126 +1,128 @@
-# TestDog 测试用例管理工具
+# TestDog Test Case Management Tool
 
-简体中文 | [English](README.en.md)
+[简体中文](README.zh-CN.md) | English
 
-基于 **Tauri 2 + React 18 + Ant Design + Tailwind CSS 4** 桌面外壳、**Fastify 5 + Prisma 7 + SQLite + Stagehand 4 + Playwright** Node 后端的桌面端测试用例管理工具：
+A desktop test case management tool built on a **Tauri 2 + React 18 + Ant Design + Tailwind CSS 4** desktop shell and a **Fastify 5 + Prisma 7 + SQLite + Stagehand 4 + Playwright** Node backend:
 
-1. **AI 生成脚本**：自然语言（可带附件/登录配置）→ 模型预拆分步骤计划 → 确认后在真实浏览器以 tool-calling 循环逐步执行 → 每步落为语义化定位器脚本；支持暂停续跑、AI 修复、人工接管
-2. **手动录制脚本**：Playwright codegen 录制操作 → 解析为结构化步骤
-3. **回放运行**：确定性 Playwright 回放（零 LLM 成本），UI/接口/WebSocket 断言，失败自愈 + 一键采纳回写
-4. **插件系统**：组件库语义动作插件（下拉/树选/级联/日期/时间/滑块）+ 预设编排，跨 **Ant Design / Element（element-ui · element-plus）/ Vant / MUI**
+1. **AI script generation**: natural language (with attachments / login profiles) → model-proposed step plan → after confirmation, executed step-by-step in a real browser via a tool-calling loop → each step lands as a semantic-locator script; supports pause & resume, AI repair, and manual takeover
+2. **Manual recording**: record with Playwright codegen → parsed into structured steps
+3. **Replay runs**: deterministic Playwright replay (zero LLM cost) with UI / API / WebSocket assertions, self-healing on failure + one-click adoption back into the script
+4. **Plugin system**: component-library semantic action plugins (dropdown / tree select / cascader / date / time / slider) + preset orchestration, across **Ant Design / Element (element-ui · element-plus) / Vant / MUI**
 
-## 与 OpenClaw 对比
+## Comparison with OpenClaw
 
-**TestDog 更适合将 Web 测试流程沉淀为用例、脚本和回归报告；OpenClaw 更适合通过聊天入口处理跨工具的日常任务。** OpenClaw 的官方定位是自托管 AI 助手，支持多种消息渠道、工具和技能扩展。参见 [OpenClaw 官方介绍](https://docs.openclaw.ai/)。
+**TestDog fits reusable Web test cases, scripts, and regression reports; OpenClaw fits everyday tasks spanning tools and chat channels.** OpenClaw is a self-hosted AI assistant with messaging integrations and tool/skill extensions. See the [official introduction](https://docs.openclaw.ai/).
 
-| 对比维度 | TestDog | OpenClaw |
+| Area | TestDog | OpenClaw |
 | --- | --- | --- |
-| 测试流程 | 内置项目、用例、脚本版本、批量运行及测试报告，面向重复回归 | 通用助手工作流；如需同样的测试管理流程，可围绕工具、技能与外部测试系统搭建 |
-| 浏览器操作 | 自然语言生成或手动录制，保存为可编辑步骤再回放 | 支持浏览器快照、点击、输入与截图等操作，可用于网页任务；详见[浏览器工具](https://docs.openclaw.ai/tools/browser) |
-| 结果验证 | 内置 UI、接口、WebSocket 断言，以及失败截图、console/network 记录 | 可通过浏览器及其他工具收集信息；测试断言与报告的组织方式取决于具体工作流 |
-| 扩展方向 | 组件库语义动作插件，聚焦复杂表单控件的生成与回放 | 通用工具、技能、消息渠道及[定时自动化](https://docs.openclaw.ai/automation/cron-jobs)，适合跨服务任务 |
+| Test workflow | Built-in projects, cases, script versions, batch runs, and reports | General assistant workflows; equivalent test management can be assembled with tools, skills, and external test systems |
+| Browser interaction | Generate or record editable steps, then replay them | Browser snapshots, clicks, typing, and screenshots for web tasks; see [browser tools](https://docs.openclaw.ai/tools/browser) |
+| Verification | UI, API, and WebSocket assertions, failure screenshots, and console/network records | Evidence can be collected with browser and other tools; assertions and reports depend on the configured workflow |
+| Extensions | Component-library actions for generating and replaying complex form interactions | General tools, skills, messaging integrations, and [scheduled automation](https://docs.openclaw.ai/automation/cron-jobs) for cross-service tasks |
 
-**TestDog 的优势**
+**TestDog advantages**
 
-- **测试资产可复用**：生成或录制一次后，可编辑、按版本管理并批量回归，无需每次重新描述完整流程。
-- **常规回放无需大模型调用**：已保存脚本由 Playwright 执行；仅修复和自愈需调用模型，回归测试成本更低。
-- **测试结果更便于检查**：步骤、断言、失败证据和报告集中展示，减少自行拼接测试管理工具的工作。
+- **Reusable test assets**: edit, version, and batch-replay generated or recorded scripts without describing the entire flow again.
+- **No LLM calls for ordinary replay**: Playwright executes saved scripts; only repair and self-healing require model calls, lowering regression testing costs.
+- **Integrated test evidence**: steps, assertions, failure details, and reports reduce the need to assemble separate test-management tools.
 
-**TestDog 的局限**
+**TestDog limitations**
 
-- **通用任务覆盖较窄**：当前主要服务 Web 测试，不提供 OpenClaw 式的多聊天渠道助手入口与通用任务编排。
-- **已有脚本仍需维护**：页面结构或业务流程变化后，可能需要重新录制、修改断言或人工确认 AI 修复；确定性回放不等于永不失败。
-- **插件适配有边界**：内置插件覆盖常见组件库；自定义控件和复杂页面仍可能需要补充插件或人工处理。
+- **Narrower task coverage**: focused on Web testing, without OpenClaw-style multi-channel assistant entry points or general task orchestration.
+- **Scripts still need maintenance**: changes to pages or business flows may require re-recording, assertion updates, or human review of AI repairs. Deterministic replay does not guarantee success.
+- **Limited built-in component coverage**: custom controls and complex pages may require additional plugins or manual intervention.
 
-## 架构
+This is a use-case assessment based on current project features and OpenClaw documentation checked on 2026-09-09, not a performance or success-rate benchmark. OpenClaw can be extended for testing; evaluate both against your actual workflow.
+
+## Architecture
 
 ```mermaid
 flowchart TB
-    subgraph desktop["TestDog 桌面应用"]
-        shell["Tauri 2 · Rust 外壳"]
-        ui["系统 WebView 中的 React 18 界面<br/>Vite · Ant Design · Tailwind CSS 4"]
-        shell -->|承载界面| ui
+    subgraph desktop["TestDog desktop application"]
+        shell["Tauri 2 · Rust shell"]
+        ui["React 18 in the system WebView<br/>Vite · Ant Design · Tailwind CSS 4"]
+        shell -->|Hosts UI| ui
 
-        subgraph backend["独立 Node.js 后端进程"]
+        subgraph backend["Standalone Node.js backend process"]
             api["Fastify 5 · REST / WebSocket<br/>127.0.0.1:4123"]
             data["Prisma 7 · better-sqlite3"]
-            agent["toolLoop · OpenAI SDK<br/>生成 / 修复 / 自愈"]
-            stagehand["Stagehand 4<br/>生成执行 / 自愈重定位"]
-            playwright["Playwright<br/>录制 / 确定性回放 / 断言"]
+            agent["toolLoop · OpenAI SDK<br/>Generation / repair / self-healing"]
+            stagehand["Stagehand 4<br/>Generation execution / relocation"]
+            playwright["Playwright<br/>Recording / deterministic replay / assertions"]
             api --> data
             api --> agent
             api --> playwright
             agent --> stagehand
         end
 
-        shell -.->|生产环境启动后端| api
-        ui -->|REST 请求| api
-        api -->|WebSocket 实时进度| ui
-        data --> db[("本地 SQLite<br/>项目 / 用例 / 脚本 / 运行记录")]
+        shell -.->|Starts backend in production| api
+        ui -->|REST requests| api
+        api -->|WebSocket progress| ui
+        data --> db[("Local SQLite<br/>Projects / cases / scripts / runs")]
     end
 
-    agent <-->|OpenAI 兼容接口| model["用户配置的模型服务 / 网关"]
-    stagehand -->|浏览器执行与重定位| browser["本机 Chrome / Chromium<br/>被测 Web 应用"]
-    playwright -->|录制、回放与验证| browser
+    agent <-->|OpenAI-compatible API| model["User-configured model service / gateway"]
+    stagehand -->|Browser execution and relocation| browser["Local Chrome / Chromium<br/>Web application under test"]
+    playwright -->|Recording, replay and verification| browser
 ```
 
-> Stagehand / Prisma 都是 Node 库，跑不进 Tauri 的 Rust/Webview，因此采用「Tauri 外壳 + 独立 Node 后端进程」：开发期由 `concurrently` 拉起后端 + Vite，Tauri 窗口加载 Vite；生产期后端 `tsup` 打成单文件、随安装包内置 node 运行时分发（最终用户无需装 Node）。
+> Stagehand / Prisma are Node libraries that cannot run inside Tauri's Rust/Webview, so TestDog uses a "Tauri shell + standalone Node backend process" split: in development `concurrently` starts the backend + Vite and the Tauri window loads Vite; in production the backend is bundled to a single file with `tsup` and shipped inside the installer with a bundled Node runtime (end users don't need Node installed).
 
-## 目录结构
+## Directory Structure
 
 ```text
-test-tool/
-├─ src/                # React 前端（pages/ components/ i18n/ api/ utils/）
-├─ server/             # Node 后端（Fastify + Prisma + Stagehand + Playwright）
+TestDog/
+├─ src/                # React frontend (pages/ components/ i18n/ api/ utils/)
+├─ server/             # Node backend (Fastify + Prisma + Stagehand + Playwright)
 │  ├─ prisma/schema.prisma
-│  ├─ src/routes/      # REST + WS 路由（projects/testCases/scripts/generate/runs/record/attachments/loginConfigs/plugins/generationLogs/locator/settings）
-│  ├─ src/services/    # 生成 / 回放 / 录制 / 插件 / 附件 / 定位器等核心服务（componentPlugins/ 内置组件插件，sources/ 为单文件页内源码）
-│  ├─ src/toolLoop.ts  # 通用 LLM 工具调用循环（生成 / 自愈共用）
-│  ├─ src/migrate.ts   # 生产库幂等迁移（升级安装时旧库自动补列）
+│  ├─ src/routes/      # REST + WS routes (projects/testCases/scripts/generate/runs/record/attachments/loginConfigs/plugins/generationLogs/locator/settings)
+│  ├─ src/services/    # generation / replay / recording / plugins / attachments / locator services (componentPlugins/ built-in plugins; sources/ holds single-file in-page sources)
+│  ├─ src/toolLoop.ts  # shared LLM tool-calling loop (generation / self-heal)
+│  ├─ src/migrate.ts   # idempotent production-DB migration (auto-patches old DBs on upgrade)
 │  └─ tests/           # vitest
-├─ scripts/            # 打包脚本（dist.mjs / build-dmg.mjs / prepare-sidecar.mjs）
-├─ doc/                # VitePress 帮助文档站（中英双语）
-└─ src-tauri/          # Tauri 外壳（Rust + resources/ sidecar 资源）
+├─ scripts/            # packaging scripts (dist.mjs / build-dmg.mjs / prepare-sidecar.mjs)
+├─ doc/                # VitePress help-doc site (bilingual zh / en)
+└─ src-tauri/          # Tauri shell (Rust + resources/ sidecar resources)
 ```
 
-## 开发运行
+## Development Setup
 
 ```bash
-# 0. 克隆仓库
+# 0. Clone
 git clone https://github.com/xianyongwen/TestDog.git
 cd TestDog
 
-# 1. 安装依赖（根 + 后端）
+# 1. Install dependencies (root + backend)
 npm install
 npm --prefix server install
 
-# 2. 初始化数据库（首次；空库可跑一次 migrate dev，
-#    之后给 schema 加字段不要再用 migrate dev / db push，见下方说明）
+# 2. Initialize the database (first time only; an empty DB may run migrate dev once.
+#    Do NOT use migrate dev / db push for later schema changes — see the note below)
 npm --prefix server run prisma:generate
 npm --prefix server run prisma:migrate -- --name init
 
-# 3. 下载浏览器（首次，供 Playwright/Stagehand 使用）
+# 3. Download the browser (first time; used by Playwright/Stagehand)
 npm --prefix server exec -- playwright install chromium
 
-# 4. 启动桌面应用（Tauri 窗口 + 自动拉起后端 + Vite）
+# 4. Start the desktop app (Tauri window + auto-started backend + Vite)
 npm run tauri dev
 ```
 
-> 也可只跑 Web 调试：`npm run dev`（后端 :4123 + 前端 :1420，浏览器打开 `http://localhost:1420`）。
+> Web-only debugging also works: `npm run dev` (backend on :4123 + frontend on :1420, open `http://localhost:1420`).
 >
-> **schema 变更流程**（见 `server/src/migrate.ts` 头注释）：`prisma generate` 重新生成 client → dev 库用 better-sqlite3 幂等建表/加列 → `migrate.ts` 的 `MIGRATIONS` 追加幂等条目。已有 dev.db 后**不要**跑 `prisma migrate dev` / `db push`（自建 `_app_migrations` 表会被判定为漂移导致 reset/删表）。
+> **Schema change flow** (see the header comment in `server/src/migrate.ts`): `prisma generate` to regenerate the client → patch the dev DB with idempotent better-sqlite3 SQL → append an idempotent entry to `MIGRATIONS` in `migrate.ts`. After dev.db exists, do **not** run `prisma migrate dev` / `db push` (the self-managed `_app_migrations` table is detected as drift, causing a reset/drop).
 
-## 配置 AI 网关
+## AI Gateway Configuration
 
-AI 生成与自愈需要 LLM，通过 **OpenAI 兼容协议**调用自定义网关/代理，默认模型 `deepseek-v4-flash-vision-exp`。进入左侧「**设置**」页填写：
+AI generation and self-healing need an LLM, called via the **OpenAI-compatible protocol** through a custom gateway/proxy; default model `deepseek-v4-flash-vision-exp`. Fill in the left sidebar's "**Settings**" page:
 
-- **网关地址 / 密钥 / 模型名**
-- **模型具备视觉能力**：开启后图片附件与页面截图以多模态直发主模型，生成循环提供 `see` 视觉观察工具（关闭则不发送图片）
-- **思考深度**（reasoning_effort，映射为网关的推理强度参数；非推理模型保持关闭）
-- **智能体最大步数**、**浏览器路径**（留空自动探测系统 Chrome）、**拆步提示词**（可恢复默认）、**生成记录保留天数**
-- **外观**（浅色 / 深色 / 跟随系统）、**字体大小**（小 / 中 / 大）、**界面语言**（简体中文 / English）
+- **Gateway URL / API key / model name**
+- **Model has vision**: when enabled, image attachments and page screenshots go to the main model multimodally, and the generation loop gains a `see` visual-observation tool (disabled = no images are sent)
+- **Reasoning effort** (maps to the gateway's reasoning-strength parameter; keep off for non-reasoning models)
+- **Agent max steps**, **browser path** (empty = auto-detect system Chrome), **step-split prompt** (restorable to default), **generation-log retention days**
+- **Appearance** (Light / Dark / Follow system), **font size** (Small / Medium / Large), **UI language** (简体中文 / English)
 
-也可在 `server/.env` 中兜底配置（注意：留空值会导致导入报错，不填则保持注释）：
+A `.env` fallback in `server/` also works (note: empty values cause import errors — leave commented instead):
 
 ```env
 OPENAI_API_KEY=sk-xxxx
@@ -128,38 +130,38 @@ OPENAI_BASE_URL=https://your-gateway.example.com/v1
 OPENAI_MODEL=deepseek-v4-flash-vision-exp
 ```
 
-## 核心功能
+## Core Features
 
-- **AI 生成脚本**：用例页「AI生成」→ 输入自然语言 + 起始地址，可传附件（文本自动提取；图片压缩后以多模态直发主模型）、选择登录配置（以已登录 storageState 状态生成）。先由模型预拆分为步骤计划确认，再在真实浏览器的 tool-calling 循环里逐步执行（snapshot / click / fill / select / assert / see / api 等工具），动作成功即解析为语义化定位器落库；定位卡住时挂起求助（AI 修复 / 改述 / 手动接管 / 跳过），支持暂停后续跑「继续生成」。
-- **手动录制脚本**：输入起始地址 → 在弹出的 Playwright 录制浏览器里操作 → 「停止并导入」解析为可编辑步骤；「登录配置」可录制登录态供生成与回放复用。
-- **回放运行**：任一脚本版本一键运行，Playwright 确定性回放（零 LLM 成本）；支持 UI 断言（可见/隐藏/文本/URL）、接口断言（状态码/响应体/JSON 字段）、WebSocket 断言（发送/接收消息）；选择器失效自动 AI 自愈，可一键采纳回写原脚本；失败步骤自动截图并采集 console/network；结果导出 JSON / Excel；支持项目内用例**批量无头运行**。
-- **插件系统**：内置组件插件按「框架 × 能力域」拆分——下拉 `select`、树选择、级联、日期 `set_date`、时间 `set_time`、滑块 `set_value`，覆盖 **Ant Design / Element（element-ui · element-plus）/ Vant / MUI**（原生 `<select>` 由分发器原生交互层兜底 selectOption）；动作遵循三态结果协议 + 页内后验校验终态，拦截「点了但没选上」的假成功；支持上传自定义插件（.js/.zip），「预设」按顺序编排注入（动作词表 + 页内脚本随生成/回放注入），内置插件源码即单文件页内脚本（`sources/*.js`），可直接阅读、修改并作为开发范例。
-- **生成记录**：每次生成留步骤级日志（工具调用、视觉观察、求助决策）与 token usage 记账（步骤明细、缓存命中），按保留天数启动时自动清理。
-- **其他**：`.testcase` 文件单条 / 批量导入导出；用例列表拖拽排序、批量设置默认脚本版本、批量运行后导出**测试报告**（Excel，含逐运行步骤明细 / console / network / token）；两个技能包与测试友好代码规则下载（供 Claude Code 等编程 agent 使用：`generate-testcase` 生成可导入用例、`tt-plugin-from-source` 从项目源码生成组件插件）；系统变量注入唯一测试数据（随机手机号/邮箱/身份证等）；中英双语界面。
+- **AI script generation**: "AI Generate" on the case page → natural language + start URL, with attachments (text auto-extracted; images compressed and sent multimodally to the main model) and login profiles (generates with an already-logged-in storageState). The model first proposes a step plan for confirmation, then a tool-calling loop executes step-by-step in a real browser (snapshot / click / fill / select / assert / see / api tools); each successful action is resolved into a semantic locator and persisted; when locating gets stuck the run suspends for help (AI repair / rephrase / manual takeover / skip); pause and "continue generation" later.
+- **Manual recording**: enter a start URL → operate in the popped-up Playwright recording browser → "stop and import" parses into editable steps; "login profiles" record login states for reuse in generation and replay.
+- **Replay runs**: one-click run of any script version, deterministic Playwright replay (zero LLM cost); UI assertions (visible / hidden / text / URL), API assertions (status code / response body / JSON field), WebSocket assertions (send / receive message); failed locators auto self-heal and can be adopted back into the original script in one click; failed steps auto-capture screenshots plus console/network; results export to JSON / Excel; **headless batch runs** of a project's cases are supported.
+- **Plugin system**: built-in plugins are split by "framework × capability domain" — dropdown `select`, tree select, cascader, date `set_date`, time `set_time`, slider `set_value` — covering **Ant Design / Element (element-ui · element-plus) / Vant / MUI** (native `<select>` is handled by the dispatcher's native-interaction fallback selectOption); actions follow a tri-state result protocol + in-page post-validation of end states, blocking "clicked but not actually selected" false successes; upload custom plugins (.js/.zip); "Presets" orchestrate injection order (action vocabulary + in-page scripts injected during generation/replay); the built-in plugins' sources are themselves single-file in-page scripts (`sources/*.js`) that can be read, modified, and used as development examples.
+- **Generation logs**: every generation keeps step-level logs (tool calls, visual observations, help decisions) and token usage accounting (per-step details, cache hits), auto-cleaned on startup per retention days.
+- **More**: single / bulk import & export of `.testcase` files; drag-sort cases, batch-set default script versions, and export a **test report** (Excel with per-run step details / console / network / token) after batch runs; two skill packages + test-friendly code rules for coding agents (generate-testcase for importable cases, tt-plugin-from-source for generating plugins from project source); system variables for unique test data (random phone / email / ID number); bilingual UI (Chinese / English).
 
-## 技术要点
+## Technical Notes
 
-- Stagehand 4（`@browserbasehq/stagehand`，本地模式 `env: "LOCAL"`）负责生成期浏览器执行与自愈重定位；回放引擎用 `playwright-core` 确定性执行，自愈经 CDP 附加同一浏览器重新定位。
-- LLM 循环为自研 `toolLoop`（openai SDK，OpenAI 兼容网关），生成、自愈定位、AI 修复共用；token usage 在网关客户端层差分入账。
-- 内置组件插件按「框架 × 能力域」拆分为单文件页内脚本（`server/src/services/componentPlugins/sources/`，构建时随 `dist/sources/` 分发）；运行时同一组件上的插件按预设成员顺序组成匹配链（排前者先尝试、成功即止），`detect/candidates/annotate/actions` 四插槽语义见文档站《插件开发》。
-- Prisma 7：数据源 URL 在 `prisma.config.ts`，SQLite 用 `@prisma/adapter-better-sqlite3` driver adapter，generator 为 `prisma-client`。
-- 录制用 `playwright codegen` 子进程，`parseCodegen` 解析为结构化步骤（不匹配的行存 `raw` 兜底，不丢行）。
-- 附件归一化零 LLM 依赖：xlsx（sheetjs）/ pdf（pdf-parse）/ docx（mammoth）/ csv / json 纯文本提取；图片 compressorjs 压缩后保存原始图，生成时多模态直发主模型。
-- 浏览器视口统一 1920×1080；生产环境用系统 Chrome（`--channel=chrome`）。
-- 前端 i18next 双语（zh-CN / en-US），样式 Tailwind CSS 4 + Ant Design 5，主题与字体大小随设置即时生效。
+- Stagehand 4 (`@browserbasehq/stagehand`, local mode `env: "LOCAL"`) drives generation-time browser execution and self-healing relocation; the replay engine uses `playwright-core` for deterministic execution, with self-heal re-attaching via CDP to the same browser to re-locate.
+- The LLM loop is the in-house `toolLoop` (openai SDK, OpenAI-compatible gateway), shared by generation, self-heal locating, and AI repair; token usage is booked differentially at the gateway client layer.
+- Built-in component plugins are split by "framework × capability domain" into single-file in-page scripts (`server/src/services/componentPlugins/sources/`, shipped with the build under `dist/sources/`); at runtime, plugins matching the same component form a match chain in preset member order (earlier tries first, stops on success) — the `detect/candidates/annotate/actions` four-slot semantics are documented on the docs site's "Plugin Development" page.
+- Prisma 7: datasource URL in `prisma.config.ts`, SQLite via the `@prisma/adapter-better-sqlite3` driver adapter, generator `prisma-client`.
+- Recording spawns a `playwright codegen` subprocess; `parseCodegen` parses it into structured steps (unmatched lines kept in `raw` so nothing is dropped).
+- Attachment normalization is zero-LLM: xlsx (sheetjs) / pdf (pdf-parse) / docx (mammoth) / csv / json plain-text extraction; images are compressed with compressorjs, the original saved, and sent multimodally to the main model during generation.
+- Browser viewport is uniformly 1920×1080; production uses system Chrome (`--channel=chrome`).
+- Frontend: i18next bilingual (zh-CN / en-US), Tailwind CSS 4 + Ant Design 5 styling, theme and font size apply instantly from Settings.
 
-## 生产打包
+## Production Packaging
 
 ```bash
-npm run dist        # scripts/dist.mjs：macOS 出 .app/.dmg，Windows 出 NSIS 安装包
+npm run dist        # scripts/dist.mjs: macOS .app/.dmg, Windows NSIS installer
 ```
 
-1. `scripts/prepare-sidecar.mjs` 先把后端 `tsup` 打成单文件、裁剪生产依赖、复制 node 运行时与 `app.db.template` 进 `src-tauri/resources/`。**改完 schema 必须重跑并提交产物 `resources/server/index.js` + `app.db.template`**，否则安装包运行时即报 `Unknown field` 错误。
-2. macOS：`tauri build` 出 .app/.dmg（`build-dmg.mjs` 去重/兜底）；Windows：NSIS 安装包（打包时 TEMP 重定向到项目盘，规避系统盘空间不足的 makensis 报错）。
-3. 生产库由 `app.db.template` 首次复制生成；升级安装不覆盖旧库，启动时 `server/src/migrate.ts` 幂等迁移自动补列。
+1. `scripts/prepare-sidecar.mjs` first bundles the backend to a single file with `tsup`, prunes production dependencies, and copies the Node runtime and `app.db.template` into `src-tauri/resources/`. **After any schema change you must re-run it and commit the artifacts `resources/server/index.js` + `app.db.template`**, or the installed app errors with `Unknown field` at startup.
+2. macOS: `tauri build` produces .app/.dmg (`build-dmg.mjs` deduplicates/falls back); Windows: NSIS installer (TEMP is redirected to the project drive during packaging to avoid makensis failures from low system-disk space).
+3. The production DB is created by copying `app.db.template` on first run; upgrades never overwrite the old DB — the idempotent migration in `server/src/migrate.ts` auto-patches columns at startup.
 
-## 文档与贡献
+## Docs & Contributing
 
-- **帮助文档**：<https://softwing.top/testdog-doc/> （源码位于 `doc/`，VitePress 中英双语；本地预览 `npm --prefix doc install && npm --prefix doc run dev`）
-- **贡献指南**：见 [CONTRIBUTING.md](CONTRIBUTING.md)（分支模型 / 提交规范 / schema 变更流程 / PR 流程）
-- **安全漏洞**：勿提公开 Issue，走 GitHub 私下漏洞报告，见 [SECURITY.md](SECURITY.md)
+- **Help docs**: <https://softwing.top/testdog-doc/> (sources in `doc/`, VitePress, bilingual zh/en; preview locally with `npm --prefix doc install && npm --prefix doc run dev`)
+- **Contributing**: see [CONTRIBUTING.md](CONTRIBUTING.md) (branch model / commit convention / schema-change flow / PR process)
+- **Security**: do not open public issues; use GitHub private vulnerability reporting, see [SECURITY.md](SECURITY.md)
