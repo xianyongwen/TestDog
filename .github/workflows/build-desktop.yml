@@ -96,6 +96,11 @@ jobs:
       - name: Test update lifecycle and release manifests
         run: npm run test:updater
 
+      - name: Remove restored installer artifacts
+        # Keep compiled Rust dependencies, but never reuse installers from a cached build.
+        run: |
+          node -e "require('fs').rmSync('src-tauri/target/release/bundle', { recursive: true, force: true })"
+
       - name: Build macOS app with ad-hoc signing
         if: runner.os == 'macOS'
         # Build the app first: a compiler/signing failure must stop the job.
@@ -107,7 +112,6 @@ jobs:
         run: |
           codesign --verify --deep --strict src-tauri/target/release/bundle/macos/TestDog.app
           node scripts/build-dmg.mjs
-          hdiutil verify src-tauri/target/release/bundle/dmg/*.dmg
 
       - name: Build Windows installer
         if: runner.os == 'Windows'

@@ -6,6 +6,47 @@ import path from 'node:path';
 import { createUpdateController } from '../src/utils/updateController.ts';
 import { updaterBuildConfig } from './configure-updater.mjs';
 import { mergeRelease, platforms, stageRelease } from './updater-release.mjs';
+import { buildDmg } from './build-dmg.mjs';
+
+test('DMG creation verifies one exact path and excludes updater archives', (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'testdog dmg test-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const appPath = path.join(root, 'macos', 'Test Dog.app');
+  const dmgPath = path.join(root, 'dmg', 'Test Dog_0.1.3_x86_64.dmg');
+  fs.mkdirSync(appPath, { recursive: true });
+  fs.mkdirSync(path.dirname(dmgPath));
+  fs.writeFileSync(path.join(root, 'macos', 'Test Dog.app.tar.gz'), 'updater');
+  fs.writeFileSync(path.join(root, 'dmg', 'old.dmg'), 'old');
+  const verified = [];
+  let staging;
+  buildDmg({ appPath, dmgPath, productName: 'Test Dog', run(command, args) {
+    if (command === 'ditto') fs.cpSync(args[0], args[1], { recursive: true });
+    else if (args[0] === 'create') {
+      staging = args[args.indexOf('-srcfolder') + 1];
+      assert.deepEqual(fs.readdirSync(staging).sort(), ['Applications', 'Test Dog.app']);
+      fs.writeFileSync(args.at(-1), 'new');
+    } else verified.push(args);
+  } });
+  assert.deepEqual(verified, [['verify', dmgPath]]);
+  assert.equal(fs.existsSync(staging), false);
+});
+
+test('DMG verification failure fails the build and removes staging', (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'testdog-dmg-failure-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const appPath = path.join(root, 'TestDog.app');
+  fs.mkdirSync(appPath);
+  let staging;
+  assert.throws(() => buildDmg({
+    appPath, dmgPath: path.join(root, 'TestDog.dmg'), productName: 'TestDog',
+    run(command, args) {
+      if (command === 'ditto') fs.cpSync(args[0], args[1], { recursive: true });
+      else if (args[0] === 'create') staging = args[args.indexOf('-srcfolder') + 1];
+      else throw new Error('Invalid DMG');
+    },
+  }), /Invalid DMG/);
+  assert.equal(fs.existsSync(staging), false);
+});
 
 function fixture(overrides = {}) {
   const calls = [];
