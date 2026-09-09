@@ -1,7 +1,7 @@
 {
   "name": "test-dog",
   "private": true,
-  "version": "0.1.2",
+  "version": "0.1.3",
   "type": "module",
   "scripts": {
     "dev:web": "vite",
@@ -10,7 +10,9 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "dist": "node scripts/dist.mjs"
+    "dist": "node scripts/dist.mjs",
+    "updater:configure": "node scripts/configure-updater.mjs",
+    "test:updater": "node --test scripts/updater.test.mjs"
   },
   "dependencies": {
     "@ant-design/cssinjs": "^1.21.0",
@@ -19,6 +21,8 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@tailwindcss/vite": "^4.3.3",
+    "@tauri-apps/api": "^2.11.1",
+    "@tauri-apps/plugin-updater": "^2.11.0",
     "antd": "^5.25.0",
     "compressorjs": "^1.3.0",
     "dayjs": "^1.11.13",

@@ -15,6 +15,8 @@ import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const isMac = process.platform === 'darwin';
+const updater = process.argv.includes('--updater');
+const updaterConfig = updater ? ' --config src-tauri/tauri.updater.conf.json' : '';
 
 function run(cmd) {
   console.log(`$ ${cmd}`);
@@ -22,6 +24,12 @@ function run(cmd) {
 }
 
 if (isMac) {
+  if (updater) {
+    // Signed releases must never fall back to a stale app after a failed build.
+    run(`tauri build${updaterConfig}`);
+    run('node scripts/build-dmg.mjs');
+    process.exit(0);
+  }
   try {
     run('tauri build');
   } catch (e) {
@@ -42,5 +50,5 @@ if (isMac) {
     process.env.TMP = buildTmp;
     process.env.TMPDIR = buildTmp;
   }
-  run('tauri build --bundles nsis');
+  run(`tauri build --bundles nsis${updaterConfig}`);
 }

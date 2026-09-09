@@ -10,7 +10,68 @@ use std::time::{Duration, Instant};
 use tauri::{Manager, RunEvent};
 
 /// 后端子进程句柄，退出时取出 kill。
-struct ServerChild(Mutex<Option<Child>>);
+struct ServerProcess {
+    child: Option<Child>,
+    command: Command,
+}
+
+struct ServerChild(Mutex<ServerProcess>);
+
+fn stop_backend(app: &tauri::AppHandle) -> Result<(), String> {
+    if let Some(state) = app.try_state::<ServerChild>() {
+        let mut process = state.0.lock().map_err(|e| e.to_string())?;
+        if let Some(child) = process.child.as_mut() {
+            if child.try_wait().map_err(|e| e.to_string())?.is_none() {
+                child.kill().map_err(|e| e.to_string())?;
+            }
+            child.wait().map_err(|e| e.to_string())?;
+        }
+        process.child = None;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn updater_enabled(app: tauri::AppHandle) -> bool {
+    !cfg!(debug_assertions)
+        && app
+            .config()
+            .plugins
+            .0
+            .get("updater")
+            .and_then(|config| config.get("pubkey"))
+            .and_then(|key| key.as_str())
+            .is_some_and(|key| !key.trim().is_empty())
+}
+
+// Windows 安装器会直接退出进程，必须在安装前释放随包 Node/SQLite 文件和端口。
+#[tauri::command]
+async fn prepare_app_update(app: tauri::AppHandle) -> Result<(), String> {
+    stop_backend(&app)
+}
+
+// 安装调用返回错误后恢复后端，让当前版本仍能继续使用。
+#[tauri::command]
+async fn recover_app_update(app: tauri::AppHandle) -> Result<(), String> {
+    let state = app.state::<ServerChild>();
+    {
+        let mut process = state.0.lock().map_err(|e| e.to_string())?;
+        if process.child.is_none() {
+            process.child = Some(process.command.spawn().map_err(|e| e.to_string())?);
+        }
+    }
+    if wait_for_backend(Duration::from_secs(20)) {
+        Ok(())
+    } else {
+        Err("Backend did not recover within 20 seconds".into())
+    }
+}
+
+#[tauri::command]
+async fn restart_app(app: tauri::AppHandle) -> Result<(), String> {
+    stop_backend(&app)?;
+    app.restart();
+}
 
 const BACKEND_PORT: u16 = 4123;
 
@@ -30,7 +91,10 @@ async fn open_help_docs() -> Result<(), String> {
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     let mut command = Command::new("xdg-open");
 
-    let status = command.arg(url).status().map_err(|error| error.to_string())?;
+    let status = command
+        .arg(url)
+        .status()
+        .map_err(|error| error.to_string())?;
     if status.success() {
         Ok(())
     } else {
@@ -60,7 +124,14 @@ fn ensure_executable(path: &std::path::Path) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![open_help_docs])
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .invoke_handler(tauri::generate_handler![
+            open_help_docs,
+            updater_enabled,
+            prepare_app_update,
+            recover_app_update,
+            restart_app
+        ])
         .setup(|app| {
             #[cfg(debug_assertions)]
             {
@@ -89,10 +160,7 @@ pub fn run() {
             let log_path = data_dir.join("server.log");
 
             if !node_bin.exists() {
-                log::error!(
-                    "找不到随包 node 二进制：{}",
-                    node_bin.display()
-                );
+                log::error!("找不到随包 node 二进制：{}", node_bin.display());
             }
 
             // 首次运行：从模板创建空库（带表结构、无数据）
@@ -136,14 +204,14 @@ pub fn run() {
             cmd.creation_flags(0x08000000);
             let child = cmd.spawn()?;
 
-            app.manage(ServerChild(Mutex::new(Some(child))));
+            app.manage(ServerChild(Mutex::new(ServerProcess {
+                child: Some(child),
+                command: cmd,
+            })));
 
             // 阻塞到后端端口就绪再继续；窗口随后创建，避免首屏 fetch 失败
             if !wait_for_backend(Duration::from_secs(20)) {
-                log::error!(
-                    "后端未在 20s 内就绪，请查看日志：{}",
-                    log_path.display()
-                );
+                log::error!("后端未在 20s 内就绪，请查看日志：{}", log_path.display());
             } else {
                 log::info!("后端已就绪 :{}", BACKEND_PORT);
             }
@@ -155,14 +223,7 @@ pub fn run() {
         .run(|app_handle, event| {
             // 应用退出时终止后端子进程
             if let RunEvent::Exit = event {
-                if let Some(state) = app_handle.try_state::<ServerChild>() {
-                    if let Ok(mut guard) = state.0.lock() {
-                        if let Some(mut child) = guard.take() {
-                            let _ = child.kill();
-                            let _ = child.wait();
-                        }
-                    }
-                }
+                let _ = stop_backend(app_handle);
             }
         });
 }

@@ -28,6 +28,7 @@ import Runs from './pages/Runs';
 import Settings from './pages/Settings';
 import GenerationRecords from './pages/GenerationRecords';
 import Plugins from './pages/Plugins';
+import AppUpdater from './components/AppUpdater';
 import appLogo from '../src-tauri/icons/128x128.png';
 import { version as appVersion } from '../package.json';
 
@@ -125,6 +126,7 @@ function Shell() {
             </>}
           </a>
         </Tooltip>
+        <AppUpdater collapsed={collapsed} />
         <div className="sidebar-footer" title={`${t('common.version')} ${appVersion}`}>
           {!collapsed && <span>{t('common.version')}</span>}
           <span className="sidebar-version">v{appVersion}</span>

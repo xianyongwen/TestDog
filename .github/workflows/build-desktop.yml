@@ -34,6 +34,9 @@ jobs:
       DATABASE_URL: file:./ci.db
       PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
       CARGO_INCREMENTAL: '0'
+      TAURI_UPDATER_PUBLIC_KEY: ${{ vars.TAURI_UPDATER_PUBLIC_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
     steps:
       - name: Check out source
         uses: actions/checkout@v4
@@ -87,11 +90,17 @@ jobs:
         working-directory: server
         run: npm ci --no-audit --no-fund
 
+      - name: Validate updater configuration and release version
+        run: npm run updater:configure
+
+      - name: Test update lifecycle and release manifests
+        run: npm run test:updater
+
       - name: Build macOS app with ad-hoc signing
         if: runner.os == 'macOS'
         # Build the app first: a compiler/signing failure must stop the job.
         # The existing headless DMG helper then avoids Finder/volume-mount issues.
-        run: npx tauri build --bundles app --config src-tauri/tauri.ci.conf.json
+        run: npx tauri build --bundles app --config src-tauri/tauri.updater.conf.json
 
       - name: Verify macOS signature and create DMG
         if: runner.os == 'macOS'
@@ -102,7 +111,7 @@ jobs:
 
       - name: Build Windows installer
         if: runner.os == 'Windows'
-        run: npm run dist
+        run: npm run dist -- --updater
 
       - name: Verify bundled Node and native SQLite module
         shell: bash
@@ -132,3 +141,51 @@ jobs:
           if-no-files-found: error
           retention-days: 7
           compression-level: 0
+
+      - name: Stage signed update package
+        if: startsWith(github.ref, 'refs/tags/')
+        run: node scripts/updater-release.mjs stage ${{ matrix.platform }}
+
+      - name: Upload signed update package
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: actions/upload-artifact@v4
+        with:
+          name: updater-${{ matrix.platform }}
+          path: updater-artifacts/*
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+
+  release:
+    name: Prepare signed update release
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: updater-*
+          path: updater-artifacts
+          merge-multiple: true
+      - name: Assemble complete update manifest
+        run: node scripts/updater-release.mjs merge
+      - name: Create draft release with all platforms
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          if gh release view "$GITHUB_REF_NAME" --json isDraft > release-state.json 2>/dev/null; then
+            node -e 'if (!JSON.parse(require("fs").readFileSync("release-state.json")).isDraft) throw new Error("Refusing to replace a published update; create a new version instead")'
+          else
+            gh release create "$GITHUB_REF_NAME" --draft --verify-tag --title "TestDog $GITHUB_REF_NAME" --generate-notes
+          fi
+          mapfile -d '' assets < <(find updater-artifacts -maxdepth 1 -type f ! -name 'macos-*.json' ! -name 'windows-*.json' -print0)
+          gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber

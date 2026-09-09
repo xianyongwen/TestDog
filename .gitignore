@@ -32,8 +32,10 @@ src-tauri/resources/node.exe
 .sidecar-cache
 .sidecar-staging
 .build-tmp
+src-tauri/tauri.updater.conf.json
+updater-artifacts/
+.tauri/
 
 # Playwright
 playwright-report/
 test-results/
-

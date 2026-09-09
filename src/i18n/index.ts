@@ -2,6 +2,7 @@ import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import zhCN from './locales/zh-CN';
 import enUS from './locales/en-US';
+import { updaterZhCN, updaterEnUS } from './updater';
 
 export const LANGUAGES = [
   { value: 'zh-CN', label: '简体中文' },
@@ -20,8 +21,8 @@ function detectInitialLanguage(): AppLanguage {
 
 i18n.use(initReactI18next).init({
   resources: {
-    'zh-CN': { translation: zhCN },
-    'en-US': { translation: enUS },
+    'zh-CN': { translation: { ...zhCN, updater: updaterZhCN } },
+    'en-US': { translation: { ...enUS, updater: updaterEnUS } },
   },
   lng: detectInitialLanguage(),
   fallbackLng: 'zh-CN',
