@@ -701,7 +701,7 @@ export default function Generate() {
                   </Space>
                 </div>
                 <Input.TextArea
-                  rows={4}
+                  rows={2}
                   placeholder={
                     endState === 'stopped'
                       ? t('generate.stoppedPlaceholder')

@@ -593,7 +593,7 @@ export default function ProjectCases() {
         );
       },
     },
-    { title: t('common.createdAt'), dataIndex: 'createdAt', render: (v) => new Date(v as string).toLocaleString() },
+    { title: t('common.createdAt'), width: 160, dataIndex: 'createdAt', render: (v) => new Date(v as string).toLocaleString() },
     {
       title: t('common.actions'),
       width: 160,

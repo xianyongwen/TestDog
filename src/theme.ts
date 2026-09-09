@@ -25,7 +25,7 @@ export function applyTheme(resolved: 'light' | 'dark') {
 
 /** React hook：AppInner 调用，返回 [模式, 实际明暗, 切换]。system 下系统外观变化会触发重渲染 */
 export function useThemeMode(): [ThemeMode, 'light' | 'dark', (m: ThemeMode) => void] {
-  const [mode, setModeState] = useState<ThemeMode>(getStoredMode);
+  const [mode] = useState<ThemeMode>(getStoredMode);
   const [resolved, setResolved] = useState<'light' | 'dark'>(() => resolveMode(getStoredMode()));
 
   useEffect(() => {
@@ -45,7 +45,13 @@ export function useThemeMode(): [ThemeMode, 'light' | 'dark', (m: ThemeMode) => 
     return () => mq.removeEventListener('change', onChange);
   }, [mode]);
 
-  const setMode = (m: ThemeMode) => setModeState(m);
+  const setMode = (m: ThemeMode) => {
+    if (m === mode) return;
+    // Settings 与 AppInner 各自使用此 hook；保存后刷新，让全局 antd
+    // ConfigProvider 和 CSS 主题从同一份配置初始化，避免明暗样式混用。
+    localStorage.setItem(STORAGE_KEY, m);
+    window.location.reload();
+  };
   return [mode, resolved, setMode];
 }
 
@@ -70,14 +76,18 @@ export function applyFontScale(scale: FontSizeScale) {
 
 /** React hook：AppInner 调用，返回 [档位, 切换] */
 export function useFontSizeScale(): [FontSizeScale, (s: FontSizeScale) => void] {
-  const [scale, setScaleState] = useState<FontSizeScale>(getStoredFontScale);
+  const [scale] = useState<FontSizeScale>(getStoredFontScale);
 
   useEffect(() => {
     applyFontScale(scale);
     localStorage.setItem(FONT_SCALE_STORAGE_KEY, scale);
   }, [scale]);
 
-  const setScale = (s: FontSizeScale) => setScaleState(s);
+  const setScale = (s: FontSizeScale) => {
+    if (s === scale) return;
+    localStorage.setItem(FONT_SCALE_STORAGE_KEY, s);
+    window.location.reload();
+  };
   return [scale, setScale];
 }
 
