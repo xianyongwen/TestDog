@@ -209,6 +209,7 @@ console.log(`  删除冗余 query compiler ${removedWasms} 个文件`);
 console.log('\n--- [4/5] 生成 SQLite 空库模板 ---');
 const templateAbs = path.join(resDir, 'app.db.template');
 if (fs.existsSync(templateAbs)) fs.rmSync(templateAbs);
+fs.writeFileSync(templateAbs, ''); // 先创建空文件，避免 Prisma schema engine 无法打开尚不存在的 SQLite 路径。
 run(
   `npx prisma db push --url="file:${templateAbs}" --accept-data-loss`,
   { cwd: serverDir },
