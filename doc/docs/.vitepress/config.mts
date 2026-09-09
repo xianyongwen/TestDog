@@ -40,6 +40,7 @@ const sidebar = (p = '') => [
   {
     text: '进阶',
     items: [
+      { text: '用 AI 提升测试工程师素养', link: `${p}/guide/testing-craft` },
       { text: '插件开发', link: `${p}/guide/plugin-dev` },
       { text: '测试数据与登录态', link: `${p}/guide/test-data` },
       { text: '.testcase 用例文件', link: `${p}/guide/testcase-file` },
@@ -88,6 +89,7 @@ const enSidebar = (p = '') => [
   {
     text: 'Advanced',
     items: [
+      { text: 'Testing Craft with AI', link: `${p}/guide/testing-craft` },
       { text: 'Plugin Development', link: `${p}/guide/plugin-dev` },
       { text: 'Test Data & Login', link: `${p}/guide/test-data` },
       { text: '.testcase Files', link: `${p}/guide/testcase-file` },
@@ -149,6 +151,8 @@ export default defineConfig({
 
   // 本地全文搜索；中文界面补充中文文案（英文用默认）
   themeConfig: {
+    // logo 字段会自动补 base 前缀，写站点根绝对路径即可（md/head 里的 public 资源才需要手写 /testdog-doc/）
+    logo: '/logo.png',
     socialLinks: [{ icon: 'github', link: 'https://github.com/xianyongwen/TestDog' }],
     search: {
       provider: 'local',

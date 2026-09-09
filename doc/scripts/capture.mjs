@@ -6,7 +6,8 @@ import { mkdirSync, writeFileSync } from 'fs'
 const require = createRequire('/Users/xianyongwen/Documents/myProject/test-tool/server/package.json')
 const { chromium } = require('playwright-core')
 
-const BASE = 'http://localhost:1420/#'
+// BASE 可用环境变量覆盖（隔离端口截图时用），如 DOCS_BASE=http://localhost:1421/#
+const BASE = process.env.DOCS_BASE ?? 'http://localhost:1420/#'
 const IMG = '/Users/xianyongwen/Documents/myProject/test-tool/doc/docs/public/images'
 const VID = '/tmp/docs-videos'
 const DEMO_CASE_ID = 'cmrt3gzyr0001ydbwnd9euoz2' // 演示项目 / 新增待办
@@ -131,6 +132,11 @@ async function aiGenerateRun() {
     console.log('WARN: plan not ready in 90s, continue recording')
   }
   await pause(page, 2500)
+
+  // 计划确认弹窗（含测试意图与验收约定）
+  await page.getByText('测试意图与验收约定', { exact: true }).first().waitFor({ timeout: 10000 }).catch(() => {})
+  await pause(page, 1200)
+  await shot(page, 'ai-generate-plan')
 
   // 点「开始执行」进入智能体执行
   const startBtn = page.getByRole('button', { name: '开始执行' }).first()

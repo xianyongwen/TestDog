@@ -29,15 +29,22 @@ When the run finishes, open the **Run Records** tab (or click View detail in the
 
 | Category | Assertion | Notes |
 | --- | --- | --- |
-| **UI** | Element visible | Waits for the element (auto-wait, up to 10s) |
-| | Element hidden | Waits until the element is invisible/removed — good for toasts and spinners |
-| | Text content | Verifies element text |
-| | Page URL | Current URL contains the expected substring |
+| **UI** | Element visible | Waits for the unique target (auto-wait, up to 10s) |
+| | Element hidden | Hidden or absent; multiple matches error out, not counted as hidden |
+| | Text contains | Visible text within scope contains the expected substring |
+| | Text exactly equals | Equals the expected text after whitespace normalization |
+| | Field value equals | Form field value equals exactly (empty string allowed) |
+| | Checked / unchecked | Control checked state |
+| | Enabled / disabled | Control enabled state |
+| | Matched element count | Number of matching nodes, hidden included, 0 supported (for collection / absence assertions) |
+| | URL contains / equals exactly | Current URL contains the substring / equals the expected URL |
 | **API** | Status code | Status of the latest response matching a URL keyword |
 | | Response body | Body contains the expected substring |
 | | JSON field | Reads a field by JSON path (e.g. `data.items.0.id`) and compares |
 | **WebSocket** | Sent message | Matches a client-sent WS message |
 | | Received message | Matches a server-pushed WS message |
+
+UI assertions share the same semantics as AI generation, retried within a timeout budget; a parent scope can narrow the search (the scope itself must exist uniquely, so a lost scope can't fake a pass).
 
 ::: tip Locating API/WS traffic
 `locator.value` holds a **URL keyword substring** (e.g. `/api/login`); the engine matches the most recent response/frame whose URL contains it.
@@ -51,6 +58,7 @@ When the run finishes, open the **Run Records** tab (or click View detail in the
 
 - When a selector no longer matches (e.g. after a frontend redesign), replay automatically switches to **AI self-healing** using the step's natural-language instruction, then continues.
 - Self-healed locators can be **written back** to the original script with one click, effective for the next run.
+- **Assertions are never self-healed**: a failed assertion may be a real product defect, and re-targeting would turn it into a pass — failures are kept as-is for you to judge.
 
 ## Review & export
 
