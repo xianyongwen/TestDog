@@ -1,5 +1,9 @@
 # TestDog 测试用例管理工具
 
+<div align="center">
+  <img src="src-tauri/icons/icon.png" width="128" alt="TestDog logo" />
+</div>
+
 简体中文 | [English](README.md)
 
 基于 **Tauri 2 + React 18 + Ant Design + Tailwind CSS 4** 桌面外壳、**Fastify 5 + Prisma 7 + SQLite + Stagehand 4 + Playwright** Node 后端的桌面端测试用例管理工具：

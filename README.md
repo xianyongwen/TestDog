@@ -1,5 +1,9 @@
 # TestDog Test Case Management Tool
 
+<div align="center">
+  <img src="src-tauri/icons/icon.png" width="128" alt="TestDog logo" />
+</div>
+
 [简体中文](README.zh-CN.md) | English
 
 A desktop test case management tool built on a **Tauri 2 + React 18 + Ant Design + Tailwind CSS 4** desktop shell and a **Fastify 5 + Prisma 7 + SQLite + Stagehand 4 + Playwright** Node backend:
