@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Collapse, Form, Input, InputNumber, Select, Space, Switch, Tag, App, Alert, Button } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { http } from '../api/client';
+import { UpdateSettings } from '../components/AppUpdater';
 import { LANGUAGES, getCurrentLanguage, setLanguage, type AppLanguage } from '../i18n';
 import { useThemeMode, useFontSizeScale, type ThemeMode, type FontSizeScale } from '../theme';
 
@@ -87,6 +88,8 @@ export default function Settings() {
           description={t('settings.notConfiguredAlertDesc')}
         />
       )}
+
+      <UpdateSettings />
 
       <Form form={form} layout="vertical">
         

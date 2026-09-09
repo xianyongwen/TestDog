@@ -1,6 +1,8 @@
 export const updaterZhCN = {
   title: '软件更新',
   check: '检查更新',
+  viewUpdate: '查看更新',
+  desktopOnly: '请在 TestDog 桌面客户端中检查和安装更新。',
   auto: '自动检查并下载更新',
   description: '启动时及每隔 4 小时检查新版本，下载后由你选择重启安装。',
   idle: '点击检查新版本',
@@ -23,6 +25,8 @@ export const updaterZhCN = {
 export const updaterEnUS = {
   title: 'Software updates',
   check: 'Check for updates',
+  viewUpdate: 'View update',
+  desktopOnly: 'Check for and install updates in the TestDog desktop app.',
   auto: 'Automatically check and download updates',
   description: 'Checks on startup and every 4 hours. Choose when to restart and install after the download.',
   idle: 'Check for a new version',

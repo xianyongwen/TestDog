@@ -1,10 +1,11 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import { Alert, App, Button, Modal, Progress, Space, Switch, Tooltip, Typography } from 'antd';
+import { Alert, App, Button, Card, Modal, Progress, Space, Switch, Tooltip, Typography } from 'antd';
 import { CloudDownloadOutlined } from '@ant-design/icons';
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { check } from '@tauri-apps/plugin-updater';
 import { useTranslation } from 'react-i18next';
 import { createUpdateController } from '../utils/updateController';
+import { version as appVersion } from '../../package.json';
 
 const controller = createUpdateController({
   enabled: () => invoke<boolean>('updater_enabled'),
@@ -14,6 +15,41 @@ const controller = createUpdateController({
   restart: () => invoke('restart_app'),
 });
 const preferenceKey = 'testdog-auto-update';
+const openUpdaterEvent = 'testdog:open-updater';
+
+export function UpdateSettings() {
+  const { t } = useTranslation();
+  const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot);
+  const desktop = isTauri();
+  const busy = ['checking', 'downloading', 'installing'].includes(state.phase);
+  const installable = state.phase === 'ready' || state.phase === 'restart';
+
+  return (
+    <Card title={t('updater.title')} className="mb-4 max-w-[640px]" size="small">
+      <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+        <Space wrap>
+          <Typography.Text>{t('common.version')} v{appVersion}</Typography.Text>
+          <Button
+            type="primary"
+            icon={<CloudDownloadOutlined />}
+            aria-label={t(installable ? 'updater.viewUpdate' : 'updater.check')}
+            disabled={!desktop || busy}
+            loading={busy}
+            onClick={() => {
+              window.dispatchEvent(new Event(openUpdaterEvent));
+              void controller.check();
+            }}
+          >
+            {t(installable ? 'updater.viewUpdate' : 'updater.check')}
+          </Button>
+        </Space>
+        <Typography.Text type={state.error ? 'danger' : 'secondary'} role="status">
+          {desktop ? t(`updater.${state.phase}`, { version: state.version }) : t('updater.desktopOnly')}
+        </Typography.Text>
+      </Space>
+    </Card>
+  );
+}
 
 export default function AppUpdater({ collapsed }: { collapsed: boolean }) {
   const { t } = useTranslation();
@@ -24,6 +60,12 @@ export default function AppUpdater({ collapsed }: { collapsed: boolean }) {
     try { return localStorage.getItem(preferenceKey) !== 'false'; } catch { return true; }
   });
   const desktop = isTauri();
+
+  useEffect(() => {
+    const showUpdater = () => setOpen(true);
+    window.addEventListener(openUpdaterEvent, showUpdater);
+    return () => window.removeEventListener(openUpdaterEvent, showUpdater);
+  }, []);
 
   useEffect(() => {
     if (!desktop || !automatic || import.meta.env.DEV) return;
