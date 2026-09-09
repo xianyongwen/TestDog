@@ -1,5 +1,5 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import { Alert, App, Button, Card, Modal, Progress, Space, Switch, Tooltip, Typography } from 'antd';
+import { Alert, App, Button, Card, Modal, Progress, Space, Switch, Typography } from 'antd';
 import { CloudDownloadOutlined } from '@ant-design/icons';
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { check } from '@tauri-apps/plugin-updater';
@@ -51,7 +51,7 @@ export function UpdateSettings() {
   );
 }
 
-export default function AppUpdater({ collapsed }: { collapsed: boolean }) {
+export default function AppUpdater() {
   const { t } = useTranslation();
   const { notification, modal } = App.useApp();
   const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot);
@@ -97,18 +97,6 @@ export default function AppUpdater({ collapsed }: { collapsed: boolean }) {
   const status = t(`updater.${state.phase}`, { version: state.version });
   return (
     <>
-      <Tooltip title={status} placement="right">
-        <Button
-          type="text"
-          className="mx-2 mb-1"
-          icon={<CloudDownloadOutlined />}
-          aria-label={t('updater.title')}
-          onClick={() => setOpen(true)}
-          style={installable ? { color: 'var(--ant-color-primary, #1677ff)' } : undefined}
-        >
-          {!collapsed && (installable ? t('updater.install') : t('updater.title'))}
-        </Button>
-      </Tooltip>
       <Modal
         title={t('updater.title')}
         open={open}

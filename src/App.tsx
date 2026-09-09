@@ -69,6 +69,7 @@ function Shell() {
 
   return (
     <Layout className="h-screen bg-page">
+      <AppUpdater />
       <Sider
         width={208}
         collapsedWidth={64}
@@ -126,7 +127,6 @@ function Shell() {
             </>}
           </a>
         </Tooltip>
-        <AppUpdater collapsed={collapsed} />
         <div className="sidebar-footer" title={`${t('common.version')} ${appVersion}`}>
           {!collapsed && <span>{t('common.version')}</span>}
           <span className="sidebar-version">v{appVersion}</span>
