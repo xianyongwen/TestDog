@@ -1,4 +1,7 @@
 import { defineConfig } from 'vitepress'
+import { localeScript } from './locale-preference.mjs'
+
+const base = '/testdog-doc/'
 
 // 中 / 英共享的导航结构（en 侧路径加 /en 前缀）
 const nav = (p = '') => [
@@ -105,9 +108,12 @@ export default defineConfig({
   // 部署子路径（如 https://example.com/testdog-doc/）；
   // 注意：public 静态资源（/images /videos /favicon /logo）不会自动加 base，
   // 文档 md 与 head 里的引用需写死 /testdog-doc/ 前缀
-  base: '/testdog-doc/',
+  base,
   // 站点图标：与应用图标一致（src-tauri/icons/128x128.png，更新应用图标时同步复制到 docs/public/favicon.png）
-  head: [['link', { rel: 'icon', type: 'image/png', href: '/testdog-doc/favicon.png' }]],
+  head: [
+    ['link', { rel: 'icon', type: 'image/png', href: `${base}favicon.png` }],
+    ['script', {}, localeScript(base)]
+  ],
 
   locales: {
     root: {
