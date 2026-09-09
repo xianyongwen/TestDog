@@ -9,18 +9,61 @@ A desktop test case management tool built on a **Tauri 2 + React 18 + Ant Design
 3. **Replay runs**: deterministic Playwright replay (zero LLM cost) with UI / API / WebSocket assertions, self-healing on failure + one-click adoption back into the script
 4. **Plugin system**: component-library semantic action plugins (dropdown / tree select / cascader / date / time / slider) + preset orchestration, across **Ant Design / Element (element-ui · element-plus) / Vant / MUI**
 
+## Comparison with OpenClaw
+
+**TestDog fits reusable Web test cases, scripts, and regression reports; OpenClaw fits everyday tasks spanning tools and chat channels.** OpenClaw is a self-hosted AI assistant with messaging integrations and tool/skill extensions. See the [official introduction](https://docs.openclaw.ai/).
+
+| Area | TestDog | OpenClaw |
+| --- | --- | --- |
+| Test workflow | Built-in projects, cases, script versions, batch runs, and reports | General assistant workflows; equivalent test management can be assembled with tools, skills, and external test systems |
+| Browser interaction | Generate or record editable steps, then replay them | Browser snapshots, clicks, typing, and screenshots for web tasks; see [browser tools](https://docs.openclaw.ai/tools/browser) |
+| Verification | UI, API, and WebSocket assertions, failure screenshots, and console/network records | Evidence can be collected with browser and other tools; assertions and reports depend on the configured workflow |
+| Extensions | Component-library actions for generating and replaying complex form interactions | General tools, skills, messaging integrations, and [scheduled automation](https://docs.openclaw.ai/automation/cron-jobs) for cross-service tasks |
+
+**TestDog advantages**
+
+- **Reusable test assets**: edit, version, and batch-replay generated or recorded scripts without describing the entire flow again.
+- **No LLM calls for ordinary replay**: Playwright executes saved scripts; only repair and self-healing require model calls, lowering regression testing costs.
+- **Integrated test evidence**: steps, assertions, failure details, and reports reduce the need to assemble separate test-management tools.
+
+**TestDog limitations**
+
+- **Narrower task coverage**: focused on Web testing, without OpenClaw-style multi-channel assistant entry points or general task orchestration.
+- **Scripts still need maintenance**: changes to pages or business flows may require re-recording, assertion updates, or human review of AI repairs. Deterministic replay does not guarantee success.
+- **Limited built-in component coverage**: custom controls and complex pages may require additional plugins or manual intervention.
+
+This is a use-case assessment based on current project features and OpenClaw documentation checked on 2026-09-09, not a performance or success-rate benchmark. OpenClaw can be extended for testing; evaluate both against your actual workflow.
+
 ## Architecture
 
-```text
-Tauri 2 shell (Rust + system Webview)
-  └ React 18 + Vite + Ant Design + Tailwind CSS 4 frontend (i18n: 简体中文 / English)
-      · fetch  → backend REST (projects / cases / scripts / generation / runs / recording / attachments / plugins / settings …)
-      · WebSocket → real-time progress (generation / runs / recording + cancel)
-                    │ http://127.0.0.1:4123
-Node backend (Fastify 5 + TS ESM, tsx in dev / tsup for packaging)
-  · Prisma 7 + SQLite (better-sqlite3 driver adapter; production copies app.db.template on first run + idempotent migration)
-  · OpenAI SDK (OpenAI-compatible protocol via a custom gateway; in-house toolLoop)
-  · Stagehand 4 (generation execution / self-healing relocation) + Playwright (replay / recording / precise-verify CDP channel)
+```mermaid
+flowchart TB
+    subgraph desktop["TestDog desktop application"]
+        shell["Tauri 2 · Rust shell"]
+        ui["React 18 in the system WebView<br/>Vite · Ant Design · Tailwind CSS 4"]
+        shell -->|Hosts UI| ui
+
+        subgraph backend["Standalone Node.js backend process"]
+            api["Fastify 5 · REST / WebSocket<br/>127.0.0.1:4123"]
+            data["Prisma 7 · better-sqlite3"]
+            agent["toolLoop · OpenAI SDK<br/>Generation / repair / self-healing"]
+            stagehand["Stagehand 4<br/>Generation execution / relocation"]
+            playwright["Playwright<br/>Recording / deterministic replay / assertions"]
+            api --> data
+            api --> agent
+            api --> playwright
+            agent --> stagehand
+        end
+
+        shell -.->|Starts backend in production| api
+        ui -->|REST requests| api
+        api -->|WebSocket progress| ui
+        data --> db[("Local SQLite<br/>Projects / cases / scripts / runs")]
+    end
+
+    agent <-->|OpenAI-compatible API| model["User-configured model service / gateway"]
+    stagehand -->|Browser execution and relocation| browser["Local Chrome / Chromium<br/>Web application under test"]
+    playwright -->|Recording, replay and verification| browser
 ```
 
 > Stagehand / Prisma are Node libraries that cannot run inside Tauri's Rust/Webview, so TestDog uses a "Tauri shell + standalone Node backend process" split: in development `concurrently` starts the backend + Vite and the Tauri window loads Vite; in production the backend is bundled to a single file with `tsup` and shipped inside the installer with a bundled Node runtime (end users don't need Node installed).
@@ -116,20 +159,6 @@ npm run dist        # scripts/dist.mjs: macOS .app/.dmg, Windows NSIS installer
 1. `scripts/prepare-sidecar.mjs` first bundles the backend to a single file with `tsup`, prunes production dependencies, and copies the Node runtime and `app.db.template` into `src-tauri/resources/`. **After any schema change you must re-run it and commit the artifacts `resources/server/index.js` + `app.db.template`**, or the installed app errors with `Unknown field` at startup.
 2. macOS: `tauri build` produces .app/.dmg (`build-dmg.mjs` deduplicates/falls back); Windows: NSIS installer (TEMP is redirected to the project drive during packaging to avoid makensis failures from low system-disk space).
 3. The production DB is created by copying `app.db.template` on first run; upgrades never overwrite the old DB — the idempotent migration in `server/src/migrate.ts` auto-patches columns at startup.
-
-### GitHub Actions packaging
-
-The workflow `.github/workflows/build-desktop.yml` builds macOS Apple Silicon and Intel `.dmg` files (containing the `.app`), plus a Windows x64 NSIS `.exe` installer. Each architecture builds natively so the bundled Node runtime and `better-sqlite3` match.
-
-1. Commit and push the workflow to the GitHub default branch.
-2. Open **Actions → Build desktop installers → Run workflow**, or push a `v*` tag such as `v0.1.2`. Ordinary pushes and pull requests do not trigger packaging.
-3. Download the platform archive from the run's **Artifacts** section and extract the installer. Artifacts expire after **7 days**. The workflow does not create or publish a GitHub Release.
-
-No Apple account, paid certificate, or Secrets are required. CI uses `src-tauri/tauri.ci.conf.json` for ad-hoc signing while preserving the local `xywMacAppSign` setting. The macOS app is not notarized and may require manually allowing it in **System Settings → Privacy & Security**. The unsigned Windows installer may also show an unknown-publisher warning.
-
-CI uses Node.js 24 and Rust stable, installs frontend/backend dependencies, and regenerates Prisma, the backend, and an empty database template without local `.env` files or business data. Checks cover the existing sidecar smoke tests, bundled Node / native SQLite compatibility, and macOS signature / DMG verification. Installer versions come from project configuration; tags do not update them automatically.
-
-To control usage, builds run only manually or on version tags, use npm / Rust caches, and time out after 60 minutes per job. A new run on the same branch or tag cancels the previous unfinished run. Private repositories remain subject to the account's Actions allowance and billing settings.
 
 ## Docs & Contributing
 

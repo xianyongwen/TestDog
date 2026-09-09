@@ -9,18 +9,59 @@
 3. **回放运行**：确定性 Playwright 回放（零 LLM 成本），UI/接口/WebSocket 断言，失败自愈 + 一键采纳回写
 4. **插件系统**：组件库语义动作插件（下拉/树选/级联/日期/时间/滑块）+ 预设编排，跨 **Ant Design / Element（element-ui · element-plus）/ Vant / MUI**
 
+## 与 OpenClaw 对比
+
+**TestDog 更适合将 Web 测试流程沉淀为用例、脚本和回归报告；OpenClaw 更适合通过聊天入口处理跨工具的日常任务。** OpenClaw 的官方定位是自托管 AI 助手，支持多种消息渠道、工具和技能扩展。参见 [OpenClaw 官方介绍](https://docs.openclaw.ai/)。
+
+| 对比维度 | TestDog | OpenClaw |
+| --- | --- | --- |
+| 测试流程 | 内置项目、用例、脚本版本、批量运行及测试报告，面向重复回归 | 通用助手工作流；如需同样的测试管理流程，可围绕工具、技能与外部测试系统搭建 |
+| 浏览器操作 | 自然语言生成或手动录制，保存为可编辑步骤再回放 | 支持浏览器快照、点击、输入与截图等操作，可用于网页任务；详见[浏览器工具](https://docs.openclaw.ai/tools/browser) |
+| 结果验证 | 内置 UI、接口、WebSocket 断言，以及失败截图、console/network 记录 | 可通过浏览器及其他工具收集信息；测试断言与报告的组织方式取决于具体工作流 |
+| 扩展方向 | 组件库语义动作插件，聚焦复杂表单控件的生成与回放 | 通用工具、技能、消息渠道及[定时自动化](https://docs.openclaw.ai/automation/cron-jobs)，适合跨服务任务 |
+
+**TestDog 的优势**
+
+- **测试资产可复用**：生成或录制一次后，可编辑、按版本管理并批量回归，无需每次重新描述完整流程。
+- **常规回放无需大模型调用**：已保存脚本由 Playwright 执行；仅修复和自愈需调用模型，回归测试成本更低。
+- **测试结果更便于检查**：步骤、断言、失败证据和报告集中展示，减少自行拼接测试管理工具的工作。
+
+**TestDog 的局限**
+
+- **通用任务覆盖较窄**：当前主要服务 Web 测试，不提供 OpenClaw 式的多聊天渠道助手入口与通用任务编排。
+- **已有脚本仍需维护**：页面结构或业务流程变化后，可能需要重新录制、修改断言或人工确认 AI 修复；确定性回放不等于永不失败。
+- **插件适配有边界**：内置插件覆盖常见组件库；自定义控件和复杂页面仍可能需要补充插件或人工处理。
+
 ## 架构
 
-```text
-Tauri 2 外壳（Rust + 系统 Webview）
-  └ React 18 + Vite + Ant Design + Tailwind CSS 4 前端（i18n：简体中文 / English）
-      · fetch  → 后端 REST（项目 / 用例 / 脚本 / 生成 / 运行 / 录制 / 附件 / 插件 / 设置 …）
-      · WebSocket → 实时进度（生成 / 运行 / 录制 + 取消）
-                    │ http://127.0.0.1:4123
-Node 后端（Fastify 5 + TS ESM，开发 tsx / 打包 tsup）
-  · Prisma 7 + SQLite（better-sqlite3 driver adapter；生产由 app.db.template 首次复制 + 幂等迁移）
-  · OpenAI SDK（OpenAI 兼容协议经自定义网关；自研 toolLoop 工具调用循环）
-  · Stagehand 4（生成执行 / 自愈重定位）+ Playwright（回放 / 录制 / 精确验证 CDP 通道）
+```mermaid
+flowchart TB
+    subgraph desktop["TestDog 桌面应用"]
+        shell["Tauri 2 · Rust 外壳"]
+        ui["系统 WebView 中的 React 18 界面<br/>Vite · Ant Design · Tailwind CSS 4"]
+        shell -->|承载界面| ui
+
+        subgraph backend["独立 Node.js 后端进程"]
+            api["Fastify 5 · REST / WebSocket<br/>127.0.0.1:4123"]
+            data["Prisma 7 · better-sqlite3"]
+            agent["toolLoop · OpenAI SDK<br/>生成 / 修复 / 自愈"]
+            stagehand["Stagehand 4<br/>生成执行 / 自愈重定位"]
+            playwright["Playwright<br/>录制 / 确定性回放 / 断言"]
+            api --> data
+            api --> agent
+            api --> playwright
+            agent --> stagehand
+        end
+
+        shell -.->|生产环境启动后端| api
+        ui -->|REST 请求| api
+        api -->|WebSocket 实时进度| ui
+        data --> db[("本地 SQLite<br/>项目 / 用例 / 脚本 / 运行记录")]
+    end
+
+    agent <-->|OpenAI 兼容接口| model["用户配置的模型服务 / 网关"]
+    stagehand -->|浏览器执行与重定位| browser["本机 Chrome / Chromium<br/>被测 Web 应用"]
+    playwright -->|录制、回放与验证| browser
 ```
 
 > Stagehand / Prisma 都是 Node 库，跑不进 Tauri 的 Rust/Webview，因此采用「Tauri 外壳 + 独立 Node 后端进程」：开发期由 `concurrently` 拉起后端 + Vite，Tauri 窗口加载 Vite；生产期后端 `tsup` 打成单文件、随安装包内置 node 运行时分发（最终用户无需装 Node）。
@@ -116,20 +157,6 @@ npm run dist        # scripts/dist.mjs：macOS 出 .app/.dmg，Windows 出 NSIS 
 1. `scripts/prepare-sidecar.mjs` 先把后端 `tsup` 打成单文件、裁剪生产依赖、复制 node 运行时与 `app.db.template` 进 `src-tauri/resources/`。**改完 schema 必须重跑并提交产物 `resources/server/index.js` + `app.db.template`**，否则安装包运行时即报 `Unknown field` 错误。
 2. macOS：`tauri build` 出 .app/.dmg（`build-dmg.mjs` 去重/兜底）；Windows：NSIS 安装包（打包时 TEMP 重定向到项目盘，规避系统盘空间不足的 makensis 报错）。
 3. 生产库由 `app.db.template` 首次复制生成；升级安装不覆盖旧库，启动时 `server/src/migrate.ts` 幂等迁移自动补列。
-
-### GitHub Actions 打包
-
-工作流：`.github/workflows/build-desktop.yml`，产出 macOS Apple Silicon、macOS Intel 的 `.dmg`（内含 `.app`）以及 Windows x64 的 NSIS `.exe` 安装包。每个平台原生构建，确保内置 Node 和 `better-sqlite3` 架构一致。
-
-1. 将工作流提交并推送到 GitHub 默认分支。
-2. 在仓库 **Actions → Build desktop installers → Run workflow** 手动运行；推送 `v*` 标签（例如 `v0.1.2`）也会触发。普通 push / PR 不触发打包。
-3. 运行成功后，在该次运行页面的 **Artifacts** 下载对应平台的压缩包，解压获得安装包。产物保留 **7 天**，不自动创建或发布 GitHub Release。
-
-无需配置 Apple 账号、付费证书或 Secrets。macOS 使用 `src-tauri/tauri.ci.conf.json` 覆盖为 ad-hoc 签名，本地 `xywMacAppSign` 配置保持不变；未经过 Apple 公证，下载后 macOS 可能要求在“系统设置 → 隐私与安全性”中手动允许打开。Windows 安装包未签名，也可能显示未知发布者提示。
-
-CI 使用 Node.js 24 和 Rust stable，自动安装前后端依赖并重新生成 Prisma 客户端、后端及空数据库模板，不使用本地 `.env` 或业务数据库。构建包含现有 sidecar 自检、内置 Node / SQLite 原生模块验证，以及 macOS 签名和 DMG 校验。安装包版本来自项目配置，标签名不会自动修改版本。
-
-为控制用量，仅在手动运行或发版本标签时构建，启用 npm / Rust 缓存，每个构建任务最多运行 60 分钟；同一分支或标签的新运行会取消尚未完成的旧运行。私有仓库仍受账户 Actions 免费额度及计费设置约束。
 
 ## 文档与贡献
 
