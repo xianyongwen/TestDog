@@ -77,7 +77,7 @@ function Shell() {
         collapsed={collapsed}
         onCollapse={setCollapsed}
         trigger={null}
-        className="app-sidebar m-3 rounded-2xl"
+        className="app-sidebar m-3 rounded-2xl overflow-hidden"
       >
         <div className="sidebar-header">
           <div className="sidebar-brand">

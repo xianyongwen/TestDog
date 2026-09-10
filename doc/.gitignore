@@ -1,3 +1,6 @@
 node_modules/
 docs/.vitepress/dist/
 docs/.vitepress/cache/
+
+# 部署配置（含服务器地址 / SSH 密码，勿提交）
+.env.deploy

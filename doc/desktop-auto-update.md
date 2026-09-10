@@ -27,6 +27,17 @@
 
 默认更新地址是 `https://github.com/xianyongwen/TestDog/releases/latest/download/latest.json`。仓库或分发位置改变时，在 `src-tauri/tauri.conf.json` 中设置新的 HTTPS 地址；发布清单中的包地址由构建仓库决定。客户端必须能够无认证访问清单与下载包。
 
+## Actions 自动生成清单
+
+配置上述签名变量和密钥后，在 Actions 手动运行构建也会生成更新清单。三个平台成功后，`Generate latest.json and update assets` 任务汇总并检查三平台产物，上传两份可下载的 Artifact：
+
+- `latest-json`：解压后得到 `latest.json`。
+- `update-release-assets`：包含清单、三个平台更新包、签名和安装器，适合整体上传到对应版本的 Release。
+
+分支上的手动运行仅生成 Artifact，不创建 Release。Tag 运行还会执行 `Prepare signed update release`，将同一批文件上传到草稿 Release。必须正式发布包含清单和更新包的 Release，客户端才能下载更新；仅有 Actions Artifact 不会让更新地址生效。
+
+未配置签名的分支构建只生成普通安装器，不生成清单，原因会显示在运行摘要中。修改工作流后，需要推送修改并启动一次新的运行；重跑历史任务不会使用新工作流。
+
 ## 本地签名打包
 
 将上述公钥、私钥及密码设置为当前终端的环境变量，然后运行：
