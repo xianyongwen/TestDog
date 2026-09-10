@@ -1,4 +1,6 @@
-# TestDog Test Case Management Tool
+# TestDog
+
+> A local desktop tool for Web regression testing: describe a flow in natural language, review the generated steps, save them as editable Playwright scripts, and replay them deterministically later.
 
 <div align="center">
   <img src="src-tauri/icons/icon.png" width="128" alt="TestDog logo" />
@@ -6,37 +8,55 @@
 
 [简体中文](README.zh-CN.md) | English
 
-A desktop test case management tool built on a **Tauri 2 + React 18 + Ant Design + Tailwind CSS 4** desktop shell and a **Fastify 5 + Prisma 7 + SQLite + Stagehand 4 + Playwright** Node backend:
+[Download the latest installer](https://github.com/xianyongwen/TestDog/releases/latest) · [Quick start](https://softwing.top/testdog-doc/en/guide/getting-started) · [Help docs](https://softwing.top/testdog-doc/en/) · [GitHub](https://github.com/xianyongwen/TestDog)
 
-1. **AI script generation**: natural language (with attachments / login profiles) → model-proposed step plan → after confirmation, executed step-by-step in a real browser via a tool-calling loop → each step lands as a semantic-locator script; supports pause & resume, AI repair, and manual takeover
-2. **Manual recording**: record with Playwright codegen → parsed into structured steps
-3. **Replay runs**: deterministic Playwright replay (zero LLM cost) with UI / API / WebSocket assertions, self-healing on failure + one-click adoption back into the script
-4. **Plugin system**: component-library semantic action plugins (dropdown / tree select / cascader / date / time / slider) + preset orchestration, across **Ant Design / Element (element-ui · element-plus) / Vant / MUI**
+![TestDog AI generation result](doc/docs/public/images/ai-generate-done.png)
 
-## Comparison with OpenClaw
+Watch the short demos: [AI generation (36s)](doc/docs/public/videos/ai-generate.mp4) · [deterministic replay (18s)](doc/docs/public/videos/replay-run.mp4)
 
-**TestDog fits reusable Web test cases, scripts, and regression reports; OpenClaw fits everyday tasks spanning tools and chat channels.** OpenClaw is a self-hosted AI assistant with messaging integrations and tool/skill extensions. See the [official introduction](https://docs.openclaw.ai/).
+## Why TestDog
 
-| Area | TestDog | OpenClaw |
+TestDog turns a browser flow into a reusable test asset instead of a one-off AI interaction:
+
+- **Describe or record**: generate a test from natural language, or record it with Playwright codegen.
+- **Review before saving**: confirm the model's step plan, then keep each action as an editable semantic locator step.
+- **Replay without an LLM**: run saved scripts with Playwright, including UI, API, and WebSocket assertions; batch-run a project and export evidence.
+- **Repair when needed**: when a locator breaks, ask the model for a bounded repair and review the proposed change before adopting it.
+
+## What needs AI, and what does not?
+
+| Workflow | LLM required? | Notes |
 | --- | --- | --- |
-| Test workflow | Built-in projects, cases, script versions, batch runs, and reports | General assistant workflows; equivalent test management can be assembled with tools, skills, and external test systems |
-| Browser interaction | Generate or record editable steps, then replay them | Browser snapshots, clicks, typing, and screenshots for web tasks; see [browser tools](https://docs.openclaw.ai/tools/browser) |
-| Verification | UI, API, and WebSocket assertions, failure screenshots, and console/network records | Evidence can be collected with browser and other tools; assertions and reports depend on the configured workflow |
-| Extensions | Component-library actions for generating and replaying complex form interactions | General tools, skills, messaging integrations, and [scheduled automation](https://docs.openclaw.ai/automation/cron-jobs) for cross-service tasks |
+| AI script generation | Yes | Natural language, attachments, screenshots, and browser actions are processed through the configured OpenAI-compatible gateway. |
+| Locator repair / self-healing | Only when triggered | A model is used to find or propose a replacement when a saved locator fails. |
+| Manual recording | No | Playwright codegen records the browser interaction. |
+| Ordinary replay and assertions | No | Saved steps run deterministically with Playwright; UI, API, and WebSocket checks do not call an LLM. |
+| Batch regression and reports | No | Runs reuse saved scripts and produce screenshots, console/network evidence, JSON, or Excel reports. |
 
-**TestDog advantages**
+AI generation and repair use the model gateway configured by the user. The application is local-first: projects, scripts, runs, and logs are stored in local SQLite, while model requests follow the configured gateway.
 
-- **Reusable test assets**: edit, version, and batch-replay generated or recorded scripts without describing the entire flow again.
-- **No LLM calls for ordinary replay**: Playwright executes saved scripts; only repair and self-healing require model calls, lowering regression testing costs.
-- **Integrated test evidence**: steps, assertions, failure details, and reports reduce the need to assemble separate test-management tools.
+## Try it with an example
 
-**TestDog limitations**
+Download an example `.testcase` file and import it from the Projects page:
 
-- **Narrower task coverage**: focused on Web testing, without OpenClaw-style multi-channel assistant entry points or general task orchestration.
-- **Scripts still need maintenance**: changes to pages or business flows may require re-recording, assertion updates, or human review of AI repairs. Deterministic replay does not guarantee success.
-- **Limited built-in component coverage**: custom controls and complex pages may require additional plugins or manual intervention.
+- [Login flow example](downloads/skills/generate-testcase/examples/login-flow.testcase)
+- [API JSON assertion example](downloads/skills/generate-testcase/examples/api-json-assert.testcase)
+- [WebSocket notification example](downloads/skills/generate-testcase/examples/websocket-notify.testcase)
 
-This is a use-case assessment based on current project features and OpenClaw documentation checked on 2026-09-09, not a performance or success-rate benchmark. OpenClaw can be extended for testing; evaluate both against your actual workflow.
+## Installers
+
+The [latest GitHub Release](https://github.com/xianyongwen/TestDog/releases/latest) contains the available **macOS Apple Silicon**, **macOS Intel**, and **Windows x64** installers. The installer bundles Node.js; install system Chrome first because browser automation uses it by default.
+
+For the first launch, follow the [getting-started guide](https://softwing.top/testdog-doc/en/guide/getting-started) to configure an OpenAI-compatible model gateway and run the example case.
+
+## Core capabilities
+
+1. **AI script generation**: natural language (with attachments / login profiles) → model-proposed step plan → after confirmation, executed step-by-step in a real browser via a tool-calling loop → each step lands as a semantic-locator script; supports pause & resume, AI repair, and manual takeover.
+2. **Manual recording**: record with Playwright codegen → parsed into structured steps.
+3. **Replay runs**: deterministic Playwright replay with UI / API / WebSocket assertions, failure screenshots, console/network evidence, batch runs, and optional self-healing.
+4. **Plugin system**: component-library semantic action plugins (dropdown / tree select / cascader / date / time / slider) + preset orchestration, across **Ant Design / Element (element-ui · element-plus) / Vant / MUI**.
+
+TestDog fits reusable Web test cases, scripts, and regression reports. It is not a general-purpose browser assistant or a hosted test cloud.
 
 ## Architecture
 

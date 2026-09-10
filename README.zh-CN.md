@@ -1,4 +1,6 @@
-# TestDog 测试用例管理工具
+# TestDog
+
+> 面向 Web 回归测试的本地桌面工具：用自然语言描述流程，确认 AI 生成的步骤后保存为可编辑的 Playwright 脚本，之后可确定性回放。
 
 <div align="center">
   <img src="src-tauri/icons/icon.png" width="128" alt="TestDog logo" />
@@ -6,35 +8,55 @@
 
 简体中文 | [English](README.md)
 
-基于 **Tauri 2 + React 18 + Ant Design + Tailwind CSS 4** 桌面外壳、**Fastify 5 + Prisma 7 + SQLite + Stagehand 4 + Playwright** Node 后端的桌面端测试用例管理工具：
+[下载最新版安装包](https://github.com/xianyongwen/TestDog/releases/latest) · [快速开始](https://softwing.top/testdog-doc/guide/getting-started) · [帮助文档](https://softwing.top/testdog-doc/) · [GitHub](https://github.com/xianyongwen/TestDog)
 
-1. **AI 生成脚本**：自然语言（可带附件/登录配置）→ 模型预拆分步骤计划 → 确认后在真实浏览器以 tool-calling 循环逐步执行 → 每步落为语义化定位器脚本；支持暂停续跑、AI 修复、人工接管
-2. **手动录制脚本**：Playwright codegen 录制操作 → 解析为结构化步骤
-3. **回放运行**：确定性 Playwright 回放（零 LLM 成本），UI/接口/WebSocket 断言，失败自愈 + 一键采纳回写
-4. **插件系统**：组件库语义动作插件（下拉/树选/级联/日期/时间/滑块）+ 预设编排，跨 **Ant Design / Element（element-ui · element-plus）/ Vant / MUI**
+![TestDog AI 生成结果](doc/docs/public/images/ai-generate-done.png)
 
-## 与 OpenClaw 对比
+短视频演示：[AI 生成（36 秒）](doc/docs/public/videos/ai-generate.mp4) · [确定性回放（18 秒）](doc/docs/public/videos/replay-run.mp4)
 
-**TestDog 更适合将 Web 测试流程沉淀为用例、脚本和回归报告；OpenClaw 更适合通过聊天入口处理跨工具的日常任务。** OpenClaw 的官方定位是自托管 AI 助手，支持多种消息渠道、工具和技能扩展。参见 [OpenClaw 官方介绍](https://docs.openclaw.ai/)。
+## 为什么是 TestDog
 
-| 对比维度 | TestDog | OpenClaw |
+TestDog 的目标不是让 AI 临时替你点一次网页，而是把一次浏览器流程沉淀成可复用的测试资产：
+
+- **描述或录制**：用自然语言生成测试，或用 Playwright codegen 手动录制。
+- **确认后保存**：先检查模型给出的步骤计划，再将每个动作保存为可编辑的语义定位器步骤。
+- **无需大模型回放**：保存后的脚本由 Playwright 执行，支持 UI、接口、WebSocket 断言、项目批量回归和证据导出。
+- **失败时再修复**：定位器失效时，才请求模型提出受控修复建议；确认后再采纳回写脚本。
+
+## 哪些操作需要 AI，哪些不需要？
+
+| 流程 | 是否需要 LLM | 说明 |
 | --- | --- | --- |
-| 测试流程 | 内置项目、用例、脚本版本、批量运行及测试报告，面向重复回归 | 通用助手工作流；如需同样的测试管理流程，可围绕工具、技能与外部测试系统搭建 |
-| 浏览器操作 | 自然语言生成或手动录制，保存为可编辑步骤再回放 | 支持浏览器快照、点击、输入与截图等操作，可用于网页任务；详见[浏览器工具](https://docs.openclaw.ai/tools/browser) |
-| 结果验证 | 内置 UI、接口、WebSocket 断言，以及失败截图、console/network 记录 | 可通过浏览器及其他工具收集信息；测试断言与报告的组织方式取决于具体工作流 |
-| 扩展方向 | 组件库语义动作插件，聚焦复杂表单控件的生成与回放 | 通用工具、技能、消息渠道及[定时自动化](https://docs.openclaw.ai/automation/cron-jobs)，适合跨服务任务 |
+| AI 生成脚本 | 是 | 自然语言、附件、截图和浏览器动作通过用户配置的 OpenAI 兼容网关处理。 |
+| 定位器修复 / 自愈 | 仅触发时需要 | 保存的定位器失败后，模型用于寻找或提出替代定位器。 |
+| 手动录制 | 不需要 | 由 Playwright codegen 录制浏览器操作。 |
+| 普通回放与断言 | 不需要 | 已保存步骤由 Playwright 确定性执行；UI、接口和 WebSocket 检查不会调用 LLM。 |
+| 批量回归与报告 | 不需要 | 复用已保存脚本运行，并生成截图、console/network 证据以及 JSON / Excel 报告。 |
 
-**TestDog 的优势**
+AI 生成和修复使用用户配置的模型网关。TestDog 以本地为主：项目、脚本、运行记录和日志保存在本地 SQLite；模型请求则按用户配置发送到对应网关。
 
-- **测试资产可复用**：生成或录制一次后，可编辑、按版本管理并批量回归，无需每次重新描述完整流程。
-- **常规回放无需大模型调用**：已保存脚本由 Playwright 执行；仅修复和自愈需调用模型，回归测试成本更低。
-- **测试结果更便于检查**：步骤、断言、失败证据和报告集中展示，减少自行拼接测试管理工具的工作。
+## 先导入一个示例
 
-**TestDog 的局限**
+下载 `.testcase` 示例文件，在「项目」页面导入：
 
-- **通用任务覆盖较窄**：当前主要服务 Web 测试，不提供 OpenClaw 式的多聊天渠道助手入口与通用任务编排。
-- **已有脚本仍需维护**：页面结构或业务流程变化后，可能需要重新录制、修改断言或人工确认 AI 修复；确定性回放不等于永不失败。
-- **插件适配有边界**：内置插件覆盖常见组件库；自定义控件和复杂页面仍可能需要补充插件或人工处理。
+- [登录流程示例](downloads/skills/generate-testcase/examples/login-flow.testcase)
+- [接口 JSON 断言示例](downloads/skills/generate-testcase/examples/api-json-assert.testcase)
+- [WebSocket 通知示例](downloads/skills/generate-testcase/examples/websocket-notify.testcase)
+
+## 安装包
+
+[GitHub 最新 Release](https://github.com/xianyongwen/TestDog/releases/latest) 会提供当前可用的 **macOS Apple Silicon**、**macOS Intel** 和 **Windows x64** 安装包。安装包内置 Node.js；浏览器自动化默认使用系统 Chrome，请先安装 Chrome。
+
+首次启动请参考[快速开始](https://softwing.top/testdog-doc/guide/getting-started)，配置 OpenAI 兼容模型网关并运行示例用例。
+
+## 核心能力
+
+1. **AI 生成脚本**：自然语言（可带附件 / 登录配置）→ 模型预拆分步骤计划 → 确认后在真实浏览器逐步执行 → 保存为语义定位器脚本；支持暂停续跑、AI 修复和人工接管。
+2. **手动录制**：Playwright codegen 录制操作 → 解析为结构化步骤。
+3. **回放运行**：Playwright 确定性回放，支持 UI / 接口 / WebSocket 断言、失败截图、console/network 证据、批量运行和可选的失败自愈。
+4. **插件系统**：组件库语义动作插件（下拉 / 树选 / 级联 / 日期 / 时间 / 滑块）+ 预设编排，覆盖 **Ant Design / Element（element-ui · element-plus）/ Vant / MUI**。
+
+TestDog 适合沉淀可复用的 Web 测试用例、脚本和回归报告；它不是通用浏览器助手，也不是托管式云测试平台。
 
 ## 架构
 
