@@ -1,7 +1,7 @@
 import { registerCancel, unregisterCancel } from '../../ws/hub';
 import { closeSession } from '../stagehandManager';
 import { clearUsage, type TokenUsage } from '../tokenUsage';
-import { pub } from './logBridge';
+import { activeLogIds, pub } from './logBridge';
 import { testIntentSchema, type TestIntent } from '../../shared/testIntent';
 import type { AssistDecision, PlanStep, ConfirmedPlan } from './types';
 import { clearCheckpoint } from './checkpoint';
@@ -203,6 +203,8 @@ export function releaseJob(jobId: string, paused: boolean): void {
     pub({ type: 'gen:paused', jobId, message: '已暂停，可调整步骤后继续生成' });
   }
   if (!paused) {
+    // 终态消息之后仍可能有一个已开始执行的工具返回；映射必须保留到循环与最终 usage 对账完成。
+    activeLogIds.delete(jobId);
     cancelSessionGc(jobId);
     unregisterCancel(jobId);
     clearUsage(jobId);

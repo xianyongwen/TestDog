@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({ drive: vi.fn(), pub: vi.fn() }));
 vi.mock('../src/db', () => ({ prisma: {} }));
 vi.mock('../src/services/pluginStore', () => ({ enabledActionVocabulary: async () => [] }));
-vi.mock('../src/services/generation/logBridge', () => ({ pub: mocks.pub, pubToolWithUsage: vi.fn(), updateToolAssistant: vi.fn() }));
+vi.mock('../src/services/generation/logBridge', () => ({ pub: mocks.pub, pubToolWithUsage: vi.fn(), updateToolAssistant: vi.fn(), activeLogIds: new Map() }));
 vi.mock('../src/services/toolLoop', () => ({ runToolLoop: (options: any) => mocks.drive(options), usageDelta: () => ({ inputTokens: 0, outputTokens: 0, totalTokens: 0, cachedTokens: 0 }) }));
 vi.mock('../src/services/networkCaptureService', () => ({ NetworkCapture: class { attach() {} dispose() {} } }));
 vi.mock('../src/services/generation/jobControl', () => ({ revokeHandlers: new Map(), askUser: vi.fn() }));

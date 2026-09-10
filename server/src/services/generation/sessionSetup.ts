@@ -7,7 +7,7 @@ import { closeSession, getCdpPort } from '../stagehandManager';
 import { enabledInpageScripts } from '../pluginStore';
 import { buildPluginInitScript, type PluginInjectItem } from '../pluginRuntime';
 import { installPluginPwBridge } from '../../../scripts/pluginPwBridge';
-import { reconcileTotalUsage } from '../generationLogService';
+import { flushGenerationLogWrites, reconcileTotalUsage } from '../generationLogService';
 import { pub } from './logBridge';
 import { scheduleSessionGc } from './jobControl';
 import { buildAttachmentParts, normalizeStepSystemVars, safeJsonParse } from './util';
@@ -110,7 +110,11 @@ export async function finalizeGenJob(jobId: string, o: { paused: boolean; pwBrow
   }
   if (o.paused) scheduleSessionGc(jobId);
   else await closeSession(jobId);
-  if (o.logId) await reconcileTotalUsage(o.logId);
+  if (o.logId) {
+    // 取消时终态消息可能先于最后一个在途工具返回；先等两类异步写入，再用运行时累计兜底对账。
+    await flushGenerationLogWrites(o.logId, jobId);
+    await reconcileTotalUsage(o.logId);
+  }
 }
 
 /** 连接会话浏览器的 playwright 视图（与 Stagehand 同一底层标签），供语义化做真实 Playwright 精确验证；失败返回错误信息。 */

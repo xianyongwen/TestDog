@@ -4,7 +4,7 @@ vi.mock('../src/db', () => ({ prisma: {} }));
 vi.mock('../src/ws/hub', () => ({ registerCancel: vi.fn(), unregisterCancel: vi.fn() }));
 vi.mock('../src/services/stagehandManager', () => ({ closeSession: vi.fn() }));
 vi.mock('../src/services/pluginStore', () => ({ enabledActionVocabulary: async () => [] }));
-vi.mock('../src/services/generation/logBridge', () => ({ pub: published }));
+vi.mock('../src/services/generation/logBridge', () => ({ pub: published, activeLogIds: new Map() }));
 vi.mock('../src/services/generationLogService', () => ({ appendStep: vi.fn(), STEP_TYPE: {} }));
 import { preSplit } from '../src/services/generation/preSplit';
 import { awaitPlanConfirm, confirmPlan, releaseJob } from '../src/services/generation/jobControl';

@@ -88,7 +88,6 @@ function logFromWsEvent(msg: ServerMsg, logId: string): void {
           scriptSteps: (msg.script as any)?.steps,
           totalUsage: usage ?? undefined,
         });
-        activeLogIds.delete(msg.jobId as string);
       }
       return;
     }
@@ -104,7 +103,6 @@ function logFromWsEvent(msg: ServerMsg, logId: string): void {
           error: message,
           totalUsage: usage ?? undefined,
         });
-        activeLogIds.delete(msg.jobId as string);
       }
       return;
     }

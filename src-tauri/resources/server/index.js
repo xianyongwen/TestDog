@@ -4625,8 +4625,26 @@ function trunc(s, n = MAX_RESULT_CHARS) {
   return s.length > n ? s.slice(0, n) + `
 \u2026(\u5DF2\u622A\u65AD, \u539F\u59CB ${s.length} \u5B57)` : s;
 }
-function swallow(p) {
-  p.catch((e) => console.warn("[genLog] \u5199\u5165\u5931\u8D25:", e));
+var pendingWrites = /* @__PURE__ */ new Map();
+function swallow(key, p) {
+  const tracked = p.catch((e) => console.warn("[genLog] \u5199\u5165\u5931\u8D25:", e));
+  let group = pendingWrites.get(key);
+  if (!group) {
+    group = /* @__PURE__ */ new Set();
+    pendingWrites.set(key, group);
+  }
+  group.add(tracked);
+  void tracked.finally(() => {
+    group.delete(tracked);
+    if (!group.size) pendingWrites.delete(key);
+  });
+}
+async function flushGenerationLogWrites(...keys) {
+  for (; ; ) {
+    const writes = keys.flatMap((key) => key ? [...pendingWrites.get(key) ?? []] : []);
+    if (!writes.length) return;
+    await Promise.allSettled(writes);
+  }
 }
 async function upsertLog(jobId, patch) {
   try {
@@ -4658,6 +4676,7 @@ async function upsertLog(jobId, patch) {
 function appendStep(logId, step) {
   if (!logId) return;
   swallow(
+    logId,
     prisma.generationStep.create({
       data: {
         logId,
@@ -4679,6 +4698,7 @@ function appendStep(logId, step) {
 function updateStepAssistant(logId, stepIndex, assistant) {
   if (!logId || !Number.isInteger(stepIndex)) return;
   swallow(
+    logId,
     prisma.generationStep.updateMany({
       where: { logId, stepIndex, type: STEP_TYPE.TOOL },
       data: { assistant: trunc(assistant) }
@@ -4687,6 +4707,7 @@ function updateStepAssistant(logId, stepIndex, assistant) {
 }
 function markFinished(jobId, status, extra) {
   swallow(
+    jobId,
     prisma.generationLog.update({
       where: { jobId },
       data: {
@@ -4701,6 +4722,7 @@ function markFinished(jobId, status, extra) {
 }
 function markStatus(jobId, status) {
   swallow(
+    jobId,
     prisma.generationLog.update({
       where: { jobId },
       data: { status, finishedAt: status === "RUNNING" ? null : void 0 }
@@ -4761,18 +4783,19 @@ async function reconcileTotalUsage(logId) {
       sumInput += Number(u.inputTokens ?? 0);
       sumOutput += Number(u.outputTokens ?? 0);
     }
-    const log = await prisma.generationLog.findUnique({ where: { id: logId }, select: { totalUsage: true } });
-    const runtime3 = log?.totalUsage ?? {};
-    const runtimeTotal = Number(runtime3.totalTokens ?? 0);
-    const runtimeCached = Number(runtime3.cachedTokens ?? 0);
-    const runtimeInput = Number(runtime3.inputTokens ?? 0);
-    const runtimeOutput = Number(runtime3.outputTokens ?? 0);
-    const finalTotal = Math.max(sumTotal, runtimeTotal);
-    const finalCached = Math.max(sumCached, runtimeCached);
-    const finalInput = Math.max(sumInput, runtimeInput);
-    const finalOutput = Math.max(sumOutput, runtimeOutput);
-    if (sumTotal > runtimeTotal * 1.05 && runtimeTotal > 0) {
-      console.warn(`[usage] \u8BB0\u8D26\u7591\u4F3C\u4E22\u5931\uFF1A\u8FD0\u884C\u65F6\u7D2F\u8BA1 ${runtimeTotal} < \u6B65\u9AA4\u660E\u7EC6\u548C ${sumTotal}\uFF08\u5DEE ${sumTotal - runtimeTotal}\uFF09\uFF0C\u5934\u90E8\u4EE5\u660E\u7EC6\u548C\u4E3A\u51C6`);
+    const log = await prisma.generationLog.findUnique({ where: { id: logId }, select: { jobId: true, totalUsage: true } });
+    const stored = log?.totalUsage ?? {};
+    const live = log?.jobId ? getUsage(log.jobId) : { inputTokens: 0, outputTokens: 0, totalTokens: 0, cachedTokens: 0 };
+    const storedTotal = Number(stored.totalTokens ?? 0);
+    const finalTotal = Math.max(sumTotal, storedTotal, live.totalTokens);
+    const finalCached = Math.max(sumCached, Number(stored.cachedTokens ?? 0), live.cachedTokens);
+    const finalInput = Math.max(sumInput, Number(stored.inputTokens ?? 0), live.inputTokens);
+    const finalOutput = Math.max(sumOutput, Number(stored.outputTokens ?? 0), live.outputTokens);
+    const persistedTotal = Math.max(sumTotal, storedTotal);
+    if (live.totalTokens > persistedTotal) {
+      console.warn(`[usage] \u6536\u5C3E\u8865\u8BB0\u5728\u9014\u8C03\u7528\uFF1A\u5DF2\u6301\u4E45\u5316 ${persistedTotal} < \u8FD0\u884C\u65F6\u7D2F\u8BA1 ${live.totalTokens}\uFF08\u8865 ${live.totalTokens - persistedTotal}\uFF09`);
+    } else if (sumTotal > storedTotal * 1.05 && storedTotal > 0) {
+      console.warn(`[usage] \u8BB0\u8D26\u7591\u4F3C\u4E22\u5931\uFF1A\u5DF2\u843D\u5E93\u7D2F\u8BA1 ${storedTotal} < \u6B65\u9AA4\u660E\u7EC6\u548C ${sumTotal}\uFF08\u5DEE ${sumTotal - storedTotal}\uFF09\uFF0C\u5934\u90E8\u4EE5\u660E\u7EC6\u548C\u4E3A\u51C6`);
     }
     await prisma.generationLog.update({
       where: { id: logId },
@@ -4938,7 +4961,6 @@ function logFromWsEvent(msg, logId) {
           scriptSteps: msg.script?.steps,
           totalUsage: usage ?? void 0
         });
-        activeLogIds.delete(msg.jobId);
       }
       return;
     }
@@ -4953,7 +4975,6 @@ function logFromWsEvent(msg, logId) {
           error: message,
           totalUsage: usage ?? void 0
         });
-        activeLogIds.delete(msg.jobId);
       }
       return;
     }
@@ -5138,6 +5159,7 @@ function releaseJob(jobId, paused) {
     pub({ type: "gen:paused", jobId, message: "\u5DF2\u6682\u505C\uFF0C\u53EF\u8C03\u6574\u6B65\u9AA4\u540E\u7EE7\u7EED\u751F\u6210" });
   }
   if (!paused) {
+    activeLogIds.delete(jobId);
     cancelSessionGc(jobId);
     unregisterCancel(jobId);
     clearUsage(jobId);
@@ -5404,7 +5426,10 @@ async function finalizeGenJob(jobId, o) {
   }
   if (o.paused) scheduleSessionGc(jobId);
   else await closeSession(jobId);
-  if (o.logId) await reconcileTotalUsage(o.logId);
+  if (o.logId) {
+    await flushGenerationLogWrites(o.logId, jobId);
+    await reconcileTotalUsage(o.logId);
+  }
 }
 async function connectPwView(jobId, page) {
   const cdpPort = getCdpPort(jobId);

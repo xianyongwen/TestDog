@@ -1,5 +1,5 @@
 import { prisma } from '../db';
-import type { TokenUsage } from './tokenUsage';
+import { getUsage, type TokenUsage } from './tokenUsage';
 import type { TestStep } from '../shared/testScript';
 
 /** 生成记录的步骤类型。前端用此枚举显示中文标签 / 折叠逻辑。 */
@@ -44,9 +44,34 @@ function trunc(s: string | null | undefined, n: number = MAX_RESULT_CHARS): stri
   return s.length > n ? s.slice(0, n) + `\n…(已截断, 原始 ${s.length} 字)` : s;
 }
 
-/** 吞错：日志写入失败不应影响主流程。 */
-function swallow(p: Promise<unknown>): void {
-  p.catch((e) => console.warn('[genLog] 写入失败:', e));
+/**
+ * 日志写入仍保持非阻塞，但按 logId/jobId 跟踪未完成任务，供生成收尾在 usage 对账前冲刷。
+ * 否则取消与最后一个在途工具返回相撞时，最后一步的 appendStep/markFinished 可能晚于对账。
+ */
+const pendingWrites = new Map<string, Set<Promise<unknown>>>();
+
+function swallow(key: string, p: Promise<unknown>): void {
+  const tracked = p.catch((e) => console.warn('[genLog] 写入失败:', e));
+  let group = pendingWrites.get(key);
+  if (!group) {
+    group = new Set();
+    pendingWrites.set(key, group);
+  }
+  group.add(tracked);
+  void tracked.finally(() => {
+    group!.delete(tracked);
+    if (!group!.size) pendingWrites.delete(key);
+  });
+}
+
+/** 等待指定生成记录/任务已经发起的异步日志写入完成。 */
+export async function flushGenerationLogWrites(...keys: Array<string | null | undefined>): Promise<void> {
+  // 写入完成回调可能同步移除 Map，因此先拍平快照；循环一次可接住等待期间同 key 新加入的写入。
+  for (;;) {
+    const writes = keys.flatMap((key) => key ? [...(pendingWrites.get(key) ?? [])] : []);
+    if (!writes.length) return;
+    await Promise.allSettled(writes);
+  }
 }
 
 /** upsert：按 jobId 找到已存在则更新，不存在则创建。返回 logId。null 表示失败。 */
@@ -91,6 +116,7 @@ export async function upsertLog(
 export function appendStep(logId: string | null | undefined, step: StepInput): void {
   if (!logId) return;
   swallow(
+    logId,
     prisma.generationStep
       .create({
         data: {
@@ -117,6 +143,7 @@ export function appendStep(logId: string | null | undefined, step: StepInput): v
 export function updateStepAssistant(logId: string | null | undefined, stepIndex: number, assistant: string): void {
   if (!logId || !Number.isInteger(stepIndex)) return;
   swallow(
+    logId,
     prisma.generationStep
       .updateMany({
         where: { logId, stepIndex, type: STEP_TYPE.TOOL },
@@ -133,6 +160,7 @@ export function markFinished(
   extra?: { error?: string; scriptSteps?: TestStep[]; totalUsage?: TokenUsage },
 ): void {
   swallow(
+    jobId,
     prisma.generationLog
       .update({
         where: { jobId },
@@ -151,6 +179,7 @@ export function markFinished(
 /** 仅更新状态（不写 finishedAt），用于暂停 / 恢复。 */
 export function markStatus(jobId: string, status: GenLogStatus): void {
   swallow(
+    jobId,
     prisma.generationLog
       .update({
         where: { jobId },
@@ -210,7 +239,7 @@ export async function getLogById(id: string): Promise<(any & { steps: any[] }) |
 
 /** 单条删除。 */
 /**
- * usage 对账：Σ步骤明细 与 运行时累计（getUsage）取大者回写 totalUsage。
+ * usage 对账：Σ步骤明细、已落库累计、运行时累计（getUsage）取大者回写 totalUsage。
  * 背景：长会话中记账可能丢失部分轮次（如异常中止后 clear 时机），导致头部 < 明细和；
  * 步骤明细是逐轮落库的事实数据，取大者保证头部 ≥ 真实消耗。差异超 5% 时打告警日志供排查。
  * 注意：DONE/ERROR step 不参与求和——它们历史上曾携带运行时累计值（现已不落 usage），
@@ -234,18 +263,19 @@ export async function reconcileTotalUsage(logId: string): Promise<void> {
       sumInput += Number(u.inputTokens ?? 0);
       sumOutput += Number(u.outputTokens ?? 0);
     }
-    const log = await prisma.generationLog.findUnique({ where: { id: logId }, select: { totalUsage: true } });
-    const runtime = (log?.totalUsage as any) ?? {};
-    const runtimeTotal = Number(runtime.totalTokens ?? 0);
-    const runtimeCached = Number(runtime.cachedTokens ?? 0);
-    const runtimeInput = Number(runtime.inputTokens ?? 0);
-    const runtimeOutput = Number(runtime.outputTokens ?? 0);
-    const finalTotal = Math.max(sumTotal, runtimeTotal);
-    const finalCached = Math.max(sumCached, runtimeCached);
-    const finalInput = Math.max(sumInput, runtimeInput);
-    const finalOutput = Math.max(sumOutput, runtimeOutput);
-    if (sumTotal > runtimeTotal * 1.05 && runtimeTotal > 0) {
-      console.warn(`[usage] 记账疑似丢失：运行时累计 ${runtimeTotal} < 步骤明细和 ${sumTotal}（差 ${sumTotal - runtimeTotal}），头部以明细和为准`);
+    const log = await prisma.generationLog.findUnique({ where: { id: logId }, select: { jobId: true, totalUsage: true } });
+    const stored = (log?.totalUsage as any) ?? {};
+    const live = log?.jobId ? getUsage(log.jobId) : { inputTokens: 0, outputTokens: 0, totalTokens: 0, cachedTokens: 0 };
+    const storedTotal = Number(stored.totalTokens ?? 0);
+    const finalTotal = Math.max(sumTotal, storedTotal, live.totalTokens);
+    const finalCached = Math.max(sumCached, Number(stored.cachedTokens ?? 0), live.cachedTokens);
+    const finalInput = Math.max(sumInput, Number(stored.inputTokens ?? 0), live.inputTokens);
+    const finalOutput = Math.max(sumOutput, Number(stored.outputTokens ?? 0), live.outputTokens);
+    const persistedTotal = Math.max(sumTotal, storedTotal);
+    if (live.totalTokens > persistedTotal) {
+      console.warn(`[usage] 收尾补记在途调用：已持久化 ${persistedTotal} < 运行时累计 ${live.totalTokens}（补 ${live.totalTokens - persistedTotal}）`);
+    } else if (sumTotal > storedTotal * 1.05 && storedTotal > 0) {
+      console.warn(`[usage] 记账疑似丢失：已落库累计 ${storedTotal} < 步骤明细和 ${sumTotal}（差 ${sumTotal - storedTotal}），头部以明细和为准`);
     }
     await prisma.generationLog.update({
       where: { id: logId },
