@@ -564,7 +564,7 @@ export default function Generate() {
         </h2>
       </header>
 
-      <div className="flex h-[calc(100vh-120px)] min-h-[460px] gap-4">
+      <div className="flex h-[calc(100vh-100px)] min-h-[460px] gap-4">
         {/* 左：生成的步骤 */}
         {steps.length > 0 && !stepsHidden && (
           <div className="flex min-h-0 min-w-0 flex-[1.2] flex-col">
