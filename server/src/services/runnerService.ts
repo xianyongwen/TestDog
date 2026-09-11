@@ -316,10 +316,13 @@ export async function runScript(jobId: string, params: RunParams): Promise<strin
       try {
         await executeStep(page, step, networkEntries, wsEntries);
       } catch (e) {
-        if (useSelfHeal && !cancelled && step.instruction && step.locator?.strategy !== 'response' && step.locator?.strategy !== 'websocket') {
+        // 录制脚本没有 instruction（parseCodegen 只落 description），自愈指令回退到 description，
+        // 否则手动录制的脚本永远不触发自愈（文档承诺：选择器失效自动 AI 自愈）。
+        const healStep = step.instruction || step.description ? { ...step, instruction: step.instruction || step.description } : step;
+        if (useSelfHeal && !cancelled && healStep.instruction && healStep.locator?.strategy !== 'response' && healStep.locator?.strategy !== 'websocket') {
           const before = { ...getUsage(jobId) };
           try {
-            const outcome = await selfHealStep(stagehand, shPage, page, step);
+            const outcome = await selfHealStep(stagehand, shPage, page, healStep);
             healed = outcome.healed;
             healedLocator = outcome.locator;
           } catch {
