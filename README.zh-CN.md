@@ -10,9 +10,9 @@
 
 [下载最新版安装包](https://github.com/xianyongwen/TestDog/releases/latest) · [快速开始](https://softwing.top/testdog-doc/guide/getting-started) · [帮助文档](https://softwing.top/testdog-doc/) · [GitHub](https://github.com/xianyongwen/TestDog)
 
-![TestDog AI 生成结果](doc/docs/public/images/ai-generate-done.png)
+![TestDog AI 生成演示](doc/docs/public/images/ai-generate.gif)
 
-短视频演示：[AI 生成（36 秒）](doc/docs/public/videos/ai-generate.mp4) · [确定性回放（18 秒）](doc/docs/public/videos/replay-run.mp4)
+短视频演示：[45 秒快速上手](doc/docs/public/videos/quick-start.mp4) · [AI 生成（36 秒）](doc/docs/public/videos/ai-generate.mp4) · [确定性回放（18 秒）](doc/docs/public/videos/replay-run.mp4)
 
 ## 为什么是 TestDog
 

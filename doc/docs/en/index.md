@@ -57,3 +57,8 @@ features:
     link: /en/guide/ai-generate
     linkText: Learn more
 ---
+
+## See TestDog in 45 seconds
+
+<video class="doc-video" src="/videos/ai-generate.mp4" autoplay muted loop controls playsinline></video>
+<p class="doc-video-caption">Describe the test intent in natural language → the model pre-splits a step plan → confirmed steps run in a real browser → saved as a semantic-locator script</p>

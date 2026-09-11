@@ -57,3 +57,8 @@ features:
     link: /guide/ai-generate
     linkText: 查看说明
 ---
+
+## 45 秒看懂 TestDog
+
+<video class="doc-video" src="/videos/ai-generate.mp4" autoplay muted loop controls playsinline></video>
+<p class="doc-video-caption">自然语言描述测试意图 → 模型预拆分步骤计划 → 确认后真实浏览器逐步执行 → 落为语义化定位器脚本</p>
