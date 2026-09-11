@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quick Start · Title Card</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    height: 100vh; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 28px;
+    background: radial-gradient(1200px 700px at 50% 30%, #1c2540 0%, #0d1220 65%, #090d17 100%);
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+    color: #f4f6fb; overflow: hidden;
+  }
+  .question {
+    font-size: clamp(40px, 7vw, 88px); font-weight: 700; text-align: center;
+    letter-spacing: .02em; line-height: 1.25;
+    opacity: 0; transform: translateY(24px);
+    animation: rise .7s cubic-bezier(.2,.7,.3,1) .15s forwards;
+    text-wrap: balance;
+  }
+  .question .accent { color: #6f9dff; }
+  .brand {
+    display: flex; align-items: center; gap: 12px;
+    font-size: clamp(16px, 2vw, 22px); color: #93a1bd;
+    opacity: 0; animation: rise .6s ease .75s forwards;
+  }
+  .brand .mark { font-size: 1.4em; }
+  .hint {
+    font-size: clamp(13px, 1.4vw, 16px); color: #55617c; letter-spacing: .12em;
+    opacity: 0; animation: rise .6s ease 1.05s forwards;
+  }
+  .end-title { font-size: clamp(36px, 6vw, 72px); font-weight: 700; text-align: center; line-height: 1.3; }
+  .end-title .accent { color: #6f9dff; }
+  @keyframes rise { to { opacity: 1; transform: translateY(0); } }
+</style>
+</head>
+<body>
+  <!-- 默认开场卡（0-3s）。加 ?card=end 切换为收尾卡（40-45s 结尾定格可选）。 -->
+  <div id="start">
+    <div class="question">写 Playwright 测试<br>太<span class="accent">麻烦</span>？</div>
+    <div class="brand"><span class="mark">🐶</span><span>TestDog · 45 秒看完整流程</span></div>
+  </div>
+  <div id="end" hidden>
+    <div class="end-title">录制即用例 · 回放零成本<br><span class="accent">失效自愈</span></div>
+    <div class="brand" style="animation-delay:.3s"><span class="mark">🐶</span><span>TestDog</span></div>
+  </div>
+<script>
+  if (location.search.indexOf('end') !== -1) {
+    document.getElementById('start').hidden = true;
+    document.getElementById('end').hidden = false;
+    document.title = 'Quick Start · End Card';
+  }
+</script>
+</body>
+</html>

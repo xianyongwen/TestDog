@@ -2,6 +2,9 @@
 
 **TestDog** is a desktop test case management tool: generate UI test scripts from natural language or manual recording, then replay them as-written with Playwright to verify (everyday regression costs no model tokens). Built for end-to-end regression testing of web applications.
 
+<video class="doc-video" src="/videos/ai-generate.mp4" autoplay muted loop controls playsinline></video>
+<p class="doc-video-caption">AI script generation end to end: send in natural language → confirm the step plan → execute in a real browser → land as a replayable script</p>
+
 ## Core capabilities
 
 - **AI script generation** — Describe the test in natural language (attachments and login state supported). The model pre-splits a step plan, then executes it in a real browser via a tool-calling loop, turning each step into a semantic-locator script. Pause/resume, AI repair and manual takeover are all supported.
