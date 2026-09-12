@@ -1,0 +1,102 @@
+{
+  "format": "testcase",
+  "version": 1,
+  "title": "组件库文章筛选并校验筛选结果",
+  "description": "在文章管理页用组件库控件组合筛选：Ant Design 下拉选状态（plugin 语义动作）、日期范围设定、勾选「仅置顶」、取消勾选，再用强断言校验输入值与结果行数。\n需在项目设置定义变量：baseUrl。",
+  "naturalLanguage": "打开文章管理页，用下拉选择状态为已发布，设置创建日期，勾选仅置顶再取消，校验状态输入框的值、结果列表行数与标题文本",
+  "steps": [
+    {
+      "instruction": "打开文章管理页",
+      "description": "进入文章管理列表页，地址取自环境变量 {{baseUrl}}",
+      "kind": "navigate",
+      "action": "goto",
+      "url": "{{baseUrl}}/articles"
+    },
+    {
+      "instruction": "在下拉框中选择状态为已发布",
+      "description": "Ant Design Select 非原生控件，用 plugin 语义动作按可见文本点选，避开弹层/虚拟列表的原生操作脆弱性",
+      "kind": "action",
+      "action": "plugin",
+      "locator": { "strategy": "label", "value": "状态" },
+      "pluginAction": { "action": "select", "args": { "value": "已发布" } }
+    },
+    {
+      "instruction": "断言状态下拉的值为已发布",
+      "description": "value 断言校验 Select 输入框当前值全等「已发布」（全等比较，非包含）",
+      "kind": "assert",
+      "action": "assert",
+      "locator": { "strategy": "label", "value": "状态" },
+      "assertion": { "type": "value", "expected": "已发布" }
+    },
+    {
+      "instruction": "设置创建日期为 2026-09-01",
+      "description": "DatePicker 用 set_date 语义动作，值为 YYYY-MM-DD",
+      "kind": "action",
+      "action": "plugin",
+      "locator": { "strategy": "label", "value": "创建日期" },
+      "pluginAction": { "action": "set_date", "args": { "value": "2026-09-01" } }
+    },
+    {
+      "instruction": "勾选仅置顶复选框",
+      "description": "原生 checkbox 直接 check（缺省即勾选）；组件库包装的 checkbox 也可改用 plugin 的 check 动作",
+      "kind": "action",
+      "action": "check",
+      "locator": { "strategy": "role", "value": "checkbox", "role": "checkbox", "name": "仅置顶" }
+    },
+    {
+      "instruction": "断言仅置顶已勾选",
+      "description": "checked 断言校验勾选状态为已勾选（不需要 expected）",
+      "kind": "assert",
+      "action": "assert",
+      "locator": { "strategy": "role", "value": "checkbox", "role": "checkbox", "name": "仅置顶" },
+      "assertion": { "type": "checked" }
+    },
+    {
+      "instruction": "取消勾选仅置顶复选框",
+      "description": "取消勾选用 action=check + checked:false（没有 uncheck 动作）",
+      "kind": "action",
+      "action": "check",
+      "checked": false,
+      "locator": { "strategy": "role", "value": "checkbox", "role": "checkbox", "name": "仅置顶" }
+    },
+    {
+      "instruction": "断言仅置顶未勾选",
+      "description": "unchecked 断言校验勾选状态为未勾选",
+      "kind": "assert",
+      "action": "assert",
+      "locator": { "strategy": "role", "value": "checkbox", "role": "checkbox", "name": "仅置顶" },
+      "assertion": { "type": "unchecked" }
+    },
+    {
+      "instruction": "点击查询按钮",
+      "description": "触发筛选，列表按条件刷新",
+      "kind": "action",
+      "action": "click",
+      "locator": { "strategy": "role", "value": "button", "role": "button", "name": "查询" }
+    },
+    {
+      "instruction": "断言结果列表共 5 行",
+      "description": "count 断言校验表格数据行数等于 5（expected 必须是非负整数字符串）",
+      "kind": "assert",
+      "action": "assert",
+      "locator": { "strategy": "css", "value": ".ant-table-tbody tr" },
+      "assertion": { "type": "count", "expected": "5" }
+    },
+    {
+      "instruction": "断言页面标题文本",
+      "description": "text_exact 断言标题全等（空白归一化后全等，换行/多空格不影响）",
+      "kind": "assert",
+      "action": "assert",
+      "locator": { "strategy": "role", "value": "heading", "role": "heading", "name": "文章管理" },
+      "assertion": { "type": "text_exact", "expected": "文章管理" }
+    },
+    {
+      "instruction": "断言跳转后的 URL",
+      "description": "url_exact 断言当前 URL 全等（url/url_exact 不等待跳转语义，前置已有自动等待的断言兜底）",
+      "kind": "assert",
+      "action": "assert",
+      "assertion": { "type": "url_exact", "expected": "{{baseUrl}}/articles" }
+    }
+  ],
+  "rawCode": ""
+}

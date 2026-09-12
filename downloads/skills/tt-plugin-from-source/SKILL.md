@@ -41,7 +41,9 @@ description: 从被测项目的源码出发，为测试工具（test-tool）生�
 - 受控事件模型：`v-model` / `onChange` / 自定义事件名；键盘与 Enter 语义（可输入过滤？Enter 选中？）
 - 视觉状态类名（选中 / 高亮 / 禁用）——**语义须用「点击前后对照」实测**，不能凭类名猜：
   如 antd 级联的 `-expand` 实为「有子级」的常驻标记（未点开也有），「当前激活路径」是 `-active`
-- 数据属性的实际格式（如日期/时间值是否补零、路径分隔符是什么），比对时一律数值/结构归一，不假设格式
+- 数据属性的实际格式（如日期/时间值是否补零、路径分隔符是什么），比对时一律数值/结构归一，不假设格式；
+  **role/aria 等可访问性属性同样按目标版本实测**（同库跨版本可能有无之别——缺失的候选由验证管线
+  自动丢弃，无害但无效，不要假设声明了 role 就一定存在）
 - 元素集合枚举要过滤 `aria-hidden="true"` 的副本/幽灵节点——组件库会在拖拽/悬停后动态追加
   隐藏克隆（如 rc-slider 拖拽后追加 tooltip 锚点 handle），不过滤会让「第 N 个手柄」的索引错位
 - 类名修饰符判别注意 CSS 类是整 token 匹配：`.el-date-editor--time` 匹配不到
@@ -78,7 +80,8 @@ DOM 根类（如 vant 4 的纯选项/日期/时间滚轮都是 `.van-picker`）�
 
 ⚠️ fixture 页自身 bug 会伪装成组件怪异行为（如「当前值」展示代码抛 TypeError → React/Vue
 整树卸载 → 弹层凭空消失，极易误判为组件问题）。探测脚本先挂 `pageerror`/`console` 监听，
-排查行为异常时先排除 fixture 自身报错；「当前值」展示尽量只做简单拼接。
+排查行为异常时先排除 fixture 自身报错（含 CDN 依赖加载顺序导致的「组件库未定义」）；
+「当前值」展示尽量只做简单拼接，并给容器统一类名（如 `.val`）便于脚本断言。
 
 ### 5. 判断能力需求
 - 只需「找得准」→ 只写 detect + candidates（+annotate 更好）
@@ -89,6 +92,11 @@ DOM 根类（如 vant 4 的纯选项/日期/时间滚轮都是 `.van-picker`）�
 - 需要真实键盘/鼠标事件、auto-wait 定位、等网络空闲等 Playwright 能力 → 在 actions 的
   `fn(el, args, pw)` 里用第三参 `pw`（Playwright 桥，见 plugin-api.md「pw — Playwright 桥」；
   跨进程 RPC，勿放高频循环，等待交给 auto-wait/`{ timeout }`）
+- **切换型控件（checkbox/radio/switch 等藏在 label 里的原生 input）范式**：
+  原生 input 是状态真值（input.checked，状态类只是渲染结果），合成 click 点原生 input 即官方等效
+  交互；动作设计三件套——目标状态参数解析（布尔参数优先 + 文本别名容错）、**已处于目标状态时
+  幂等成功**、点击后受控回写**异步落定**（框架批处理/nextTick，实测可达数百毫秒）——fn 与 verify
+  都必须轮询确认，同步即读会把「已成功」误判为失败、或把重试点成回退
 - 可输入的控件**先实测 fill+Enter 是否提交所填值**，可靠才声明 `preferFill: true`（平台先尝试
   fill+Enter，画面有变化即算成功）。⚠️ 有的组件 fill 后提交的不是输入值（如 element-plus
   TimePicker 会提交面板默认的当前时刻）——这种情况必须 `preferFill: false`，让动作的面板路径
@@ -124,6 +132,9 @@ npx tsx scripts/pluginHarness.ts <fixture名|页面URL> ./<你的插件>.js --pr
     验证动作可执行且返回 `status==='success'`（harness 只验候选与清单，不执行动作）。
     需要批量/回归验证时可脚本化同款逻辑：自建 Playwright 脚本注入运行时后循环
     `page.evaluate(() => window.__ttPluginRegistry__.invokeAction(…))` 断言结果，比手测可靠
+    ⚠️ **page.evaluate 回调内不能有任何具名函数绑定**（tsx/esbuild keep-names 会把具名函数与
+    `const fn = () => {}` 包一层 `__name()`，页面里没有该助手 → ReferenceError 假死）：回调体
+    只用内联匿名箭头，或 `page.addInitScript('window.__name = (f) => f;')` 打桩兜底
 
 ### 8. 交付
 - 单文件 `.js`（推荐）：把最终 IIFE 脚本交给用户

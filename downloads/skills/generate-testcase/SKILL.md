@@ -1,6 +1,6 @@
 ---
 name: generate-testcase
-description: 生成可导入「测试工具」桌面应用、由 Playwright 确定性回放并验证的 .testcase 测试用例文件（JSON）。当开发者要求为 Web 应用编写/生成/补齐端到端测试用例、UI 自动化测试、接口响应断言、WebSocket 消息断言、回归用例时使用。生成后用本机 Playwright 跑一遍 smoke test 校验所有定位器在目标应用上能解析、副作用成立，失败则改 locator/拆步重跑直到全过；之后 .testcase 可在测试工具中导入并由 Playwright 一键运行验证（断言 UI 可见性 / 不可见 / 文本 / URL / 接口状态码 / 响应体 / JSON 字段 / WebSocket 消息，失败步骤自动截图、采集 console 与 network），或经本地 HTTP API（127.0.0.1:4123）直接推送。
+description: 生成可导入「测试工具」桌面应用、由 Playwright 确定性回放并验证的 .testcase 测试用例文件（JSON）。当开发者要求为 Web 应用编写/生成/补齐端到端测试用例、UI 自动化测试、接口响应断言、WebSocket 消息断言、回归用例时使用。生成后用本机 Playwright 跑一遍 smoke test 校验所有定位器在目标应用上能解析、副作用成立，失败则改 locator/拆步重跑直到全过；之后 .testcase 可在测试工具中导入并由 Playwright 一键运行验证（断言 UI 可见性/不可见/文本包含与全等/元素值/勾选与可用状态/元素计数/URL 包含与全等/接口状态码/响应体/JSON 字段/WebSocket 消息，组件库控件可用语义动作回放，失败步骤自动截图、采集 console 与 network），或经本地 HTTP API（127.0.0.1:4123）直接推送。
 ---
 
 # 生成测试工具用例（.testcase）
@@ -10,9 +10,10 @@ description: 生成可导入「测试工具」桌面应用、由 Playwright 确�
 把「测试某个 Web 应用」的需求，转化成一个或多个 `.testcase` 文件，导入「测试工具」桌面端后即可 **由 Playwright 真实浏览器回放并自动验证**：
 
 - **回放引擎**：`server/src/services/runnerService.ts` 启动 `playwright-core` 的 Chromium（`chromium.launch`），按 `steps` 顺序执行；支持 `loginConfigId` 以已登录 storageState 创建上下文。
-- **验证范围**：UI 断言（`visible` / `hidden` / `text` / `url`）、HTTP 响应断言（`response_status` / `response_body` / `response_json`，按 URL 关键词匹配运行中最近响应）、WebSocket 断言（`ws_sent` / `ws_received`，按 URL 关键词匹配帧）。`hidden` 用于断言元素已消失（toast/loading/弹窗），不自愈（AI 重新定位会反向操作）。
+- **验证范围**：UI 断言（`visible` / `hidden` / `text` / `text_exact` / `value` / `checked` / `unchecked` / `enabled` / `disabled` / `count` / `url` / `url_exact`，总预算 10s 自动轮询）、HTTP 响应断言（`response_status` / `response_body` / `response_json`，按 URL 关键词匹配运行中最近响应）、WebSocket 断言（`ws_sent` / `ws_received`，按 URL 关键词匹配帧）。**断言失败不自愈**（AI 换目标会把产品缺陷变成「通过」，断言失败一律保留证据直接记 FAILED）。
+- **组件语义动作**：组件库（Ant Design / Element Plus / Element UI / Vant / MUI）的非原生控件（Select/DatePicker/Cascader/Slider/Checkbox/Radio 等）可用 `action: "plugin"` 语义动作回放，引擎自动探测控件、执行动作并后验，失败按「语义链 → 原生兜底 → AI 自愈」降级。
 - **失败可观测**：失败步骤自动截图、采集 `console` 与 `network`（截断 20KB）一并落库；运行步骤级进度与最终 PASSED / FAILED 经 WebSocket 实时推送。
-- **定位器失效可自愈**：步骤带 `instruction` 时，定位失败后经 CDP 附加 Stagehand 用 AI 重新定位元素，无需重写用例。
+- **定位器失效可自愈**：动作步骤带 `instruction` 时，定位失败后经 CDP 附加 Stagehand 用 AI 重新定位元素，无需重写用例。
 - **批量回放**：`runBatch` 顺序串跑多个用例（固定无头），汇总 PASSED / FAILED 状态。
 
 ## 何时使用
@@ -28,7 +29,7 @@ description: 生成可导入「测试工具」桌面应用、由 Playwright 确�
 
 ## 产出物
 
-一个或多个 `.testcase` 文件（UTF-8 JSON，扩展名 `.testcase`）。每个文件 = 一个测试用例（含首个脚本版本 v1）。
+一个或多个 `.testcase` 文件（UTF-8 JSON，扩展名 `.testcase`）。每个文件 = 一个测试用例（含首个脚本版本 v1）。顶层可附 `intent`（测试意图，可选，见 schema 第 8 节）——手写用例通常省略，运行期也不参与校验。
 
 ## 工作流
 
@@ -42,8 +43,9 @@ description: 生成可导入「测试工具」桌面应用、由 Playwright 确�
 3. **设计步骤序列**：按用户操作顺序拆步，每步一个 `TestStep`。关键点：
    - 每步都写 `instruction`（自然语言）——回放时定位器失效，自愈模块靠它用 AI 重新定位。
    - 每步都写 `description`（界面「说明」列），简述该步意图/预期，给人看。
-   - 断言前视情况加 `wait`：`url` 断言**不自动等待**（点击跳转后紧接 url 断言会因跳转未完成而失败，需先加 `wait` 或在前方加 `visible` 断言）；`visible`/`text` 自动等元素最多 10s，`response_*`/`ws_*` 自动轮询约 1s，通常无需额外 wait，仅接口/动画明显偏慢时才加 300~1000ms。
-   - 用断言收敛预期：页面可见/URL 跳转/接口状态码/响应体/JSON 字段/WS 消息。
+   - 断言前视情况加 `wait`：`url`/`url_exact` 断言**不等待跳转语义**（点击跳转后紧接 url 断言会因跳转未完成而失败，需先加 `wait` 或在前方加 `visible` 断言）；其余 UI 断言在总预算 10s 内自动轮询，`response_*`/`ws_*` 自动轮询约 1s，通常无需额外 wait，仅接口/动画明显偏慢时才加 300~1000ms。
+   - 用断言收敛预期：页面可见/URL 跳转/接口状态码/响应体/JSON 字段/WS 消息。**优先用强断言**：能用 `text_exact`/`value`/`count`/`checked` 等精确断言就不要退化为 `visible`/`text` 包含——精确断言的回归价值更高。
+   - **组件库非原生控件优先用语义动作**：被测应用用了 Ant Design / Element Plus / Element UI / Vant / MUI 的 Select/DatePicker/Cascader/Slider/Checkbox/Radio 等控件时，操作步骤用 `action: "plugin"`（详见 schema 第 6 节），原生 click/selectOption 对弹层/虚拟列表极脆。
    - **创建后建议清理**：凡新增/修改数据的步骤（新建、提交、导入），断言验证成功后**建议紧接着补一个删除/还原步骤**把刚创建的数据删掉（如「新建商机 → 断言出现 → 删除 → 断言已删除」），让用例更可重复运行、少污染系统数据。**不要拦截/ mock 接口**——接口要真实调用，接口/WS 断言正是基于真实请求的。
 4. **环境相关值用占位符，但只针对高复用值**：
    - **要占位符的（环境维度，会随环境/项目切换）**：根域名 → `{{baseUrl}}`；通用登录凭据（多个用例共用同一账号）→ `{{username}}` / `{{password}}`；第三方密钥、Token、租户 ID 这类跨用例复用的配置。
@@ -56,6 +58,7 @@ description: 生成可导入「测试工具」桌面应用、由 Playwright 确�
    - [examples/login-flow.testcase](./examples/login-flow.testcase) — 导航/填写/点击 + UI 断言 + 接口状态码断言 + URL 断言 + 环境变量
    - [examples/api-json-assert.testcase](./examples/api-json-assert.testcase) — 下拉/勾选 + 接口 JSON 字段断言 + 响应体断言 + 等待
    - [examples/websocket-notify.testcase](./examples/websocket-notify.testcase) — WebSocket 发送/接收断言
+   - [examples/component-actions.testcase](./examples/component-actions.testcase) — 组件语义动作（plugin）+ 强断言（text_exact/value/count/checked）
 
 ## 本地预校验（Playwright smoke run）
 
@@ -112,6 +115,8 @@ def resolve(step):
     if s.get("assertion"):
         s["assertion"]["expected"] = sub(s["assertion"]["expected"])
         if s["assertion"].get("jsonPath"): s["assertion"]["jsonPath"] = sub(s["assertion"]["jsonPath"])
+    if s.get("pluginAction") and isinstance(s["pluginAction"].get("args"), dict):
+        s["pluginAction"]["args"] = {k: sub(v) if isinstance(v, str) else v for k, v in s["pluginAction"]["args"].items()}
     return s
 
 def to_pw(page, step):
@@ -131,7 +136,11 @@ def to_pw(page, step):
         else page.get_by_title(loc["value"]) if loc.get("strategy")=="title" \
         else page.locator(loc["value"])  # css / xpath
     if a in ("click","check"):
-        L.first.click(timeout=5000); return (True, f"{a} {loc}")
+        L.first.set_checked(step.get("checked", True)) if a == "check" else L.first.click(timeout=5000)
+        return (True, f"{a} {loc}")
+    if a == "plugin":
+        # 组件语义动作依赖测试工具页内插件链，预校验只确认控件定位器能解析到唯一元素，不执行动作
+        L.first.wait_for(state="attached", timeout=5000); return (True, f"plugin {step['pluginAction']['action']} (deferred to runner)")
     if a == "fill":
         L.first.fill(step["value"]); return (True, f"fill {loc}={step['value']}")
     if a == "press":
@@ -143,7 +152,19 @@ def to_pw(page, step):
         if t == "visible":   L.first.wait_for(state="visible", timeout=5000); return (True, f"visible {loc}")
         if t == "hidden":    L.first.wait_for(state="hidden", timeout=5000); return (True, f"hidden {loc}")
         if t == "text":      L.first.wait_for(state="visible"); assert step["assertion"]["expected"] in L.first.inner_text(), f"text mismatch: {L.first.inner_text()!r}"; return (True, f"text {loc}")
+        if t == "text_exact":
+            L.first.wait_for(state="visible")
+            norm = lambda s: re.sub(r"\s+", " ", (s or "")).strip()
+            assert norm(step["assertion"]["expected"]) == norm(L.first.inner_text()), f"text_exact mismatch: {L.first.inner_text()!r}"
+            return (True, f"text_exact {loc}")
+        if t == "value":     assert step["assertion"]["expected"] == L.first.input_value(), f"value mismatch: {L.first.input_value()!r}"; return (True, f"value {loc}")
+        if t == "checked":   assert L.first.is_checked(), "expected checked"; return (True, f"checked {loc}")
+        if t == "unchecked": assert not L.first.is_checked(), "expected unchecked"; return (True, f"unchecked {loc}")
+        if t == "enabled":   assert L.first.is_enabled(), "expected enabled"; return (True, f"enabled {loc}")
+        if t == "disabled":  assert not L.first.is_enabled(), "expected disabled"; return (True, f"disabled {loc}")
+        if t == "count":     assert str(L.first.count()) == step["assertion"]["expected"], f"count mismatch: {L.first.count()}"; return (True, f"count {loc}")
         if t == "url":       assert step["assertion"]["expected"] in page.url, f"url mismatch: {page.url}"; return (True, f"url contains {step['assertion']['expected']!r}")
+        if t == "url_exact": assert step["assertion"]["expected"] == page.url, f"url_exact mismatch: {page.url}"; return (True, f"url_exact {page.url!r}")
         # response_* / ws_* 真实回放时由测试工具的 runner 校验（依赖 network/ws hook），预校验阶段只确认步骤本身能跑通即可
         if t.startswith("response_") or t.startswith("ws_"): return (True, f"{t} (deferred to runner)")
         raise ValueError(f"unknown assert type: {t}")
@@ -196,10 +217,10 @@ Node 版（若项目已用 Playwright TS）也按相同思路写 `playwright.chr
 
 1. 进入用例详情 → 顶部选好「登录配置」（已登录状态）或留空（未登录）→ 点 **「运行」**。
 2. 后端启动 Chromium → 依次执行 `steps` → 每步产出 PASSED / FAILED：
-   - UI 断言（`visible` / `text` / `url`）、接口断言（`response_status` / `response_body` / `response_json`）、WebSocket 断言（`ws_sent` / `ws_received`）。
+   - UI 断言（`visible` / `hidden` / `text` / `text_exact` / `value` / `checked` / `unchecked` / `enabled` / `disabled` / `count` / `url` / `url_exact`）、组件语义动作（`plugin`）、接口断言（`response_status` / `response_body` / `response_json`）、WebSocket 断言（`ws_sent` / `ws_received`）。
    - 失败步骤自动截图、采集 `console` 与 `network`（最近 20KB）落库，可点开步骤查看。
    - 步骤级进度与运行日志经 WebSocket 实时推送，UI 上能看到「运行中 / 已通过 / 失败」。
-3. 定位器失效时若步骤填了 `instruction`，自动降级 AI 自愈（经 CDP 附加 Stagehand 重新定位）；自愈成功则步骤记 PASSED 并标注「已自愈」。
+3. 定位器失效时若动作步填了 `instruction`，自动降级 AI 自愈（经 CDP 附加 Stagehand 重新定位）；自愈成功则步骤记 PASSED 并标注「已自愈」、展示自愈后的新定位器。**断言失败不自愈**（换目标会把真实缺陷变成通过）。
 4. 「批量运行」入口可串跑多个用例（无头模式），汇总 PASSED / FAILED。
 
 > 生成用例不是「写完即正确」——**必须实际点运行过一遍并全部 PASSED**，才算这条用例可作为回归基线。生成时记得用 `{{baseUrl}}` 等占位符，避免硬编码环境域名导致在他环境跑挂。
@@ -221,7 +242,7 @@ curl -X POST http://127.0.0.1:4123/api/projects \
 ```
 推送前确认工具已启动（桌面端运行即监听 4123）。若不确定工具是否运行，走方式 A 即可，不要因推送失败阻塞交付。
 
-> 推送仅入库；要触发 Playwright 验证，仍需在桌面端点「运行」（或调运行接口 `POST /api/test-cases/:id/run`，body 含 `scriptId` / `selfHeal` / `loginConfigId` / `headless`）。
+> 推送仅入库；要触发 Playwright 验证，仍需在桌面端点「运行」，或调运行接口 `POST /api/runs`（body 含 `testCaseId` 必填 + `scriptId` / `steps`（可直接传步骤数组，不必来自已存脚本）/ `selfHeal`（默认 true）/ `headless`（默认 false）/ `loginConfigId`，立即返回 jobId，进度经 WS 推送）；批量运行用 `POST /api/runs/batch`（body `{testCaseIds, selfHeal?, loginConfigId?, scriptIds?}`，固定无头）。
 
 ## 关键规则（易踩坑）
 
@@ -237,13 +258,15 @@ curl -X POST http://127.0.0.1:4123/api/projects \
   | getByTitle | `title` | `getByTitle('关闭')` | ★★★★ | 推荐 |
   | CSS | `css` | `button.login` | ★★★ | 兜底 |
   | XPath | `xpath` | `//button[text()='登录']` | ★★ | 最后考虑 |
-- **枚举精确**：`action` ∈ goto/click/fill/press/check/select/assert/wait/raw；`kind` ∈ navigate/action/assert/wait；`locator.strategy` ∈ role/label/text/placeholder/testid/alt/title/css/xpath/response/websocket；`assertion.type` ∈ visible/hidden/text/url/response_status/response_body/response_json/ws_sent/ws_received。拼错=导入 400。
+- **枚举精确**：`action` ∈ goto/click/fill/press/check/select/assert/wait/raw/plugin；`kind` ∈ navigate/action/assert/wait；`locator.strategy` ∈ role/label/text/placeholder/testid/alt/title/css/xpath/response/websocket；`assertion.type` ∈ visible/hidden/text/text_exact/value/checked/unchecked/enabled/disabled/count/url/url_exact/response_status/response_body/response_json/ws_sent/ws_received。拼错=导入 400。
+- **check 与取消勾选**：`action: "check"` 缺省勾选；取消勾选写 `"checked": false`（没有 uncheck 动作）。断言勾选状态用 `assertion.type` = `checked`/`unchecked`。
+- **组件库控件用语义动作**：Ant Design / Element Plus / Element UI / Vant / MUI 的 Select/DatePicker/Cascader/Slider/TimePicker/TreeSelect/Checkbox/Radio 等非原生控件，操作步骤写 `action: "plugin"` + `pluginAction: {action, args}`（常用 `select`/`set_date`/`set_time`/`set_value`/`check`，参数表见 schema 第 6 节），`pluginId` 建议省略（引擎自动探测控件匹配插件）。原生控件仍用 click/fill/select。
 - **role 定位器**要同时填 `value` 和 `role`（同值），`name` 可选：`{"strategy":"role","value":"button","role":"button","name":"登录"}`。
 - **接口/WS 断言**用 `locator.strategy` = `response`/`websocket`，`locator.value` 是 URL 关键词子串（如 `/api/login`），不是 CSS 选择器。
 - **wait** 的 `value` 是毫秒数字符串（`"2000"` = 2 秒）。
 - **press** 的 `key` 用 Playwright 键名（`Enter`/`Escape`/`Tab`/`ArrowDown`…），默认 `Enter`。
-- **每步写 instruction**：自愈依赖它。同时填 `description`（界面「说明」列），简述意图/预期。
-- **断言前按需加 wait**：`url` 断言不自动等待，点击跳转后要先加 `wait`（如 500ms）或前方加 `visible` 断言；`visible`/`text`/`response_*`/`ws_*` 已自动等待，别重复加。
+- **每步写 instruction**：自愈依赖它（动作步失效时可救回；断言步失败不自愈，AI 换目标会把产品缺陷变成「通过」）。同时填 `description`（界面「说明」列），简述意图/预期。
+- **断言前按需加 wait**：`url`/`url_exact` 断言不等待跳转语义，点击跳转后要先加 `wait`（如 500ms）或前方加 `visible` 断言；其余 UI 断言（10s 轮询）与 `response_*`/`ws_*`（约 1s）已自动等待，别重复加。
 - **建议生成用例跑完尽量不增删系统数据**：创建类操作断言通过后**可紧跟删除步骤**清理（如「新建 → 断言 → 删除 → 断言已删除」）；但**不要拦截接口**——接口必须真实调用，接口/WS 断言正是基于真实请求。
 - **唯一/随机测试数据用系统变量**：需要唯一值的字段（临时用户名/编号/标题/手机号/邮箱/证件号）把系统变量拼进 value，写法与环境变量统一都是双花括号：`{{systemTime}}`（当前时间戳）、`{{randomNumber}}`（随机数字，如 `{{randomNumber:8}}`）、`{{randomChinese}}`（随机汉字，如 `{{randomChinese:4}}`）、`{{randomPhone}}`（随机手机号）、`{{randomEmail}}`（随机邮箱）、`{{randomIdCard}}`（随机 18 位身份证号），如 `test_user_{{systemTime}}`、`user_{{randomChinese}}`；运行引擎每次运行生成新值，避免重跑撞到上次残留。
 - **一文件一用例**：多场景拆多个文件。
