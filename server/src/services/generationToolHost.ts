@@ -12,7 +12,7 @@ import type { TestStep, ReviseOp, EmitOutcome } from '../shared/testScript';
 import { locatorSchema } from '../shared/testScript';
 import { browserAssertionTypes } from '../shared/testIntent';
 import type { TestIntent } from '../shared/testIntent';
-import { assertionContractError } from './generation/intentCoverage';
+import { assertionContractError, AssertionContractError } from './generation/intentCoverage';
 import { resolveQuery, semanticizeLocator } from './locatorVerifier';
 import { analyzeElement } from './locatorCandidateScript';
 import { executeLocatorAction, observedAction, waitForBrowserAssertion } from './browserExecution';
@@ -430,7 +430,7 @@ export function buildGenTools(
         const assertion = { type: type as NonNullable<TestStep['assertion']>['type'], expected: expect };
         if (criterion) {
           const error = assertionContractError(criterion, { assertion, locator: assertSem ?? (loc ? { strategy: 'css', value: String(a.selector) } : undefined) }, ctx.sub);
-          if (error) throw new Error(error);
+          if (error) throw new AssertionContractError(error);
         }
         await waitForBrowserAssertion({ page: { url: () => ctx.page.url(), locator: (selector: string) => ctx.pwPage.locator(selector) }, locator: loc, scope, type, expected: sub(ctx, expect), timeoutMs: a.timeoutMs == null ? 10000 : Number(a.timeoutMs), signal: ctx.signal });
         // 单元素等待挂载后再采集；集合/不存在断言保留经过校验的稳定查询，不能强制唯一命中。
@@ -564,7 +564,7 @@ export function buildGenTools(
   }
 
   // 主动求助（人在回路）：模型困惑时挂起等人决策，替代盲目重试/重复已落库步骤。
-  // 决策结果（补充说明/AI 修正/手动完成/跳过）作为工具结果回灌，模型从当前状态继续。
+  // 决策结果（补充说明/手动完成/跳过）作为工具结果回灌，模型从当前状态继续。
   if (askHuman) {
     tools.push({
       name: 'ask_human',

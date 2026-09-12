@@ -13,7 +13,7 @@ export const STEP_TYPE = {
   PLAN_CONFIRMED: 'plan_confirmed', // 用户确认步骤计划
   REVOKE: 'revoke', // 撤销步骤范围并重拆
   REVISE: 'revise', // 模型修订已落库脚本步骤（revise 工具：改参数/删冗余步骤）
-  ASSIST: 'assist', // 定位失败用户决策（重新描述/AI 修正/手动/跳过/撤销）
+  ASSIST: 'assist', // 定位失败用户决策（重新描述/手动/跳过/撤销）
   DONE: 'done', // 生成完成（含最终脚本）
   ERROR: 'error', // 生成失败
 } as const;

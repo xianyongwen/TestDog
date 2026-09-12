@@ -18,6 +18,8 @@ export const INTENT_OUTPUT_PROMPT = `
 - 支持的浏览器断言：visible/hidden/text(包含)/text_exact(规范化空白后全文相等)/value(输入值精确相等)/checked/unchecked/enabled/disabled/count(匹配节点数，expected 为非负整数字符串)/url(包含)/url_exact(相等)。value/text_exact 可期望空字符串。不要计划生成器不能执行的接口或 WS 断言。
 - 优先验证指定记录及字段的持久业务结果，不能只检查全页通用前缀或成功 toast；不虚构接口路径，HTTP 200 不能代替业务验收。只有需求涉及持久化时才补刷新验证。
 - 用户指定数据 policy=fixed；仅用户允许自由生成的测试数据用 generated 和系统变量。负向测试的非法/重复值必须保留，预期拒绝也是正确结果，不能改值追求提交成功。
+- 业务规则没把握的验收目标（source/target 写「待确认」）不得设为 required=true：无法预知正确结果就写不出可执行断言，改 required=false（覆盖报告仍展示但不阻塞完成），由用户在确认页定夺后修订。
+- 断言类型必须匹配目标形态：目标是输入框/文本域/下拉/日期等表单控件的当前值用 value（label/placeholder 定位到的是控件本体），列表单元格、详情等已渲染文本用 text/text_exact；对表单控件用 text 断言必然失败（控件 innerText 恒为空）。
 - preconditions/cleanup 只描述有依据的要求；需要执行的准备/清理动作写入 steps，最终仍保留结果断言。没有清理要求时 cleanup=[]。
 `;
 

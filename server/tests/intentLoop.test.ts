@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-const mocks = vi.hoisted(() => ({ drive: vi.fn(), pub: vi.fn() }));
+const mocks = vi.hoisted(() => ({ drive: vi.fn(), pub: vi.fn(), askUser: vi.fn() }));
 vi.mock('../src/db', () => ({ prisma: {} }));
 vi.mock('../src/services/pluginStore', () => ({ enabledActionVocabulary: async () => [] }));
 vi.mock('../src/services/generation/logBridge', () => ({ pub: mocks.pub, pubToolWithUsage: vi.fn(), updateToolAssistant: vi.fn(), activeLogIds: new Map() }));
 vi.mock('../src/services/toolLoop', () => ({ runToolLoop: (options: any) => mocks.drive(options), usageDelta: () => ({ inputTokens: 0, outputTokens: 0, totalTokens: 0, cachedTokens: 0 }) }));
 vi.mock('../src/services/networkCaptureService', () => ({ NetworkCapture: class { attach() {} dispose() {} } }));
-vi.mock('../src/services/generation/jobControl', () => ({ revokeHandlers: new Map(), askUser: vi.fn() }));
+vi.mock('../src/services/generation/jobControl', () => ({ revokeHandlers: new Map(), askUser: mocks.askUser }));
 vi.mock('../src/services/generation/manualCapture', () => ({ createManualCapture: () => vi.fn() }));
 import { runGenerationLoop } from '../src/services/generation/generationLoop';
 import type { TestIntent } from '../src/shared/testIntent';
@@ -65,5 +65,47 @@ describe('完成门槛在生成循环内的集成', () => {
     });
     expect((await runGenerationLoop(opts)).ok).toBe(true);
     expect(opts.client.chat.completions.create).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('断言失败计数与验收目标修订（cmtwv3up8 C4 死锁教训）', () => {
+  const CONTRACT_ERR = 'AssertionContractError: 目标 C1 必须使用已确认的断言 {"type":"url_exact","expected":"https://test.local/done"}，不能替换或弱化预期';
+  const REAL_FAIL = 'Error: 断言未通过（url）：期望 /nope，实际 https://test.local/done';
+
+  it('合同错误不计数、不触发自动求助，回灌修订指引', async () => {
+    const steps: TestStep[] = [];
+    mocks.drive.mockImplementation(async (o: any) => {
+      for (let i = 0; i < 3; i++) {
+        const r = await o.onFailure('assert', { type: 'url_exact', expected: 'https://test.local/other', instruction: 'x' }, CONTRACT_ERR);
+        expect(r).toContain('重试不可能通过');
+      }
+      expect(mocks.askUser).not.toHaveBeenCalled();
+      return { finished: true, steps: 0 };
+    });
+    expect((await runGenerationLoop(options(steps, []))).ok).toBe(true);
+  });
+
+  it('真实断言失败 2 次触发求助；用户修订验收目标后按新标准放行', async () => {
+    const steps: TestStep[] = [];
+    // 独立 intent 副本：applyAmend 原地 Object.assign，避免污染模块级 fixture
+    const myIntent: TestIntent = { ...intent, criteria: [{ ...intent.criteria[0] }] };
+    const amended = { ...myIntent, criteria: [{ ...myIntent.criteria[0], assertion: { type: 'url_exact', expected: 'https://test.local/amended' } }] };
+    mocks.askUser.mockResolvedValue({ decision: 'amend', intent: amended });
+    const opts = { ...options(steps, []), intent: myIntent };
+    mocks.drive.mockImplementation(async (o: any) => {
+      // 真实失败（无 criterion 的 url 断言，timeoutMs 0 立即失败）：第 2 次触发自动求助
+      await expect(o.onFailure('assert', { type: 'url', expected: '/nope', instruction: 'y' }, REAL_FAIL)).resolves.toBeNull();
+      const override = await o.onFailure('assert', { type: 'url', expected: '/nope', instruction: 'y' }, REAL_FAIL);
+      expect(override).toContain('验收目标已修订');
+      expect(mocks.askUser).toHaveBeenCalledTimes(1);
+      // 修订后护栏按新标准放行：模拟页面已呈现修订后的 URL（opts.page 与 ctx.page 同引用）
+      (opts.page as any).url = () => 'https://test.local/amended';
+      await o.tools.find((t: any) => t.name === 'assert').execute({ type: 'url_exact', expected: 'https://test.local/amended', criterionId: 'C1', instruction: '验证修订后结果页' });
+      expect(await o.validateFinish()).toBeNull();
+      return { finished: true, steps: 0 };
+    });
+    expect((await runGenerationLoop(opts)).ok).toBe(true);
+    // amend 后广播 gen:coverage 携带最新意图，前端编辑器随之同步
+    expect(mocks.pub).toHaveBeenCalledWith(expect.objectContaining({ type: 'gen:coverage', intent: expect.objectContaining({ criteria: [expect.objectContaining({ assertion: { type: 'url_exact', expected: 'https://test.local/amended' } })] }) }));
   });
 });

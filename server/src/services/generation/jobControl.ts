@@ -115,7 +115,7 @@ export function confirmPlan(jobId: string, steps: PlanStep[], intent?: TestInten
 }
 
 /**
- * 路由调用：用户在定位失败时选择重新描述 / AI 修正 / 手动操作 / 跳过 / 撤销步骤。
+ * 路由调用：用户在定位失败时选择重新描述 / 手动操作 / 跳过 / 撤销步骤。
  * revoke 在解除挂起前先真正删除步骤区间并发布 gen:revoke（前端同步收缩步骤列表）；
  * 返回 true 成功，false = 不在等待协助状态，字符串 = 撤销失败原因（挂起保持，用户可修正范围重试）。
  */

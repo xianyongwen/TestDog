@@ -74,8 +74,11 @@ export default async function generateRoutes(app: FastifyInstance) {
       const t = Number(to);
       if (!Number.isInteger(f) || !Number.isInteger(t) || f < 1 || t < f) return { error: '撤销范围无效' };
       d = { decision: 'revoke', from: f, to: t, nl: nl ? String(nl) : undefined };
+    } else if (decision === 'amend') {
+      // intent 由循环侧 applyAmend 做完整 schema 校验（非法回灌为工具结果，不挂起）
+      d = { decision: 'amend', intent: intent as never };
     } else {
-      d = { decision: decision as 'ai-fix' | 'manual' | 'skip' };
+      d = { decision: decision as 'manual' | 'skip' };
     }
     const r = assistStep(jobId, d);
     if (r !== true) return { error: typeof r === 'string' ? r : '该任务不在等待用户协助状态' };

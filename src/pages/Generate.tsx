@@ -2,7 +2,7 @@ import { browserAssertionTypes, testIntentSchema, type TestIntent } from '@share
 import TestIntentEditor from '../components/TestIntentEditor';
 import { useEffect, useRef, useState } from 'react';
 import { Button, Card, Input, InputNumber, Radio, Space, App, Alert, Select, Tag, Modal, Tooltip } from 'antd';
-import { ArrowLeftOutlined, ThunderboltOutlined, SaveOutlined, PlusOutlined, DeleteOutlined, HolderOutlined, InfoCircleOutlined, FullscreenOutlined, FullscreenExitOutlined, PaperClipOutlined, LoadingOutlined, PlayCircleOutlined, PauseOutlined, CloseCircleOutlined, RollbackOutlined, RobotOutlined, UnorderedListOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, ThunderboltOutlined, SaveOutlined, PlusOutlined, DeleteOutlined, HolderOutlined, InfoCircleOutlined, FullscreenOutlined, FullscreenExitOutlined, PaperClipOutlined, LoadingOutlined, PlayCircleOutlined, PauseOutlined, CloseCircleOutlined, RollbackOutlined, UnorderedListOutlined } from '@ant-design/icons';
 import { DndContext, PointerSensor, KeyboardSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -103,7 +103,7 @@ export default function Generate() {
   const [assist, setAssist] = useState<{ stepIndex: number; kind: string; instruction: string; canManual: boolean } | null>(null);
   const [redescText, setRedescText] = useState('');
   /** 定位失败弹框当前选中的处理方式。 */
-  const [assistMode, setAssistMode] = useState<'ai-fix' | 'redescribe' | 'manual' | 'revoke' | 'skip'>('ai-fix');
+  const [assistMode, setAssistMode] = useState<'redescribe' | 'manual' | 'revoke' | 'skip' | 'amend'>('redescribe');
   /** 撤销最后 N 步（N>=1）。 */
   const [revokeCount, setRevokeCount] = useState(1);
   const [revokeNl, setRevokeNl] = useState('');
@@ -174,6 +174,8 @@ export default function Generate() {
       } else if (msg.type === 'gen:coverage') {
         const covered = (msg.coverage ?? []) as { id: string; required: boolean; passed: boolean }[];
         setLogs(p => [...p, { color: 'blue', title: t('generate.intent.coverage'), desc: covered.map(c => `${c.id}: ${t(c.passed ? 'generate.intent.passed' : 'generate.intent.pending')}`).join(' · ') }]);
+        // 修订验收目标（amend）后服务端随覆盖广播最新意图，编辑器与后续确认保持一致
+        if (msg.intent) setIntent(msg.intent as TestIntent);
       } else if (msg.type === 'gen:plan') {
         setIntent(msg.intent as TestIntent | undefined);
         setPlan(((msg.steps as PlanStep[]) ?? []).map((s, i) => ({ ...s, id: s.id ?? `p${i}` })));
@@ -199,7 +201,7 @@ export default function Generate() {
         ]);
       } else if (msg.type === 'gen:assist') {
         setAssist({ stepIndex: msg.stepIndex as number, kind: String(msg.kind ?? ''), instruction: String(msg.instruction ?? ''), canManual: Boolean(msg.canManual) });
-        setAssistMode('ai-fix');
+        setAssistMode('redescribe');
         setRevokeNl('');
         setRevokeCount(Math.max(1, stepsRef.current.length));
       } else if (msg.type === 'gen:revoke') {
@@ -248,7 +250,7 @@ export default function Generate() {
         setDone(false);
         setEndState(String(msg.message ?? '').includes('取消') ? 'cancelled' : 'error');
         setUsage(msg.usage ?? null);
-        if (msg.usage) setLiveUsage(msg.usage as TokenUsage); // 终态以服务端任务累计为准（含未推送增量的 AI 修正等调用）
+        if (msg.usage) setLiveUsage(msg.usage as TokenUsage); // 终态以服务端任务累计为准（含未推送增量的模型调用）
         const missing = (msg.missingAttachments as string[] | undefined) ?? [];
         if (missing.length) {
           setAttachments((prev) => prev.filter((a) => !a.id || !missing.includes(a.id)));
@@ -435,7 +437,7 @@ export default function Generate() {
     setBusy(true);
   };
 
-  const assistSend = async (decision: 'redescribe' | 'ai-fix' | 'manual' | 'skip') => {
+  const assistSend = async (decision: 'redescribe' | 'manual' | 'skip') => {
     if (!jobIdRef.current) return;
     if (decision === 'redescribe' && !redescText.trim()) {
       message.warning(t('generate.redescribeEmpty'));
@@ -452,6 +454,22 @@ export default function Generate() {
     setAssist(null);
     setRedescText('');
     if (decision === 'manual') setManualHint(true);
+  };
+
+  /** 修订验收目标（assist amend 决策）：把编辑后的测试意图提交给服务端，护栏随即按新标准放行。 */
+  const amendSend = async () => {
+    if (!jobIdRef.current || !intent) return;
+    const parsed = testIntentSchema.safeParse(intent);
+    if (!parsed.success) {
+      message.warning(parsed.error.issues.map(i => i.message).join('；'));
+      return;
+    }
+    const res = await http.post<{ ok?: boolean; error?: string }>(`/api/generate/${jobIdRef.current}/assist`, { decision: 'amend', intent });
+    if (res.error) {
+      message.error(res.error);
+      return;
+    }
+    setAssist(null);
   };
 
   /** 撤销步骤：删除已生成的最后 N 步；服务端删范围并广播 gen:revoke 收缩列表，模型收到引导文本后基于当前页面重做。 */
@@ -531,20 +549,14 @@ export default function Generate() {
         value={assistMode}
         onChange={(e) => setAssistMode(e.target.value)}
         options={[
-          { value: 'ai-fix', label: t('generate.aiFix') },
           { value: 'redescribe', label: t('generate.redescribe') },
           ...(assist?.canManual ? [{ value: 'manual' as const, label: t('generate.manual') }] : []),
+          { value: 'amend', label: t('generate.amend'), disabled: !intent },
           { value: 'revoke', label: t('generate.revoke'), disabled: steps.length === 0 },
           { value: 'skip', label: t('generate.skip') },
         ]}
       />
       <div className="flex flex-col gap-2.5">
-        {assistMode === 'ai-fix' && (
-          <>
-            <div className="text-xs leading-[1.6] text-ink-2">{t('generate.aiFixHint')}</div>
-            <Button type="primary" block icon={<RobotOutlined />} onClick={() => assistSend('ai-fix')}>{t('generate.aiFixRetry')}</Button>
-          </>
-        )}
         {assistMode === 'redescribe' && (
           <>
             <div className="text-xs leading-[1.6] text-ink-2">{t('generate.redescribeHint')}</div>
@@ -585,6 +597,15 @@ export default function Generate() {
               placeholder={t('generate.revokePlaceholder')}
             />
             <Button type="primary" danger block icon={<RollbackOutlined />} onClick={revokeSend}>{t('generate.revokeRegen')}</Button>
+          </>
+        )}
+        {assistMode === 'amend' && intent && (
+          <>
+            <div className="text-xs leading-[1.6] text-ink-2">{t('generate.amendHint')}</div>
+            <div className="max-h-72 overflow-y-auto rounded-md border border-line-subtle p-2">
+              <TestIntentEditor value={intent} onChange={setIntent} />
+            </div>
+            <Button type="primary" block onClick={amendSend}>{t('generate.amendSend')}</Button>
           </>
         )}
         {assistMode === 'skip' && (

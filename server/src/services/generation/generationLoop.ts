@@ -1,4 +1,5 @@
 import type { TestIntent } from '../../shared/testIntent';
+import { testIntentSchema } from '../../shared/testIntent';
 import { completionError, coverageStatus, evidenceSignature, type AssertionEvidence } from './intentCoverage';
 import { buildWorkingMemory } from './workingMemory';
 import type OpenAI from 'openai';
@@ -39,7 +40,7 @@ const GEN_LOOP_SYSTEM_PROMPT = `你是 Web 测试脚本生成 Agent：通过调�
 6. wait 工具用于等待弹层动画/加载结束（多帧稳定判定），不要盲目连续点击。点击或其他动作后若结果快照显示新弹框已经出现，下一步必须先调用 wait(ms="500") 等待至少 500 毫秒，让弹框过渡动画完成；等待完成前不要读取或操作弹框内的控件，也不要直接使用弹框快照中的元素编号。
 7. 遇到错误不要重复同一操作：先 snapshot 查看当前状态，换路径或调整参数；连续失败会请求人工协助。已成功执行的步骤都会自动记录为脚本步骤，不要重做——重复登录/重复提交只会产生冗余步骤、还可能破坏当前页面状态。
 8. 级联/联动下拉：若选择某字段后另一个字段的值被页面清空/回设，可能存在联动、异步加载或产品缺陷，不能据此认定组合无效。先检查校验信息和需求——先选父字段（如部门），再打开子字段下拉、从当前可选列表里选择匹配的子项（如该部门下的账号）；若选完子项父字段仍被打回，换子字段当前可选列表里的其他选项，或调用 ask_human 说明联动现象请用户确认目标组合；不要交替反复重设两个互相打回的字段。
-9. 感到困惑时不要反复试错，立即调用 ask_human 主动向用户求助（挂起生成、等待人工决策）。以下情况视为困惑：换过不同方式仍无法达成目标、页面状态与预期不符且看不出原因、编号表和结构树里都找不到目标元素、或下一步只能是重复之前已做过的操作。args.question 简述困惑点与已尝试的做法，用户会据此给出补充说明、AI 修正、手动完成或跳过。系统也会在多次视觉观察仍无进展时自动挂起请求人工协助——与其反复截图盲找，不如尽早求助。
+9. 感到困惑时不要反复试错，立即调用 ask_human 主动向用户求助（挂起生成、等待人工决策）。以下情况视为困惑：换过不同方式仍无法达成目标、页面状态与预期不符且看不出原因、编号表和结构树里都找不到目标元素、或下一步只能是重复之前已做过的操作。args.question 简述困惑点与已尝试的做法，用户会据此给出补充说明、手动完成或跳过。系统也会在多次视觉观察仍无进展时自动挂起请求人工协助——与其反复截图盲找，不如尽早求助。
 10. 提交类操作（点击 确定/提交/保存/发布）后若弹窗未关闭、页面无变化或结果异常：调用 api 工具查看最近的接口请求/响应（状态码与响应体），将接口响应与页面实际表现作为证据，对照已确认需求交叉核对（HTTP 200 不等于业务正确），再决定下一步，不要盲目重复点击。分流只看一条标准——失败原因是否被页面明确告知、且可归因于输入：
   · 可归因（页面有明确错误提示/红字校验，且接口同样报错、指向可修正的输入问题）→ 先对照测试意图；负向测试验证预期拒绝，fixed 数据不得更改；仅正向测试允许调整 generated 数据时才换值重试（revise 配合见规则 13）。
   · 不可归因，或页面表现与接口结果互相矛盾——疑似被测页面 Bug：调用 ask_human 求助（question 写明「疑似被测页面 Bug」，附上查证到的接口响应与页面实际表现），不要盲目重试，也不要为迁就 Bug 修改测试目标。矛盾形态不限于以下例子：
@@ -56,15 +57,13 @@ function assertFailSig(args: Record<string, unknown>): string {
   return `${String(args.type ?? '')}|${String(args.expected ?? '')}|${String(args.selector ?? '')}`;
 }
 
-/** assist 决策 → 回灌给模型的 tool result 文本（redescribe/ai-fix/skip/revoke 四出口；
- *  manual 不在此处理——runGenerationLoop.assistFollowup 拦截后走手动捕获流程）。decision 为 null 表示超时未响应。 */
+/** assist 决策 → 回灌给模型的 tool result 文本（redescribe/skip/revoke 出口；
+ *  manual 走手动捕获流程、amend 走验收目标修订，均不在此处理。decision 为 null 表示超时未响应。 */
 function assistResultText(decision: AssistDecision | null, errorText: string): string | null {
   if (!decision) return `人工协助超时未响应：${errorText}`;
   switch (decision.decision) {
     case 'redescribe':
       return `【用户补充说明】${decision.instruction}\n请据此重新完成目标（可先 snapshot 确认当前状态）。`;
-    case 'ai-fix':
-      return '【用户引导】用户选择了 AI 修正：请重新 snapshot 查看当前页面，换一种方式完成刚才失败的目标。';
     case 'skip':
       return '【用户引导】用户明确要求跳过该目标。请继续完成测试意图的其余部分（保持末步断言）。';
     case 'revoke':
@@ -324,9 +323,20 @@ export async function runGenerationLoop(o: {
   // ---- 人在回路「手动操作」：捕获用户首个真实操作 → 落库 → 回灌引导文本 ----
   const manualCapture = createManualCapture({ jobId, pwPage, emit: emitStep, isCancelled: o.isCancelled, valueBinding: binder });
 
-  /** 决策回灌统一出口：manual 走手动捕获（等待用户操作、落库、反馈），其余走 assistResultText。 */
+  /** 决策回灌统一出口：manual 走手动捕获（等待用户操作、落库、反馈），amend 走验收目标修订，其余走 assistResultText。 */
+  const applyAmend = (next: unknown): string => {
+    if (!o.intent) return '当前生成没有验收目标，无法修订。';
+    const parsed = testIntentSchema.safeParse(next);
+    if (!parsed.success) return `修订的验收目标无效：${parsed.error.issues.map(i => i.message).join('；')}`;
+    // 原地更新：ctx.intent / checkpoint 持同一引用；旧证据签名含 criterion，标准一改自动失效，须按新标准重新断言。
+    // 与 confirmPlan 同口径先脱敏（用户编辑内容进 LLM 上下文前过滤密钥形态文本）
+    Object.assign(o.intent, redactGenerationData(jobId, parsed.data));
+    pub({ type: 'gen:coverage', jobId, coverage: coverage(), intent: o.intent });
+    return '【验收目标已修订】用户已更新验收标准，旧证据随之失效。请用 read_coverage 获取最新验收目标与预期，并按新标准重新完成当前目标。';
+  };
   const assistFollowup = async (decision: AssistDecision | null, context: string): Promise<string | null> => {
     if (decision?.decision === 'manual') return manualCapture(context);
+    if (decision?.decision === 'amend') return applyAmend(decision.intent);
     if (decision?.decision === 'skip' && o.intent) return '用户要求跳过当前操作，请继续其余目标；若涉及必验项，该项保持未验证，不能报告完整完成。';
     return assistResultText(decision, context);
   };
@@ -457,6 +467,11 @@ export async function runGenerationLoop(o: {
   // 生成/续跑/常规继续三条路径同样生效（与 onStuck 同理）。
   const assertFailTotal = new Map<string, number>();
   const onAssertFail = async (args: Record<string, unknown>, error: string): Promise<string | null> => {
+    // 合同错误（断言与已确认验收标准不一致）不计数：护栏锁的是冻结的验收标准，重试不可能通过，
+    // 计数只会制造机械的求助循环（cmtwv3up8 C4 死锁）。给修订指引——放行靠用户修订 intent（assist amend）。
+    if (error.startsWith('AssertionContractError:')) {
+      return `该断言与已确认验收标准不一致（${error.replace(/^AssertionContractError:\s*/, '').slice(0, 200)}），原样重试不可能通过。若用户已修订验收目标，先用 read_coverage 获取最新标准再断言；否则调用 ask_human 请求修订验收目标，并在 question 里直接给出具体建议修订（目标 ID + 断言类型 + expected 沿用原值 + 定位描述符），依据当前页面控件形态判断建议类型：表单控件（输入框/文本域/下拉/日期）建议 value 断言 + label/placeholder 定位控件本体，已渲染文本建议 text/text_exact。例：「C3 建议改为 value 断言 + 定位 label=摘要 的输入框，expected 不变」。`;
+    }
     const sig = assertFailSig(args);
     const total = (assertFailTotal.get(sig) ?? 0) + 1;
     assertFailTotal.set(sig, total);
@@ -469,6 +484,7 @@ export async function runGenerationLoop(o: {
       canManual: false,
     });
     if (o.isCancelled()) return null;
+    if (decision?.decision === 'amend') return applyAmend(decision.intent);
     return assistResultText(decision, String(error).slice(0, 200));
   };
 

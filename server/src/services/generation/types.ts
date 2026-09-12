@@ -52,9 +52,11 @@ export interface PlanStep {
 
 export type AssistDecision =
   | { decision: 'redescribe'; instruction: string }
-  | { decision: 'ai-fix' }
   | { decision: 'manual' }
   | { decision: 'skip' }
+  /** 修订验收目标（用户在 assist 面板编辑并确认新的测试意图）：更新本会话 intent 并广播 gen:coverage，
+   *  断言护栏随即按新标准放行——补充说明只回灌文本，改不动冻结的验收标准（cmtwv3up8 C4 死锁教训）。 */
+  | { decision: 'amend'; intent: TestIntent }
   /** 撤销已生成的第 from~to 步（1-based 含端点，绝对序号、可跨续跑 baseSteps）：立即从脚本删除并广播 gen:revoke，模型收到引导文本后基于当前页面重做。 */
   | { decision: 'revoke'; from: number; to: number; nl?: string };
 

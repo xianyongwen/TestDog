@@ -18,6 +18,15 @@ export function evidenceSignature(steps: TestStep[], index: number, criterion: A
   return createHash('sha256').update(JSON.stringify({ criterion, prefix, step: executable(steps[index]) })).digest('hex');
 }
 
+/** 断言合同错误：断言参数与已确认验收标准不一致（类型/预期），重试不可能通过。
+ *  独立类型是为了与真实断言失败区分——失败计数/自动求助只认后者（String(err) 以类名开头）。 */
+export class AssertionContractError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'AssertionContractError';
+  }
+}
+
 export function assertionContractError(criterion: AcceptanceCriterion, step: Pick<TestStep, 'assertion' | 'locator'>,
   sub: (value?: string | null) => string | undefined): string | null {
   if (step.assertion?.type !== criterion.assertion.type || sub(step.assertion?.expected) !== sub(criterion.assertion.expected))
