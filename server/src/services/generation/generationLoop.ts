@@ -52,9 +52,15 @@ const GEN_LOOP_SYSTEM_PROMPT = `你是 Web 测试脚本生成 Agent：通过调�
 12. 环境变量与系统变量都以 {{key}} 占位符引用（fill/select 的 value、断言 expected 里直接写，如 {{密码1}}、{{randomNumber[:6]}}、{{randomPhone}}），不要写死真实值。已确认测试意图中 policy=generated 的数据与验收 expected 里出现的占位符必须原样传入，由平台统一解析（同一轮生成内同键同值，fill 写入的值与断言期望自动一致）——不要自己编造唯一值（写死随机数字/手机号），也不要改写占位符形态。
 13. 以下清理仅适用于意外失败重试；负向测试中的错误输入、失败提交、拒绝断言均为必要步骤，必须保留。修正后重做提交时，若旧提交/填写操作已落库为脚本步骤，配合调用 revise 清理，回放脚本应保留完整、可验证的成功流程，仅清理有明确证据的失败重试冗余，不以步骤最少为目标。两类场景：① 提交失败原因是参数问题（如手机号重复、名称已存在、值不合法）需换值重试——重填时 value 仍传同一占位符并加 regenerate=true（平台重新生成新值，后续同占位符引用与断言自动同步），先实际执行修正动作并验证成功，再 revise 同步已验证的新值、删除有明确证据的旧值提交/重填冗余链；② 点击提交后弹窗未关、被必填校验拦截（提交未生效）——补填缺失字段重新提交，成功后调用 revise 删除先前落空的旧提交步。不要留下「注定失败的提交 + 重填」的冗余链路。所有成功执行的操作都会如实落库（含有意重复，如循环造数的多次填写同一输入框）——落库步骤与浏览器实际执行一一对应，不要重复执行已成功且已落库的操作；失败重试产生的冗余链请用 revise 清理，finish 时系统还会做一次全局脚本审查兜底。`;
 
-/** 断言失败签名：type + expected + selector 定位同一「判断」；instruction 文本不参与（避免措辞变化绕过累计）。 */
+/** 断言失败签名：type + expected + 定位描述符定位同一「判断」；instruction 文本不参与（避免措辞变化绕过累计）。
+ *  locator 参与签名：换定位策略是模型在自我纠正，不应与同目标重试混计——否则 text 失败后换 css 重试
+ *  （locator 字段不带 selector/expected）签名不变，第 2 次失败即触发求助（cmty5gvbj 弹窗断言误求助）。 */
 function assertFailSig(args: Record<string, unknown>): string {
-  return `${String(args.type ?? '')}|${String(args.expected ?? '')}|${String(args.selector ?? '')}`;
+  const loc = args.locator as { strategy?: unknown; value?: unknown; scope?: { strategy?: unknown; value?: unknown } } | undefined;
+  const locSig = loc && typeof loc === 'object'
+    ? `${String(loc.strategy ?? '')}=${String(loc.value ?? '')}${loc.scope && typeof loc.scope === 'object' ? `@${String(loc.scope.strategy ?? '')}=${String(loc.scope.value ?? '')}` : ''}`
+    : String(args.selector ?? '');
+  return `${String(args.type ?? '')}|${String(args.expected ?? '')}|${locSig}`;
 }
 
 /** assist 决策 → 回灌给模型的 tool result 文本（redescribe/skip/revoke 出口；

@@ -43,14 +43,16 @@ export function observedAction(action: any): { action: LocatorAction; selector: 
   }
 }
 
+/** 断言轮询至通过或超时。通过时返回补充提示（如 hidden 空断言警告），无提示返回 undefined。 */
 export async function waitForBrowserAssertion(o: {
   page: any; locator?: any; scope?: any; type: string; expected?: string; timeoutMs?: number; signal?: AbortSignal;
-}): Promise<void> {
+}): Promise<string | undefined> {
   const parsed = browserAssertionSchema.safeParse({ type: o.type, expected: o.expected });
   if (!parsed.success) throw new Error(parsed.error.issues.map(i => i.message).join('；'));
   if (!['text', 'url', 'url_exact'].includes(o.type) && !o.locator) throw new Error('断言缺少定位器');
   const end = Date.now() + Math.min(30000, Math.max(0, o.timeoutMs ?? 10000));
   let actual = '';
+  let everMatched = false; // 等待窗口内定位器是否命中过元素：hidden 靠「从未命中」通过属于空断言
   do {
     if (o.signal?.aborted) throw new Error('断言已中止');
     try {
@@ -76,11 +78,29 @@ export async function waitForBrowserAssertion(o: {
       } else {
         const visible = await o.locator.isVisible();
         ok = o.type === 'visible' ? visible : !visible;
+        if (ok && o.type === 'hidden') {
+          // hidden 通过：区分「匹配但隐藏」与「0 命中」，后者可能是定位失效的恒真假通过
+          try { if (await o.locator.count() > 0) everMatched = true; } catch { /* 忽略 */ }
+        }
       }
-      if (ok) return;
+      if (ok) {
+        if (o.type === 'hidden' && !everMatched) {
+          return '注意：本次 hidden 是「整个等待窗口 0 命中」意义上的通过——若目标元素本应存在（定位类名可能已随组件库版本变化），这是恒真假通过。请核对定位器确实对应目标元素，或改用先命中过目标的定位器 / count=0 表达关闭。';
+        }
+        return undefined;
+      }
     } catch { /* 包含多匹配严格模式错误，不能当成 hidden/unchecked 成功；共用总预算 */ }
     if (Date.now() >= end) break;
     await new Promise(resolve => setTimeout(resolve, Math.min(100, end - Date.now())));
   } while (true);
-  throw new Error(`断言未通过（${o.type}）：期望 ${o.expected ?? o.type}，实际 ${o.type === 'value' ? '字段值不匹配' : actual.slice(0, 160) || '不满足'}`);
+  // 末次定位诊断：区分「页面状态不符」与「定位失效」（0 命中/多匹配），模型据此换定位器而非对「不满足」盲试
+  let diag = '';
+  if (o.locator && o.type !== 'count') {
+    try {
+      const n = await o.locator.count();
+      diag = n === 0 ? '；定位器 0 命中（页面无此元素，请检查定位器是否匹配当前页面）'
+        : n > 1 ? `；定位器命中 ${n} 个元素（多匹配冲突，请收窄到唯一）` : '';
+    } catch { diag = '；定位器查询失败'; }
+  }
+  throw new Error(`断言未通过（${o.type}）：期望 ${o.expected ?? o.type}，实际 ${o.type === 'value' ? '字段值不匹配' : actual.slice(0, 160) || '不满足'}${diag}`);
 }

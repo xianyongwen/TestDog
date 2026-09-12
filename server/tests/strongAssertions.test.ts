@@ -57,6 +57,15 @@ describe('强断言的实际浏览器语义', () => {
     await expect(verify('count', '[', '0')).rejects.toThrow('断言未通过');
   });
 
+  it('visible 失败区分 0 命中与多匹配，hidden 靠「从未命中」通过附空断言警告', async () => {
+    await page.setContent('<button>新建互动事件</button><div class="modal-title">新建互动事件</div>');
+    await expect(verify('visible', '.no-such-element', undefined, 300)).rejects.toThrow('0 命中');
+    await expect(verify('visible', 'button, .modal-title', undefined, 300)).rejects.toThrow('命中 2 个元素');
+    await page.setContent('<div id="gone" style="display:none">x</div>');
+    expect(await verify('hidden', '#gone')).toBeUndefined(); // 匹配但隐藏：正常通过，无警告
+    expect(await verify('hidden', '#missing')).toContain('0 命中'); // 从未命中：提示可能是恒真假通过
+  });
+
   it('URL 精确匹配不会接受仅包含目标地址的页面', async () => {
     await waitForBrowserAssertion({ page: { url: () => 'https://example.test/done?next=evil' }, type: 'url', expected: '/done', timeoutMs: 0 });
     await expect(waitForBrowserAssertion({ page: { url: () => 'https://example.test/done?next=evil' }, type: 'url_exact', expected: 'https://example.test/done', timeoutMs: 0 })).rejects.toThrow('断言未通过');

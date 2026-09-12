@@ -432,14 +432,14 @@ export function buildGenTools(
           const error = assertionContractError(criterion, { assertion, locator: assertSem ?? (loc ? { strategy: 'css', value: String(a.selector) } : undefined) }, ctx.sub);
           if (error) throw new AssertionContractError(error);
         }
-        await waitForBrowserAssertion({ page: { url: () => ctx.page.url(), locator: (selector: string) => ctx.pwPage.locator(selector) }, locator: loc, scope, type, expected: sub(ctx, expect), timeoutMs: a.timeoutMs == null ? 10000 : Number(a.timeoutMs), signal: ctx.signal });
+        const assertWarn = await waitForBrowserAssertion({ page: { url: () => ctx.page.url(), locator: (selector: string) => ctx.pwPage.locator(selector) }, locator: loc, scope, type, expected: sub(ctx, expect), timeoutMs: a.timeoutMs == null ? 10000 : Number(a.timeoutMs), signal: ctx.signal });
         // 单元素等待挂载后再采集；集合/不存在断言保留经过校验的稳定查询，不能强制唯一命中。
         if (loc && !assertSem) assertSem = await semanticizeLocator(ctx.pwPage, semanticSource(sub(ctx, String(a.selector)) ?? String(a.selector)), { mode: 'playwright', noRawFallback: true });
         if (loc && !assertSem) throw new Error('断言定位器未通过唯一性验证');
         const step: TestStep = { kind: 'assert', action: 'assert', assertion, criterionId, ...(assertSem ? { locator: assertSem } : {}), instruction, description: instruction };
         const oc = await ctx.emit(step);
         ctx.onAssertionPassed?.(step);
-        return { status: 'success', progressed: true, recordedStep: oc.index, text: `断言通过（${type}${criterionId ? `，目标 ${criterionId}` : ''}）。${落库提示(ctx, oc)}` };
+        return { status: 'success', progressed: true, recordedStep: oc.index, text: `断言通过（${type}${criterionId ? `，目标 ${criterionId}` : ''}）。${落库提示(ctx, oc)}${assertWarn ? `\n${assertWarn}` : ''}` };
 
       },
     },

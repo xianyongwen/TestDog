@@ -108,4 +108,20 @@ describe('断言失败计数与验收目标修订（cmtwv3up8 C4 死锁教训）
     // amend 后广播 gen:coverage 携带最新意图，前端编辑器随之同步
     expect(mocks.pub).toHaveBeenCalledWith(expect.objectContaining({ type: 'gen:coverage', intent: expect.objectContaining({ criteria: [expect.objectContaining({ assertion: { type: 'url_exact', expected: 'https://test.local/amended' } })] }) }));
   });
+
+  it('换定位策略的重试独立计数，不与「同目标重试」混计（cmty5gvbj 弹窗断言误求助）', async () => {
+    const steps: TestStep[] = [];
+    mocks.askUser.mockResolvedValue(null);
+    mocks.drive.mockImplementation(async (o: any) => {
+      const textLoc = { type: 'visible', locator: { strategy: 'text', value: '新建互动事件' }, instruction: '弹窗已打开' };
+      const cssLoc = { type: 'visible', locator: { strategy: 'css', value: '.ant-modal-content' }, instruction: '弹窗已打开' };
+      await expect(o.onFailure('assert', textLoc, REAL_FAIL)).resolves.toBeNull();
+      await expect(o.onFailure('assert', cssLoc, REAL_FAIL)).resolves.toBeNull(); // 换定位器 = 自我纠正，独立计数不触发
+      expect(mocks.askUser).not.toHaveBeenCalled();
+      await expect(o.onFailure('assert', textLoc, REAL_FAIL)).resolves.toContain('人工协助超时'); // 同定位器第 2 次：触发求助
+      expect(mocks.askUser).toHaveBeenCalledTimes(1);
+      return { finished: true, steps: 0 };
+    });
+    expect((await runGenerationLoop(options(steps, []))).ok).toBe(true);
+  });
 });

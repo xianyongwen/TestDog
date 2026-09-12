@@ -77,8 +77,8 @@ export function getConfig(): AppConfig {
         : file.generationLogRetentionDays === null
           ? null
           : 5,
-    // 观察空转阈值：2~20 夹紧，非法/缺省回 4
-    seeAssistAt: Math.min(20, Math.max(2, Number(file.seeAssistAt ?? 4) || 4)),
+    // 观察空转阈值：2~20 夹紧，非法/缺省回 6
+    seeAssistAt: Math.min(20, Math.max(2, Number(file.seeAssistAt ?? 6) || 6)),
   };
 }
 

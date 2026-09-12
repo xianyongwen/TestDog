@@ -656,13 +656,15 @@ export const CANDIDATE_SCRIPT = PLUGIN_RUNTIME_SCRIPT + String.raw`(() => {
   /** 服务器侧持有完整基线；给模型的快照有范围、分页和字符预算。 */
   window.__ttSnapshot = function (options) {
     options = options || {};
+    // scope=active-overlay 是本函数输出头部的自动范围标签（见 return），不是参数值；调用方常原样回传，等价默认 auto
+    if (options.scope === 'active-overlay') options.scope = 'auto';
     const lines = window.__ttCollectInteractive();
     const state = window.__ttIndexedEls__;
     const roots = Array.from(document.querySelectorAll('dialog[open],[role="dialog"],[role="alertdialog"],[role="listbox"],.el-dialog,.el-drawer,.ant-modal,.ant-drawer,.el-select-dropdown,.ant-select-dropdown,.el-picker-panel,.ant-picker-dropdown')).filter(isShown);
     let root = null;
     if (options.scope && !['auto', 'page', 'viewport'].includes(options.scope)) {
       root = document.querySelector(options.scope);
-      if (!root) throw new Error('快照范围不存在：' + options.scope);
+      if (!root) throw new Error('快照范围不存在：' + options.scope + '（scope 仅支持 auto/page/viewport 或 CSS 选择器）');
     }
     const activeRoots = roots.filter(el => !roots.some(other => other !== el && el.contains(other)));
     const scope = options.scope || 'auto';
