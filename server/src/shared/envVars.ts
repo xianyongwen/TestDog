@@ -40,7 +40,7 @@ export const KNOWN_SYSTEM_NAMES = new Set([
 ]);
 
 /** 归一化系统变量键：{{name:param}} → "name:param"，{{name}} → "name"。同键在同一次运行内值一致。 */
-function systemKey(name: string, param?: string): string {
+export function systemKey(name: string, param?: string): string {
   return param ? `${name}:${param}` : name;
 }
 

@@ -91,6 +91,10 @@ export function cancelSessionGc(jobId: string): void {
 }
 
 /** 路由调用：用户确认/修改计划后继续执行。返回 false 表示该 job 不在等待计划确认状态。 */
+export function isAwaitingPlan(jobId: string): boolean {
+  return waits.get(jobId)?.type === 'plan';
+}
+
 export function confirmPlan(jobId: string, steps: PlanStep[], intent?: TestIntent): boolean | string {
   const w = waits.get(jobId);
   if (!w || w.type !== 'plan') return false;

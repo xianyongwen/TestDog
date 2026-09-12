@@ -14,6 +14,8 @@ import { askUser, revokeHandlers } from './jobControl';
 import { pub, pubToolWithUsage, updateToolAssistant } from './logBridge';
 import { createManualCapture } from './manualCapture';
 import { normalizeStepSystemVars, safeJsonParse, stripFences } from './util';
+import { createValueBinder } from './valueBinding';
+import type { Substituter } from './substitution';
 import type { AssistDecision, PlanStep } from './types';
 import { redactGenerationData } from './privacy';
 
@@ -46,8 +48,8 @@ const GEN_LOOP_SYSTEM_PROMPT = `你是 Web 测试脚本生成 Agent：通过调�
     - 页面报错但接口实际成功：出现错误提示或状态回滚，而接口响应正常、数据已生效；
     - 无声失败：成功/失败提示皆无，接口也无对应请求（点击未触发任何调用）或响应无法判断成败。
 11. 每个必验目标都必须由实际通过的 assert 覆盖（携带 criterionId，严格沿用确认的类型/预期/目标范围）；末步必须是断言，再调用 finish。不能用整页通用文案代替指定记录结果。失败保留证据并求助，不得弱化断言。
-12. 环境变量以 {{key}} 占位符引用（fill 的 value 里直接写 {{key}}），不要写死真实值。
-13. 以下清理仅适用于意外失败重试；负向测试中的错误输入、失败提交、拒绝断言均为必要步骤，必须保留。修正后重做提交时，若旧提交/填写操作已落库为脚本步骤，配合调用 revise 清理，回放脚本应保留完整、可验证的成功流程，仅清理有明确证据的失败重试冗余，不以步骤最少为目标。两类场景：① 提交失败原因是参数问题（如手机号重复、名称已存在、值不合法）需换值重试——先实际执行修正动作并验证成功，再 revise 同步已验证的新值、删除有明确证据的旧值提交/重填冗余链；② 点击提交后弹窗未关、被必填校验拦截（提交未生效）——补填缺失字段重新提交，成功后调用 revise 删除先前落空的旧提交步。不要留下「注定失败的提交 + 重填」的冗余链路。所有成功执行的操作都会如实落库（含有意重复，如循环造数的多次填写同一输入框）——落库步骤与浏览器实际执行一一对应，不要重复执行已成功且已落库的操作；失败重试产生的冗余链请用 revise 清理，finish 时系统还会做一次全局脚本审查兜底。`;
+12. 环境变量与系统变量都以 {{key}} 占位符引用（fill/select 的 value、断言 expected 里直接写，如 {{密码1}}、{{randomNumber[:6]}}、{{randomPhone}}），不要写死真实值。已确认测试意图中 policy=generated 的数据与验收 expected 里出现的占位符必须原样传入，由平台统一解析（同一轮生成内同键同值，fill 写入的值与断言期望自动一致）——不要自己编造唯一值（写死随机数字/手机号），也不要改写占位符形态。
+13. 以下清理仅适用于意外失败重试；负向测试中的错误输入、失败提交、拒绝断言均为必要步骤，必须保留。修正后重做提交时，若旧提交/填写操作已落库为脚本步骤，配合调用 revise 清理，回放脚本应保留完整、可验证的成功流程，仅清理有明确证据的失败重试冗余，不以步骤最少为目标。两类场景：① 提交失败原因是参数问题（如手机号重复、名称已存在、值不合法）需换值重试——重填时 value 仍传同一占位符并加 regenerate=true（平台重新生成新值，后续同占位符引用与断言自动同步），先实际执行修正动作并验证成功，再 revise 同步已验证的新值、删除有明确证据的旧值提交/重填冗余链；② 点击提交后弹窗未关、被必填校验拦截（提交未生效）——补填缺失字段重新提交，成功后调用 revise 删除先前落空的旧提交步。不要留下「注定失败的提交 + 重填」的冗余链路。所有成功执行的操作都会如实落库（含有意重复，如循环造数的多次填写同一输入框）——落库步骤与浏览器实际执行一一对应，不要重复执行已成功且已落库的操作；失败重试产生的冗余链请用 revise 清理，finish 时系统还会做一次全局脚本审查兜底。`;
 
 /** 断言失败签名：type + expected + selector 定位同一「判断」；instruction 文本不参与（避免措辞变化绕过累计）。 */
 function assertFailSig(args: Record<string, unknown>): string {
@@ -178,7 +180,11 @@ export async function runGenerationLoop(o: {
   modelVision: boolean;
   envMap: Record<string, string>;
   envVarHint: string;
-  sub: (t: string | undefined | null) => string | undefined;
+  /** 占位符解析器（generate 侧 createSubstituter）。提供时启用值绑定（fill 实例值反绑占位符、
+   *  断言前反向绑定、regenerate 再生成）；缺省（测试桩）仅按 sub 做代入，无绑定。 */
+  substitution?: Substituter;
+  /** 兜底代入（仅测试桩使用；生产经 substitution.sub）。 */
+  sub?: (t: string | undefined | null) => string | undefined;
   emit: (s: TestStep) => Promise<void>;
   steps: TestStep[];
   /** 本轮目标描述（原测试目标/追加目标，含附件文本）。 */
@@ -263,13 +269,15 @@ export async function runGenerationLoop(o: {
 
   // 步骤修订（revise 工具的落点）：纯脚本操作，不触碰浏览器。原地替换 o.steps（引用不变——
   // emitWithOutlineWaits/finishValidate/最终 script 组装均持有同一数组），pub gen:revise 让前端整表同步。
+  const binder = createValueBinder(o.substitution, o.intent, [...(o.baseSteps ?? []), ...o.steps]);
   const revise = async (ops: ReviseOp[]): Promise<string> => {
-    // update 补丁携带的 value/instruction/expected 也归一化旧写法（模型可能在修订时写 ${systemTime}）
+    // update 补丁携带的 value/instruction/expected 也归一化旧写法（模型可能在修订时写 ${systemTime}），
+    // 并做保守实例→模板规范化（本会话真实写入过的字面值精确替换回占位符，防止 revise 把实例烤死进脚本）
     for (const op of ops) {
       if (op?.op !== 'update') continue;
-      if (op.value != null) op.value = legacyToUnifiedSystemVars(String(op.value))!;
-      if (op.instruction != null) op.instruction = legacyToUnifiedSystemVars(String(op.instruction))!;
-      if (op.expected != null) op.expected = legacyToUnifiedSystemVars(String(op.expected))!;
+      if (op.value != null) op.value = binder.canonicalizeText(legacyToUnifiedSystemVars(String(op.value))!);
+      if (op.instruction != null) op.instruction = binder.canonicalizeText(legacyToUnifiedSystemVars(String(op.instruction))!);
+      if (op.expected != null) op.expected = binder.canonicalizeText(legacyToUnifiedSystemVars(String(op.expected))!);
     }
     const applied = applyReviseOps(o.steps, ops);
     if (typeof applied === 'string') throw new Error(applied);
@@ -299,8 +307,9 @@ export async function runGenerationLoop(o: {
     client,
     model: cfg.openaiModel,
     xpathMap: {},
-    sub: o.sub,
+    sub: o.substitution?.sub ?? o.sub ?? ((t: string | undefined | null) => t ?? undefined),
     envMap: o.envMap,
+    valueBinding: binder,
     emit: emitStep,
     onTool: (index, label, detail, result) => pubToolWithUsage(jobId, index, label, detail, result, { inputTokens: 0, outputTokens: 0, totalTokens: 0, cachedTokens: 0 }),
     note: () => {},
@@ -313,7 +322,7 @@ export async function runGenerationLoop(o: {
   };
 
   // ---- 人在回路「手动操作」：捕获用户首个真实操作 → 落库 → 回灌引导文本 ----
-  const manualCapture = createManualCapture({ jobId, pwPage, emit: emitStep, isCancelled: o.isCancelled });
+  const manualCapture = createManualCapture({ jobId, pwPage, emit: emitStep, isCancelled: o.isCancelled, valueBinding: binder });
 
   /** 决策回灌统一出口：manual 走手动捕获（等待用户操作、落库、反馈），其余走 assistResultText。 */
   const assistFollowup = async (decision: AssistDecision | null, context: string): Promise<string | null> => {
@@ -389,7 +398,14 @@ export async function runGenerationLoop(o: {
     } });
 
   const outlineText = o.outline.length
-    ? o.outline.map((s, i) => `${i + 1}. [${s.kind === 'assert' ? '断言' : (s.action ?? '操作')}] ${s.instruction}`).join('\n')
+    ? o.outline.map((s, i) => {
+        const head = `${i + 1}. [${s.kind === 'assert' ? '断言' : (s.action ?? '操作')}] ${legacyToUnifiedSystemVars(s.instruction) ?? s.instruction}`;
+        // value/expected 必须随大纲注入：它们是用户在确认页最终敲定的取值（可能改过模型草案），
+        // 只传 instruction 会把用户的编辑丢弃、模型按意图旧值执行（cmtwv3up8：初始密码改 pw_{{randomNumber:6}} 落库仍是 {{密码1}}）
+        const value = s.value != null && s.value !== '' ? `（value: ${legacyToUnifiedSystemVars(s.value)}）` : '';
+        const assertion = s.kind === 'assert' && s.assertion?.expected != null ? `（expected: ${legacyToUnifiedSystemVars(s.assertion.expected)}）` : '';
+        return `${head}${value}${assertion}`;
+      }).join('\n')
     : '（用户未确认具体大纲，请自行规划步骤）';
   const pluginHint = pluginActions.length
     ? `\n\n【可用组件语义动作】\n${pluginActions.map((v) => `- ${v.name}：${v.doc ?? ''}`).join('\n')}`
@@ -399,14 +415,16 @@ export async function runGenerationLoop(o: {
     { role: 'system', content: `${GEN_LOOP_SYSTEM_PROMPT}${pluginHint}${o.envVarHint ? `\n\n${o.envVarHint}` : ''}` },
     {
       role: 'user',
-      content: `【测试目标】\n${o.goalText}\n\n【参考大纲（软约束：按实际情况执行，允许合理偏离；不要照抄大纲文本当作操作）】\n${outlineText}`,
+      content: `【测试目标】\n${o.goalText}\n\n【参考大纲（执行路线是软约束：按实际情况执行，允许合理偏离；不要照抄大纲文本当作操作。步骤括号内的 value/expected 是用户确认的取值，fill/select 的 value 与断言 expected 必须采用，与意图 data 不一致时以大纲为准）】\n${outlineText}`,
     },
   ];
   // 原始目标仍由 read_goal 完整提供，初始提示不携带无限长附件。
   if (messages[1]?.role === 'user' && typeof messages[1].content === 'string' && messages[1].content.length > 16000) {
     messages[1].content = messages[1].content.slice(0, 12000) + '\n【后续目标/附件已省略，请先使用 read_goal 分页读取完整要求】';
   }
-  const intentText = JSON.stringify(o.intent ?? null);
+  // 大纲/意图注入前归一化旧写法 ${var} → {{var}}（拆分提示词版本可能仍教 ${}，注入侧统一口径，
+  // 避免模型把 ${...} 当成要自己实例化的模板而编字面值）。
+  const intentText = legacyToUnifiedSystemVars(JSON.stringify(o.intent ?? null))!;
   if (o.intent) messages.push({ role: 'user', content: `【已确认测试意图：执行路线可调整，验收预期不得擅自更改】\n${intentText.slice(0, 12000)}${intentText.length > 12000 ? '\n【后续约定已省略，执行前用 read_goal / read_coverage 读取完整要求】' : ''}\n【当前覆盖】${JSON.stringify(compactCoverage())}\n对每个验收目标调用 assert 时携带 criterionId，严格使用该目标的 type/expected，并定位 target 范围。负向测试保留错误输入及验证拒绝的步骤；fixed 数据不可擅自替换。结束前用 read_coverage 检查遗漏。` });
   if (o.resumeMessages) {
     // 暂停期间页面可能已被人工修改；首次续跑模型调用前刷新旧观测。

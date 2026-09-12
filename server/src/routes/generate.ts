@@ -2,7 +2,7 @@ import type { TestIntent } from '../shared/testIntent';
 import type { FastifyInstance } from 'fastify';
 import { randomUUID } from 'node:crypto';
 import { isConfigured } from '../config';
-import { generate, confirmPlan, assistStep, pauseJob, continueGenerate, isJobRunning, type PlanStep, type AssistDecision } from '../services/generationService';
+import { generate, confirmPlan, assistStep, pauseJob, continueGenerate, isJobRunning, isAwaitingPlan, checkPlanValueConflicts, type PlanStep, type AssistDecision } from '../services/generationService';
 import { prisma } from '../db';
 import { publish } from '../ws/hub';
 
@@ -35,12 +35,18 @@ export default async function generateRoutes(app: FastifyInstance) {
     return { jobId };
   });
 
-  /** 预拆分完成后，用户确认/修改步骤计划并继续执行。 */
+  /** 预拆分完成后，用户确认/修改步骤计划并继续执行。
+   *  首次确认先做 LLM 取值一致性审查（fixed 意图值 vs 大纲取值，执行以大纲为准），发现冲突返回
+   *  conflicts 给前端弹窗；用户选择「仍按大纲执行」后带 force=true 重提，跳过审查直接执行。 */
   app.post('/api/generate/:jobId/confirm', async (req) => {
     const { jobId } = req.params as { jobId: string };
-    const { steps, intent } = (req.body ?? {}) as { steps?: PlanStep[]; intent?: TestIntent };
+    const { steps, intent, force } = (req.body ?? {}) as { steps?: PlanStep[]; intent?: TestIntent; force?: boolean };
     if (!Array.isArray(steps) || !steps.length || !steps.every((s) => s && typeof s.instruction === 'string' && s.instruction.trim())) {
       return { error: '缺少有效的步骤列表' };
+    }
+    if (!force && isAwaitingPlan(jobId)) {
+      const conflicts = await checkPlanValueConflicts(jobId, steps, intent);
+      if (conflicts.length) return { conflicts };
     }
     const ok = confirmPlan(jobId, steps, intent);
     if (typeof ok === 'string') return { error: ok };
@@ -48,17 +54,18 @@ export default async function generateRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
-  /** 某步定位失败时，用户选择重新描述 / AI 修正 / 手动操作 / 跳过 / 撤销部分步骤并重新生成。 */
+  /** 某步定位失败时，用户选择重新描述 / 手动操作 / 跳过 / 撤销 / 修订验收目标并重新生成。 */
   app.post('/api/generate/:jobId/assist', async (req) => {
     const { jobId } = req.params as { jobId: string };
-    const { decision, instruction, from, to, nl } = (req.body ?? {}) as {
+    const { decision, instruction, from, to, nl, intent } = (req.body ?? {}) as {
       decision?: string;
       instruction?: string;
       from?: number;
       to?: number;
       nl?: string;
+      intent?: unknown;
     };
-    if (!decision || !['redescribe', 'ai-fix', 'manual', 'skip', 'revoke'].includes(decision)) return { error: '未知决策' };
+    if (!decision || !['redescribe', 'manual', 'skip', 'revoke', 'amend'].includes(decision)) return { error: '未知决策' };
     let d: AssistDecision;
     if (decision === 'redescribe') {
       d = { decision: 'redescribe', instruction: String(instruction ?? '') };

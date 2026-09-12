@@ -24,6 +24,7 @@ import type { PluginActionResult } from '../types/plugin-api';
 import { getUsage } from './tokenUsage';
 import type { NetworkCapture } from './networkCaptureService';
 import { redactGenerationData, redactGenerationText } from './generation/privacy';
+import type { ValueBindingFacade } from './generation/valueBinding';
 
 export interface GenToolContext {
   jobId: string;
@@ -42,6 +43,9 @@ export interface GenToolContext {
   /** 占位符代入（generate 侧注入：系统变量惰性求值 + 环境变量，执行用真实值、落库保留 {{}}）。 */
   sub: (t: string | undefined | null) => string | undefined;
   envMap: Record<string, string>;
+  /** 值绑定（generate 侧注入，可缺省）：登记写入值反绑占位符、断言前反向绑定、regenerate 再生成。
+   *  保证「fill 实际写入值 = 断言解析值」，模型编字面值/改值重试都不破坏一致性（valueBinding.ts）。 */
+  valueBinding?: ValueBindingFacade;
   /** emit 落步骤（generate 侧：appendStep + pub gen:step），返回新步骤的 1-based 序号。
    *  引擎忠实记录实际执行的每个操作（含有意重复），去重由 LLM 语义判断（revise + finish 审查）。 */
   emit: (s: TestStep) => Promise<EmitOutcome>;
@@ -150,6 +154,9 @@ async function runActionShell(
 
   if ((action === 'fill' || action === 'select') && typeof args.value !== 'string') throw new Error(`${action} 缺少 value`);
   const rawValue = args.value != null ? String(args.value) : undefined;
+  // regenerate 换值重试：原值被页面校验拒绝（如手机号重复）时对占位符键重新求值并覆盖缓存——
+  // 缓存保证同轮同值，regenerate 提供换值出口；重填后 onWrite 重绑，断言自动看到新值。
+  if (action === 'fill' && args.regenerate === true) ctx.valueBinding?.regenerate(rawValue);
   const realValue = sub(ctx, rawValue);
   // 语义化候选在动作前采集（capture-before-mutation）：动作引发的状态类（checked/selected/
   // loading 等）与可访问名漂移（开启→关闭）不会被编入定位器——回放该步时的页面初始态与
@@ -162,6 +169,9 @@ async function runActionShell(
   if (ctx.signal?.aborted) throw new Error('操作已中止');
   await executeLocatorAction(loc, { ...step, value: realValue }, ACTION_TIMEOUT_MS);
   // 一旦执行成功就保存；后验失败也不能抹掉已执行的操作。
+  // 值绑定登记（fill/select）：实例值命中 generated 模板时反绑键值，并把落库值改写回模板
+  // （脚本存模式不存实例——回放时重新求值，保持一致且唯一）。
+  if (action === 'fill' || action === 'select') step.value = ctx.valueBinding?.onWrite(instruction, step.value, realValue) ?? step.value;
   const oc = await ctx.emit(step);
   ctx.note(`${instruction}（${action}）`);
   return { status: 'success', recordedStep: oc.index, effect: 'unknown', text: `${actionLabel(action)}已执行。${落库提示(ctx, oc)}` };
@@ -289,10 +299,15 @@ export function buildGenTools(
     },
     {
       name: 'fill',
-      description: '填写输入框。args.selector + args.value + args.instruction（必填）',
+      description: '填写输入框。args.selector + args.value + args.instruction（必填）。value 传占位符（如 {{randomPhone}}）或固定值；唯一/生成类数据不要自编字面值。',
       parameters: {
         type: 'object',
-        properties: { selector: { type: 'string' }, value: { type: 'string' }, instruction: { type: 'string' } },
+        properties: {
+          selector: { type: 'string' },
+          value: { type: 'string' },
+          instruction: { type: 'string' },
+          regenerate: { type: 'boolean', description: '换值重试：value 里的占位符已生成过且被页面校验拒绝（如手机号/账号已存在）时传 true，平台重新生成新值并同步到后续同占位符引用与断言。value 仍传原占位符。' },
+        },
         required: ['selector', 'value', 'instruction'],
       },
       execute: async (a) => runActionShell(ctx, 'fill', a),
@@ -383,6 +398,9 @@ export function buildGenTools(
         const criterionId = a.criterionId == null ? undefined : String(a.criterionId);
         const criterion = ctx.intent?.criteria.find(c => c.id === criterionId);
         if (criterionId && !criterion) throw new Error(`未知验收目标：${criterionId}`);
+        // 断言前反向绑定：expected/locator 引用的占位符键未在缓存中时，从写入历史按模板反查绑定——
+        // fill 阶段编了字面值（未传占位符）时，护栏比较与断言执行仍解析到实际写入值。
+        ctx.valueBinding?.tryBind(expect, criterion?.assertion?.expected, a.locator ? JSON.stringify(a.locator) : undefined, a.selector == null ? undefined : String(a.selector));
         const isUrl = type === 'url' || type === 'url_exact';
         let assertSem: TestStep['locator'];
         let loc: any;
@@ -838,6 +856,8 @@ async function runComponentAction(ctx: GenToolContext, a: Record<string, unknown
     }
   }
   let rawValue = providedValue != null ? String(providedValue) : undefined;
+  // regenerate 换值重试（与 fill 同语义）：set_date/set_value 等写值动作的占位符已被页面拒绝时重新求值
+  if (a.regenerate === true) ctx.valueBinding?.regenerate(rawValue);
   const value = sub(ctx, rawValue);
   delete extraArgs.value;
   const loc = await resolveLocator(ctx, selector, a.snapshotVersion);
@@ -851,7 +871,9 @@ async function runComponentAction(ctx: GenToolContext, a: Record<string, unknown
   const beforeHash = await shotHash(ctx.pwPage).catch(() => null);
 
   const finishOk = async (winner: string | undefined, message: string): Promise<string | AgentToolResult> => {
-    const oc = await emitSemanticActionStep(ctx, action, selector, instruction, winner, rawValue, extraArgs, semPre);
+    // 值绑定登记（组件语义动作写值：select/set_date/set_value/set_time 等）：同 runActionShell。
+    const canonical = rawValue != null ? (ctx.valueBinding?.onWrite(instruction, rawValue, value) ?? rawValue) : rawValue;
+    const oc = await emitSemanticActionStep(ctx, action, selector, instruction, winner, canonical, extraArgs, semPre);
     ctx.note(`${instruction}（${action}${winner ? ` via ${winner}` : ''}）`);
     return oc ? `${message}。${落库提示(ctx, oc)}` : { status: 'uncertain', text: `${message}。（语义定位失败，本步未落库，请先确认页面状态并请求人工协助，不要重复执行）` };
   };

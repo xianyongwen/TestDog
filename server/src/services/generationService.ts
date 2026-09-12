@@ -28,9 +28,21 @@ import {
 import { preSplit, splitSystemWithVocab } from './generation/preSplit';
 import { runGenerationLoop } from './generation/generationLoop';
 
-export { pauseJob, confirmPlan, assistStep, isJobRunning } from './generation/jobControl';
+export { pauseJob, confirmPlan, assistStep, isJobRunning, isAwaitingPlan } from './generation/jobControl';
+import { detectValueConflicts } from './generation/valueConflictCheck';
+export { detectValueConflicts, type ValueConflict } from './generation/valueConflictCheck';
 export type { GenerateParams, ContinueParams, PlanStep, AssistDecision } from './generation/types';
 import type { ContinueParams, GenerateParams, PlanStep } from './generation/types';
+import type { TestIntent } from '../shared/testIntent';
+import type OpenAI from 'openai';
+
+/** 确认前取值一致性审查：LLM 判断 fixed 意图值与大纲步骤取值的语义冲突（失败退回启发式）。
+ *  client 由本函数创建（usage 记账到该 jobId，消息自动脱敏）；超过 30s 视为不可用走兜底。 */
+export async function checkPlanValueConflicts(jobId: string, steps: PlanStep[], intent?: TestIntent): Promise<ReturnType<typeof detectValueConflicts>> {
+  const cfg = getConfig();
+  const client: OpenAI = createGatewayClient(jobId);
+  return detectValueConflicts(client, cfg.openaiModel, steps, intent, cfg.reasoningEffort, AbortSignal.timeout(30_000));
+}
 
 /**
  * 模块①：自然语言 → 预拆分步骤计划 → 用户确认 → 逐步用 act/observe 定位执行（人在回路）。
@@ -190,7 +202,7 @@ async function generateOwned(jobId: string, params: GenerateParams): Promise<voi
         modelVision,
         envMap,
         envVarHint,
-        sub,
+        substitution,
         emit,
         steps,
         goalText: `${params.nl}${attachmentText}${params.startUrl ? `\n起始地址：${params.startUrl}` : ''}`,
@@ -305,7 +317,6 @@ async function continueGenerateOwned(jobId: string, params: ContinueParams): Pro
     if (job.isCancelled()) return;
 
     const steps: TestStep[] = [];
-    const { sub } = substitution;
     const emit = createStepEmitter(jobId, steps, () => params.baseSteps.length);
 
     try {
@@ -340,7 +351,7 @@ async function continueGenerateOwned(jobId: string, params: ContinueParams): Pro
             modelVision: cfg.openaiModelVision,
             envMap,
             envVarHint,
-            sub,
+            substitution,
             emit,
             steps,
             goalText: String(st.goalText ?? params.nl),
@@ -403,7 +414,7 @@ async function continueGenerateOwned(jobId: string, params: ContinueParams): Pro
         modelVision: cfg.openaiModelVision,
         envMap,
         envVarHint,
-        sub,
+        substitution,
         emit,
         steps,
         goalText: `【追加目标】${params.nl}${attachmentText}`,

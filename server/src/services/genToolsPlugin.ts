@@ -324,6 +324,7 @@ export function componentActionParameters(validActions: string[]): Record<string
       args: { type: 'object', description: '附加参数（动作自定义）；select 必须传 value 或 args.index（二选一）',
         properties: { index: { type: 'integer', minimum: 0, description: 'select：按当前可见且未禁用选项的顺序选择，0=第一项、1=第二项；仅支持 Ant Design、Element 普通下拉和原生 select；无需先展开，不能同时传 value' } },
         additionalProperties: true },
+      regenerate: { type: 'boolean', description: '换值重试：value 里的占位符已生成过且被页面校验拒绝时传 true，平台重新生成新值并同步到后续同占位符引用与断言。value 仍传原占位符。' },
       instruction: { type: 'string', description: '本步的自然语言描述（必填，用于落库与回放自愈）' },
     },
     required: ['action', 'selector', 'instruction'],

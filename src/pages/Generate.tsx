@@ -33,6 +33,19 @@ interface PlanStep {
   assertion?: { type?: string; expected?: string; urlMatch?: string; jsonPath?: string };
 }
 
+/** 不携带参数值的动作；其余 action 步骤（select / set_date 等语义动作）在计划行渲染 value 编辑框——
+ *  语义动作的 value 执行期随大纲注入且「大纲为准」，确认页改不了就会静默沿用旧值（cmtxsmtvf 发生时间案例）。 */
+const NO_VALUE_ACTIONS = new Set(['goto', 'wait', 'click', 'press', 'check']);
+
+/** 服务端取值审查返回的冲突（LLM 判断，失败退回启发式）：执行以大纲为准，需用户知情后选择。 */
+interface ValueConflict {
+  field: string;
+  dataValue: string;
+  stepIndex: number;
+  stepValue: string;
+  reason: string;
+}
+
 /** 计划行的拖拽容器：手柄可发起拖拽，其余内容不受影响。 */
 function SortablePlanRow({ id, index, children }: { id: string; index: number; children: React.ReactNode }) {
   const { t } = useTranslation();
@@ -70,6 +83,8 @@ export default function Generate() {
   const [startUrl, setStartUrl] = useState('');
   const [loginConfigId, setLoginConfigId] = useState<string | undefined>(undefined);
   const [busy, setBusy] = useState(false);
+  /** 计划确认中（服务端 LLM 取值审查有秒级延迟，按钮转 loading 防重复点击）。 */
+  const [confirming, setConfirming] = useState(false);
   const [steps, setSteps] = useState<TestStep[]>([]);
   const [logs, setLogs] = useState<LogItem[]>([]);
   const [done, setDone] = useState(false);
@@ -373,7 +388,17 @@ export default function Generate() {
     setPlan(null);
   };
 
-  const confirmRun = async () => {
+  const confirmRun = async (force = false) => {
+    if (!jobIdRef.current || !plan) return;
+    setConfirming(true);
+    try {
+      await doConfirmRun(force);
+    } finally {
+      setConfirming(false);
+    }
+  };
+
+  const doConfirmRun = async (force: boolean) => {
     if (!jobIdRef.current || !plan) return;
     if (intent) {
       const parsed = testIntentSchema.safeParse(intent);
@@ -384,7 +409,22 @@ export default function Generate() {
       message.warning(t('generate.planEmpty'));
       return;
     }
-    const res = await http.post<{ ok?: boolean; error?: string }>(`/api/generate/${jobIdRef.current}/confirm`, { steps: valid, intent });
+    // 服务端 LLM 取值审查（force=true 为用户已在冲突弹窗选择「仍按大纲执行」的二次提交，跳过审查）。
+    const res = await http.post<{ ok?: boolean; error?: string; conflicts?: ValueConflict[] }>(`/api/generate/${jobIdRef.current}/confirm`, { steps: valid, intent, force });
+    // 审查发现 fixed 意图值与大纲取值冲突：弹窗列出，默认聚焦取消（回改），确认后才执行。
+    if (res.conflicts?.length) {
+      Modal.confirm({
+        title: t('generate.fixedValueConflictTitle'),
+        content: <div className="flex max-w-[460px] flex-col gap-1 text-[13px]">
+          {res.conflicts.map((c, i) => <div key={i}>{t('generate.fixedValueConflict', { field: c.field, dataValue: c.dataValue, index: c.stepIndex, stepValue: c.stepValue, reason: c.reason })}</div>)}
+        </div>,
+        okText: t('generate.fixedValueConflictProceed'),
+        cancelText: t('common.cancel'),
+        autoFocusButton: 'cancel',
+        onOk: () => { void confirmRun(true); },
+      });
+      return;
+    }
     if (res.error) {
       message.error(res.error);
       return;
@@ -433,10 +473,25 @@ export default function Generate() {
     setRevokeNl('');
   };
 
+  /** 数据联动：编辑 fill/select 步骤的 value 时，把意图 data 与 criteria 里同值条目一起更新——
+   *  用户在确认页改的是「这个数据」，意图是大纲的上游权威源，不同步必然打架（大纲 value 注入后两边都要对得上）。 */
+  const syncIntentValue = (oldValue: string | undefined, newValue: string) => {
+    if (!oldValue || oldValue === newValue) return;
+    // 新值含占位符 → generated，否则 fixed（与拆分提示词口径一致）
+    const generated = /\{\{\s*[\p{L}_][\p{L}\p{N}_]*\s*(?:\[?\s*:\s*\d+\s*\]?)?\s*\}\}|\$\{\s*[\p{L}_][\p{L}\p{N}_]*\s*(?:\[?\s*:\s*\d+\s*\]?)?\}/u.test(newValue);
+    setIntent(current => current ? {
+      ...current,
+      data: current.data.map(d => d.value === oldValue ? { ...d, value: newValue, policy: generated ? 'generated' as const : 'fixed' as const } : d),
+      criteria: current.criteria.map(c => c.assertion.expected === oldValue ? { ...c, assertion: { ...c.assertion, expected: newValue } } : c),
+    } : current);
+  };
+
   const updatePlan = (i: number, patch: Partial<PlanStep>) => {
+    const prev = plan?.[i];
     setPlan((p) => (p ? p.map((s, idx) => (idx === i ? { ...s, ...patch } : s)) : p));
-    const id = patch.criterionId ?? plan?.[i]?.criterionId;
+    const id = patch.criterionId ?? prev?.criterionId;
     if (id && patch.assertion) setIntent(current => current ? { ...current, criteria: current.criteria.map(c => c.id === id ? { ...c, assertion: { ...c.assertion, ...patch.assertion } as typeof c.assertion } : c) } : current);
+    if (patch.value != null && patch.value !== prev?.value) syncIntentValue(prev?.value, patch.value);
   };
   const addPlanStep = () =>
     setPlan((p) => (p ? [...p, { id: crypto.randomUUID(), kind: 'action', instruction: '', action: 'click' }] : p));
@@ -795,6 +850,9 @@ export default function Generate() {
                     {p.kind === 'action' && p.action === 'fill' && (
                       <Input placeholder={t('stepsTable.fillValue')} value={p.value ?? ''} onChange={(e) => updatePlan(i, { value: e.target.value })} className="!w-[120px]" />
                     )}
+                    {p.kind === 'action' && p.action && p.action !== 'fill' && !NO_VALUE_ACTIONS.has(p.action) && (
+                      <Input placeholder={t('generate.planActionValue')} value={p.value ?? ''} onChange={(e) => updatePlan(i, { value: e.target.value })} className="!w-[160px]" />
+                    )}
                     {p.kind === 'assert' && (
                       <>
                         {intent && <Select allowClear placeholder={t('generate.intent.criterion')} value={p.criterionId} style={{ width: 100 }}
@@ -821,7 +879,7 @@ export default function Generate() {
             </DndContext>
             <Space className="mt-2 w-full justify-end">
               <Button icon={<PlusOutlined />} onClick={addPlanStep}>{t('generate.planAddStep')}</Button>
-              <Button type="primary" onClick={confirmRun}><ThunderboltOutlined className="mr-1.5" />{t('generate.startExecute')}</Button>
+              <Button type="primary" loading={confirming} onClick={() => confirmRun()}><ThunderboltOutlined className="mr-1.5" />{t('generate.startExecute')}</Button>
               <Button danger icon={<CloseCircleOutlined />} onClick={cancelPlan}>{t('common.cancel')}</Button>
             </Space>
           </div>

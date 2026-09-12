@@ -3,6 +3,7 @@ import { semanticizeLocator } from '../locatorVerifier';
 import { pub, pubToolWithUsage } from './logBridge';
 import { trunc } from './util';
 import type { CapturedEvent } from './types';
+import type { ValueBindingFacade } from './valueBinding';
 
 /** 手动捕获等待用户操作的超时（比 assist 决策更长：用户要在页面上完成真实操作）。 */
 const CAPTURE_TIMEOUT_MS = 10 * 60_000;
@@ -80,6 +81,8 @@ export interface ManualCaptureDeps {
   /** 落库 emit（智能体循环的 emitStep：捕获步骤经大纲等待补插/侦察吸收装饰后落库）。 */
   emit: (step: TestStep) => Promise<EmitOutcome>;
   isCancelled: () => boolean;
+  /** 值绑定（可缺省）：手动填写的值同样是「实例写入」，登记反绑占位符保证后续断言同值。 */
+  valueBinding?: ValueBindingFacade;
 }
 
 /** 手动捕获工厂：注入监听脚本等待用户在浏览器里完成操作，首个事件稳定化后落库为脚本步骤，
@@ -132,6 +135,10 @@ export function createManualCapture(deps: ManualCaptureDeps): (context: string) 
     const loc = await semanticizeLocator(pwPage, evt.selector, { mode: 'playwright' }).catch(() => null);
     const instruction = trunc(context, 120) || `手动${capturedEventLabel(evt)}`;
     const step = buildCapturedStep(evt, loc ?? undefined, instruction);
+    // 手动填写的值登记值绑定（用户键入的就是实例值；命中 generated 模板时反绑并把落库值改写回模板）
+    if ((evt.type === 'fill' || evt.type === 'select') && typeof step.value === 'string') {
+      step.value = deps.valueBinding?.onWrite(instruction, step.value, step.value) ?? step.value;
+    }
     const oc = await emit(step);
     pubToolWithUsage(jobId, 0, '手动捕获', `${evt.type} ${evt.selector}`, `手动捕获：${capturedEventLabel(evt)}（${evt.selector}）`, {
       inputTokens: 0,

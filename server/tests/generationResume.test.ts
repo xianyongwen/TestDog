@@ -50,7 +50,7 @@ describe('生成检查点与续跑', () => {
     const values: string[] = [];
     let round = 0;
     mocks.run.mockImplementation(async (options: any) => {
-      values.push(options.sub('{{randomEmail}}'));
+      values.push(options.substitution.sub('{{randomEmail}}'));
       await options.emit({ kind: 'action', action: 'fill', value: '{{randomEmail}}', instruction: `round-${++round}` });
       options.onCheckpoint([{ role: 'user', content: `round-${round}` }]);
       expect(pauseJob(JOB)).toBe(true);
