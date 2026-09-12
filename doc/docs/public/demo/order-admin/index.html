@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>汪汪商城 · 订单管理</title>
+<style>
+  :root {
+    --primary: #2f6bff;
+    --primary-dark: #1d54e0;
+    --bg: #f5f6f8;
+    --card: #ffffff;
+    --border: #e5e7eb;
+    --text: #1f2329;
+    --text-sub: #646a73;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 16px;
+    min-height: 100vh;
+  }
+  /* 顶栏 */
+  .topbar {
+    background: var(--card);
+    border-bottom: 1px solid var(--border);
+    padding: 0 32px;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; font-size: 18px; font-weight: 600; }
+  .brand .logo { font-size: 24px; }
+  .brand .divider { color: var(--border); font-weight: 400; }
+  .brand .page { font-size: 16px; color: var(--text-sub); font-weight: 400; }
+  .user { display: flex; align-items: center; gap: 8px; color: var(--text-sub); font-size: 14px; }
+  .avatar {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: linear-gradient(135deg, #ffb45a, #ff8a3d);
+    color: #fff; display: flex; align-items: center; justify-content: center;
+    font-size: 14px; font-weight: 600;
+  }
+  /* 主区域 */
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 24px 32px 96px; }
+  .stats { display: flex; gap: 16px; margin-bottom: 20px; }
+  .stat {
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 14px 24px; min-width: 160px;
+  }
+  .stat .label { font-size: 13px; color: var(--text-sub); }
+  .stat .num { font-size: 26px; font-weight: 700; margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .stat .num.warn { color: #d97706; }
+  /* 版本横幅 */
+  .banner {
+    display: none;
+    background: #eff6ff; border: 1px solid #bfdbfe; color: #1d4ed8;
+    border-radius: 10px; padding: 10px 16px; margin-bottom: 16px; font-size: 15px;
+  }
+  .banner.show { display: block; }
+  /* 卡片 */
+  .card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    overflow: hidden;
+  }
+  .toolbar { padding: 18px 20px; display: flex; gap: 12px; border-bottom: 1px solid var(--border); }
+  .toolbar input {
+    width: 320px; height: 40px; padding: 0 14px; font-size: 15px;
+    border: 1px solid var(--border); border-radius: 8px; outline: none;
+    transition: border-color .15s;
+  }
+  .toolbar input:focus { border-color: var(--primary); }
+  .btn {
+    height: 40px; padding: 0 22px; font-size: 15px; border-radius: 8px; border: none;
+    cursor: pointer; font-family: inherit; transition: background .15s;
+  }
+  .btn-primary { background: var(--primary); color: #fff; }
+  .btn-primary:hover { background: var(--primary-dark); }
+  /* 表格 */
+  table { width: 100%; border-collapse: collapse; }
+  th, td { padding: 13px 20px; text-align: left; font-size: 15px; }
+  th {
+    background: #fafbfc; color: var(--text-sub); font-weight: 500; font-size: 13.5px;
+    border-bottom: 1px solid var(--border); white-space: nowrap;
+  }
+  td { border-bottom: 1px solid #f1f2f4; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: #fafbfd; }
+  td.order { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 14px; color: var(--text-sub); }
+  td.amount { text-align: right; font-variant-numeric: tabular-nums; }
+  th.amount-col { text-align: right; }
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 13px; font-weight: 500; }
+  .badge.pending { background: #fef3c7; color: #b45309; }
+  .badge.done { background: #dcfce7; color: #15803d; }
+  .btn-ship { height: 32px; padding: 0 16px; font-size: 14px; border-radius: 6px; border: 1px solid var(--primary); background: #fff; color: var(--primary); cursor: pointer; font-family: inherit; transition: all .15s; }
+  .btn-ship:hover { background: var(--primary); color: #fff; }
+  .btn-chuhu { height: 32px; padding: 0 16px; font-size: 14px; border-radius: 6px; border: 1px solid #7c5cd6; background: #fff; color: #7c5cd6; cursor: pointer; font-family: inherit; transition: all .15s; }
+  .btn-chuhu:hover { background: #7c5cd6; color: #fff; }
+  .empty-row td { text-align: center; color: var(--text-sub); padding: 32px 0; }
+  /* 模拟改版胶囊（固定右下角，不属于业务元素） */
+  .ver-pill {
+    position: fixed; right: 24px; bottom: 24px; z-index: 50;
+    display: flex; align-items: center; gap: 10px;
+    background: #1f2329; color: #fff; border: none; border-radius: 999px;
+    padding: 12px 20px; font-size: 14px; cursor: pointer; font-family: inherit;
+    box-shadow: 0 4px 16px rgba(0,0,0,.18);
+    transition: transform .15s;
+  }
+  .ver-pill:hover { transform: translateY(-2px); }
+  .ver-pill .dot { width: 8px; height: 8px; border-radius: 50%; background: #4ade80; }
+  .ver-pill.v2 .dot { background: #fbbf24; }
+  /* toast */
+  .toast {
+    position: fixed; top: 76px; left: 50%; transform: translateX(-50%) translateY(-8px);
+    background: rgba(31,35,41,.92); color: #fff; padding: 10px 20px; border-radius: 8px;
+    font-size: 14px; opacity: 0; pointer-events: none; transition: all .25s; z-index: 100;
+    max-width: 80vw;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">🐶</span>
+      <span>汪汪商城</span>
+      <span class="divider">/</span>
+      <span class="page">订单管理</span>
+    </div>
+    <div class="user"><div class="avatar">汪</div><span>运营小汪</span></div>
+  </header>
+
+  <main class="wrap">
+    <div class="stats">
+      <div class="stat"><div class="label">今日订单</div><div class="num" id="stat-today">128</div></div>
+      <div class="stat"><div class="label">待发货</div><div class="num warn" id="stat-pending">4</div></div>
+      <div class="stat"><div class="label">今日销售额</div><div class="num">¥ 3,286.00</div></div>
+    </div>
+
+    <div class="banner" id="ver-banner"></div>
+
+    <div class="card">
+      <div class="toolbar">
+        <input type="text" id="search-input" placeholder="搜索订单号 / 商品" autocomplete="off">
+        <button class="btn btn-primary" id="btn-query">查询</button>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>订单号</th><th>商品</th><th class="amount-col">金额</th><th>状态</th><th>操作</th>
+          </tr>
+        </thead>
+        <tbody id="orders-body"></tbody>
+      </table>
+    </div>
+  </main>
+
+  <button class="ver-pill" id="ver-pill" title="切换页面版本，模拟前端上线改版">
+    <span class="dot"></span><span id="ver-pill-text">模拟改版 · 当前 v1</span>
+  </button>
+  <div class="toast" id="toast"></div>
+
+<script>
+  // ---------- 静态订单数据（刷新即重置，便于反复录制） ----------
+  var ORDERS = [
+    { id: 'DOG-1001', product: '犬用磨牙棒 10 支装', amount: 39.90,  status: '已发货' },
+    { id: 'DOG-1003', product: '宠物智能饮水机',     amount: 169.00, status: '待发货' },
+    { id: 'DOG-1007', product: '犬用雨衣（透明款）', amount: 59.00,  status: '已发货' },
+    { id: 'DOG-1012', product: '猫抓板瓦楞纸大号',   amount: 29.90,  status: '已发货' },
+    { id: 'DOG-1018', product: '宠物自动喂食器',     amount: 239.00, status: '待发货' },
+    { id: 'DOG-1024', product: '犬用零食大礼包',     amount: 128.00, status: '待发货' },
+    { id: 'DOG-1027', product: '狗狗牵引绳（反光）', amount: 45.00,  status: '待发货' },
+    { id: 'DOG-1031', product: '宠物除臭喷雾 500ml', amount: 32.00,  status: '已发货' }
+  ];
+  var state = { version: 1, mode: 'static', query: '' };
+
+  // ---------- 渲染 ----------
+  function statusBadge(s) {
+    var cls = s === '已发货' ? 'done' : 'pending';
+    return '<span class="badge ' + cls + '">' + s + '</span>';
+  }
+
+  // v1 与 v2 只让「发货」这一处 DOM 断裂：按钮文案 / id / 类名 / 外层结构全部变化，
+  // 其余元素（搜索框、查询按钮、表格结构）保持完全一致，保证回放时只有目标步骤失败。
+  function actionCell(o) {
+    if (o.status === '已发货') return '<span style="color:#c2c7cc">—</span>';
+    if (state.version === 2) {
+      return '<span class="op-wrap"><button class="btn-chuhu" id="chuhu-' + o.id + '" data-action="chuhu" data-order="' + o.id + '">出库</button></span>';
+    }
+    return '<button class="btn-ship" id="ship-' + o.id + '" data-action="ship" data-order="' + o.id + '">发货</button>';
+  }
+
+  function render() {
+    var tbody = document.getElementById('orders-body');
+    var list = ORDERS.filter(function (o) {
+      if (!state.query) return true;
+      return o.id.indexOf(state.query) !== -1 || o.product.indexOf(state.query) !== -1;
+    });
+    if (!list.length) {
+      tbody.innerHTML = '<tr class="empty-row"><td colspan="5">没有匹配的订单</td></tr>';
+      return;
+    }
+    tbody.innerHTML = list.map(function (o) {
+      return '<tr>'
+        + '<td class="order">' + o.id + '</td>'
+        + '<td>' + o.product + '</td>'
+        + '<td class="amount">¥ ' + o.amount.toFixed(2) + '</td>'
+        + '<td>' + statusBadge(o.status) + '</td>'
+        + '<td>' + actionCell(o) + '</td>'
+        + '</tr>';
+    }).join('');
+    var pending = ORDERS.filter(function (o) { return o.status === '待发货'; }).length;
+    document.getElementById('stat-pending').textContent = pending;
+  }
+
+  function renderBanner() {
+    var b = document.getElementById('ver-banner');
+    if (state.version === 2) {
+      b.textContent = '🚀 v2 已上线：发货功能升级为「出库」，按钮文案与结构已调整';
+      b.classList.add('show');
+    } else {
+      b.classList.remove('show');
+    }
+    var pill = document.getElementById('ver-pill');
+    pill.classList.toggle('v2', state.version === 2);
+    document.getElementById('ver-pill-text').textContent = '模拟改版 · 当前 v' + state.version;
+  }
+
+  // ---------- toast ----------
+  var toastTimer = null;
+  function toast(msg) {
+    var t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { t.classList.remove('show'); }, 2400);
+  }
+
+  // ---------- 交互 ----------
+  document.getElementById('btn-query').addEventListener('click', function () {
+    state.query = document.getElementById('search-input').value.trim();
+    render();
+  });
+  document.getElementById('search-input').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') document.getElementById('btn-query').click();
+  });
+  document.getElementById('orders-body').addEventListener('click', function (e) {
+    var btn = e.target.closest('button[data-action]');
+    if (!btn) return;
+    var id = btn.getAttribute('data-order');
+    var order = ORDERS.find(function (o) { return o.id === id; });
+    if (!order || order.status === '已发货') return;
+    order.status = '已发货';
+    render();
+    toast('订单 ' + id + ' 已' + (state.version === 2 ? '出库' : '发货'));
+  });
+
+  // ---------- 版本切换（模拟改版） ----------
+  function applyVersion(v, silent) {
+    state.version = v;
+    render();
+    renderBanner();
+    if (!silent) toast(v === 2 ? '已模拟上线 v2：发货按钮更名为出库' : '已切回 v1（模拟回滚）');
+  }
+
+  document.getElementById('ver-pill').addEventListener('click', function () {
+    var next = state.version === 1 ? 2 : 1;
+    if (state.mode === 'server') {
+      // 本地 demo 服务器模式：服务端记忆版本，回放时全新浏览器也能读到
+      fetch('/__demo/version', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ version: next })
+      }).catch(function () { state.mode = 'static'; });
+      applyVersion(next);
+    } else {
+      // 静态模式（文档站 / file://）：写入 URL 参数
+      var u = new URL(location.href);
+      u.searchParams.set('v', String(next));
+      history.replaceState(null, '', u);
+      applyVersion(next);
+    }
+  });
+
+  // ---------- 版本探测：URL 参数 > 同源版本接口 > 默认 v1 ----------
+  (async function init() {
+    var p = new URLSearchParams(location.search);
+    if (p.get('v') === '2' || p.get('v') === '1') {
+      state.mode = 'static';
+      applyVersion(Number(p.get('v')), true);
+      return;
+    }
+    try {
+      var r = await fetch('/__demo/version', { cache: 'no-store' });
+      if (r.ok) {
+        var j = await r.json();
+        state.mode = 'server';
+        applyVersion(j.version === 2 ? 2 : 1, true);
+        return;
+      }
+    } catch (e) { /* file:// 或静态托管，走默认 */ }
+    applyVersion(1, true);
+  })();
+</script>
+</body>
+</html>
