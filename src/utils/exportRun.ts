@@ -1,8 +1,9 @@
 import ExcelJS, { type CellValue, type RichText } from 'exceljs';
 import { STEP_ACTION_LABEL, STEP_STATUS_LABEL } from '@shared/constants';
-import type { TestStep } from '@shared/testScript';
+import type { Locator, TestStep } from '@shared/testScript';
 import { apiBase } from '../api/client';
 import type { TokenUsage } from './token';
+import { describeLocator } from './locator';
 
 /** 导出用的步骤结果（与 TestCaseDetail 中的 StepResult 结构兼容）。 */
 export interface RunStepExport {
@@ -122,7 +123,7 @@ export async function exportRunExcel(input: RunExportInput) {
       u?.totalTokens ?? '',
       u?.cachedTokens ?? '',
       s.message ?? '',
-      s.healedLocator ? JSON.stringify(s.healedLocator) : '',
+      s.healedLocator ? describeLocator(s.healedLocator as Locator) : '',
     ]);
     if (!s.screenshot) continue;
     const shot = await fetchScreenshot(s.screenshot);
@@ -372,7 +373,7 @@ export async function exportBatchReport(input: BatchReportInput) {
           STEP_STATUS_LABEL[s.status] ?? s.status,
           s.healed ? '是' : '否',
           s.message ?? '',
-          s.healedLocator ? JSON.stringify(s.healedLocator) : '',
+          s.healedLocator ? describeLocator(s.healedLocator as Locator) : '',
           s.screenshot ?? '',
         ]);
         if (s.status === 'FAILED') row.font = { color: { argb: RED } };

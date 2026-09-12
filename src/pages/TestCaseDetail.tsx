@@ -1,7 +1,7 @@
 import type { TestIntent } from '@shared/testIntent';
 import TestIntentEditor from '../components/TestIntentEditor';
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { Button, Card, Descriptions, Dropdown, Image, Popconfirm, Space, Switch, Tabs, Tag, App, Select, Modal } from 'antd';
+import { Button, Card, Descriptions, Dropdown, Image, Popconfirm, Space, Switch, Tabs, Tag, App, Select, Modal, Tooltip } from 'antd';
 import SortableTable from '../components/SortableTable';
 import { ArrowLeftOutlined, ThunderboltOutlined, VideoCameraOutlined, PlayCircleOutlined, StopOutlined, SaveOutlined, DeleteOutlined, DownloadOutlined, CheckOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
@@ -9,16 +9,17 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { http, apiBase } from '../api/client';
 import { ws } from '../api/ws';
-import type { TestStep } from '@shared/testScript';
+import type { Locator, TestStep } from '@shared/testScript';
 import StepsTable from '../components/StepsTable';
 import RunLog, { type LogItem } from '../components/RunLog';
 import { RunStatusTag, StepStatusTag, ActionTag } from '../components/StatusTag';
 import { fmtToken, type TokenUsage } from '../utils/token';
+import { describeLocator } from '../utils/locator';
 import CacheRatePie from '../components/CacheRatePie';
 import { exportRunJSON, exportRunExcel } from '../utils/exportRun';
 
 interface Script { intent?: TestIntent; id: string; version: number; steps: TestStep[]; rawCode?: string; createdAt: string }
-interface StepResult { stepIndex: number; action: string; status: string; message?: string; durationMs?: number; healed: boolean; healedLocator?: { strategy: string; value: string; role?: string; name?: string } | null; screenshot?: string; consoleLog?: string; networkLog?: string }
+interface StepResult { stepIndex: number; action: string; status: string; message?: string; durationMs?: number; healed: boolean; healedLocator?: Locator | null; screenshot?: string; consoleLog?: string; networkLog?: string }
 interface Run { id: string; status: string; startedAt?: string; finishedAt?: string; logs?: string; stepResults?: StepResult[]; scriptId?: string; meta?: { usage?: TokenUsage; stepUsages?: Record<number, TokenUsage> } | null }
 interface CaseDetail {
   id: string; title: string; description?: string; naturalLanguage?: string; status: string;
@@ -528,7 +529,17 @@ function RunDetail({ runId, caseTitle, steps, stepUsages, onAdopted }: { runId: 
               );
             },
           },
-          { title: t('caseDetail.info'), dataIndex: 'message' },
+          { title: t('caseDetail.info'), dataIndex: 'message', render: (_v, r) => (
+            <span>
+              {r.message}
+              {r.healed && r.healedLocator ? (
+                // 自愈步展示智能体重新定位得到的新定位器（历史记录亦从落库的 healedLocator 渲染）
+                <Tooltip title={t('caseDetail.healedLocator')}>
+                  <code className="ml-1 rounded bg-subtle px-1 py-0.5 text-[11px] break-all text-accent">{describeLocator(r.healedLocator)}</code>
+                </Tooltip>
+              ) : null}
+            </span>
+          ) },
           {
             title: t('common.actions'),
             width: 90,

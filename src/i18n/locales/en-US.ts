@@ -340,6 +340,7 @@ const enUS = {
     runEnd: 'Run finished: {{status}}',
     stepLabel: 'Step {{index}}',
     healed: 'Healed',
+    healedLocator: 'Healed locator',
     adoptSuccess: 'Adopted to v{{version}} step {{step}}',
     adoptFailed: 'Adopt failed: {{err}}',
     adopted: 'Adopted',

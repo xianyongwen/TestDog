@@ -337,6 +337,7 @@ const zhCN = {
     runEnd: '运行结束：{{status}}',
     stepLabel: '步骤 {{index}}',
     healed: '自愈',
+    healedLocator: '自愈定位器',
     adoptSuccess: '已采纳到 v{{version}} 第 {{step}} 步',
     adoptFailed: '采纳失败：{{err}}',
     adopted: '已采纳',
