@@ -34,6 +34,8 @@ export interface AppConfig {
   reasoningEffort: ReasoningEffort; // 思考深度：'' = 发 thinking disabled 真关闭，low/high/max = 发 reasoning_effort；预拆分与生成主循环共用
   /** 生成记录的保留天数。null/0 = 永久保留；>0 表示超过 N 天的记录在启动时自动清理。 */
   generationLogRetentionDays: number | null;
+  /** 生成循环观察空转保护阈值：see/snapshot 等观测连续 N 次画面无变化即挂起求助。读图按固定 token 计价的模型可调大。 */
+  seeAssistAt: number;
 }
 
 // 开发期落 server/.local-config.json；生产期由 Tauri 经 CONFIG_PATH 指向 app_data_dir。
@@ -75,6 +77,8 @@ export function getConfig(): AppConfig {
         : file.generationLogRetentionDays === null
           ? null
           : 5,
+    // 观察空转阈值：2~20 夹紧，非法/缺省回 4
+    seeAssistAt: Math.min(20, Math.max(2, Number(file.seeAssistAt ?? 4) || 4)),
   };
 }
 

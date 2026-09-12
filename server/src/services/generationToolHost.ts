@@ -460,7 +460,7 @@ export function buildGenTools(
       ? [
           {
             name: 'see',
-            description: '视觉观察当前页面：截图（带编号标注）直接附于结果进入上下文（无额外的图像描述子调用，成本依模型而定）。蓝色边框上的白色数字 = snapshot 元素编号，可直接用于 selector。用于确认页面状态/排查渲染错乱/图表/验证码/toast 等视觉问题。args.x/y/w/h 为可选裁剪区域（px），裁剪可提升小区域清晰度。',
+            description: '视觉观察当前页面：截图（带编号标注）直接附于结果进入上下文（无额外的图像描述子调用）。蓝色边框上的白色数字 = snapshot 元素编号，可直接用于 selector。与文本快照并列的一等观测：快照文本信息不足或存疑（选项列表不全/被虚拟滚动截断、元素与文本对不上、确认渲染状态）时优先 see，不要靠反复试错。args.x/y/w/h 为可选裁剪区域（px），聚焦小控件时提升清晰度。',
             parameters: {
               type: 'object',
               properties: {

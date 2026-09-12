@@ -157,6 +157,8 @@ export interface ToolLoopOpts {
    * 供上层落库（如写 GenerationStep.assistant，事后可查「模型当时对截图说了什么」）。content 为空不回调。
    */
   onAssistantContent?: (stepIndex: number, content: string) => void;
+  /** 观察空转保护阈值：观测类工具连续 N 次画面无变化即挂起（onStuck kind='observe'）。缺省 4。 */
+  seeAssistAt?: number;
   onStep: (info: { index: number; name: string; args: Record<string, unknown>; result: string; usageDelta: TokenUsage }) => void | Promise<void>;
 }
 
@@ -212,6 +214,7 @@ const linkFlipWarnText = (a: string, b: string, count: number): string =>
  */
 export async function runToolLoop(opts: ToolLoopOpts): Promise<ToolLoopResult> {
   const { client, model, reasoningEffort, tools, messages, maxSteps, usageKey, signal, validateFinish, onFailure, onSuccess, onStuck, isProgress, onAssistantContent, onStep } = opts;
+  const SEE_ASSIST_LIMIT = Math.max(1, opts.seeAssistAt ?? SEE_ASSIST_AT);
   let finished: { success: boolean; message: string } | null = null;
   let steps = 0;
   // —— 单状态槽登记：tool_call_id → { kind, round } ——
@@ -507,7 +510,7 @@ export async function runToolLoop(opts: ToolLoopOpts): Promise<ToolLoopResult> {
       }
       if (observationTool && !finished && toolOk && !signal?.aborted && (toolName === 'see' || unchangedObservations > 0)) {
         seeStreak++;
-        if (seeStreak >= SEE_ASSIST_AT) {
+        if (seeStreak >= SEE_ASSIST_LIMIT) {
           let override: string | null = null;
           try {
             override = onStuck ? await onStuck(toolName, args, seeStreak, 'observe') : null;

@@ -29,7 +29,7 @@ const GEN_OBSERVATION_TOOLS = new Set(['snapshot', 'page_tree', 'wait', 'readTex
 const GEN_LOOP_SYSTEM_PROMPT = `你是 Web 测试脚本生成 Agent：通过调用工具在真实浏览器里完成测试目标，每一步成功操作都会自动记录为脚本步骤。
 
 操作规范：
-1. 首次动手前获取 snapshot。动作结果若已附最新快照，直接据此继续，不要重复观察。快照默认聚焦浮层/视口，找不到目标用 scope=page + query；字段状态和校验优先看文本，视觉问题再用 see。
+1. 首次动手前获取 snapshot。动作结果若已附最新快照，直接据此继续，不要重复观察。快照默认聚焦浮层/视口，找不到目标用 scope=page + query。文本快照与 see 截图是并列的观测手段：选项列表被虚拟滚动截断、元素文本与预期对不上、编号表里找不到目标、需要确认视觉状态时，直接 see（带 question 聚焦关注点），不要靠反复填写/点击试错；字段值和校验文字仍以文本快照为准。
 2. 独立字段可用 batch_actions 一次规划多个 fill/check/select，宿主串行执行并在变化时停止；按返回的已完成清单继续，不重做。联动字段、提交和弹窗切换单步处理。act 兜底一次只执行一个最匹配候选，复合目标根据新状态继续。取消勾选明确传 checked=false。元素引用：工具的 selector 参数填 snapshot 编号表里的元素编号（如 "12"）；使用编号时携带对应 snapshotVersion；旧版本会被拒绝。编号表里找不到目标、或需要页面层级结构时，才调用 page_tree 获取完整语义树（体积大，不要反复调用）；树内编号不能用作 selector。
 3. 每个动作工具的 instruction 必填：写一句自然语言描述（如「点击登录按钮」），它会被保存进脚本用于回放自愈。
 4. 组件库假控件（antd/element 的下拉、日期面板等）不是原生控件：不要对下拉触发器用 fill/select 原生方式；若可用工具中有 component_action（组件语义动作，如选择下拉选项、设置日期），优先使用它。select 必须传具体 value，或对 Ant Design、Element 普通下拉/原生 select 传 args.index（0=第一项，1=第二项，与 value 二选一）；instruction 不代替参数。按序选择无需先展开或截图识别名称，直接调用组件动作。参数错误只修正参数后重试本动作。
@@ -521,6 +521,7 @@ export async function runGenerationLoop(o: {
     onSuccess,
     onStuck,
     workingMemory: () => buildWorkingMemory(o.steps, o.goalText) + '\n【验收覆盖】' + JSON.stringify(compactCoverage()) + '\n用 read_coverage 读取完整验收预期；不允许弱化断言。',
+    seeAssistAt: cfg.seeAssistAt,
     onStep: ({ index, name, args, result, usageDelta: ud }) => {
       const label = ({ snapshot: '快照', page_tree: '结构树', goto: '导航', click: '点击', fill: '填写', press: '按键', check: '勾选', select: '选择', wait: '等待', readText: '读取文本', assert: '断言', act: 'AI 兜底', see: '视觉观察', api: '网络请求', component_action: '组件动作', batch_actions: '批量填写', read_goal: '读取目标', read_script: '读取脚本', read_coverage: '验收覆盖', ask_human: '人工求助', finish: '完成' } as any)[name] ?? name;
       let detail = '';
