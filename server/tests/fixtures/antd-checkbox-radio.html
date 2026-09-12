@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>antd checkbox/radio 测试</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/antd@5.25.0/dist/reset.css" />
+  <style>
+    body { font-family: system-ui, sans-serif; padding: 24px; max-width: 760px; }
+    .block { margin: 24px 0; }
+    .block > label { display: block; margin-bottom: 10px; font-weight: 600; }
+    .val { margin-top: 8px; color: #555; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <h3>antd (React) Checkbox / Radio 测试页</h3>
+  <div id="root"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dayjs@1.11.13/dayjs.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/antd@5.25.0/dist/antd.min.js"></script>
+  <script>
+    const { createRoot } = ReactDOM;
+    const { Checkbox, Radio, ConfigProvider } = antd;
+
+    function App() {
+      const [single, setSingle] = React.useState(false);
+      const [fruits, setFruits] = React.useState(['apple']);
+      const [all, setAll] = React.useState(true);
+      const [indList, setIndList] = React.useState(['a']);
+      const [btnFruits, setBtnFruits] = React.useState(['apple']);
+      const [gender, setGender] = React.useState('male');
+      const [size, setSize] = React.useState('m');
+      const [alone, setAlone] = React.useState(false);
+
+      return React.createElement(
+        ConfigProvider,
+        null,
+        React.createElement(
+          'div',
+          null,
+          React.createElement(
+            'div',
+            { className: 'block' },
+            React.createElement('label', null, 'antd Checkbox 单个复选框'),
+            React.createElement(Checkbox, { checked: single, onChange: (e) => setSingle(e.target.checked) }, '我已阅读并同意用户协议'),
+            React.createElement('div', { className: 'val' }, `当前状态：${single ? '已勾选' : '未勾选'}`)
+          ),
+          React.createElement(
+            'div',
+            { className: 'block' },
+            React.createElement('label', null, 'antd Checkbox.Group 复选组（苹果已选，梨禁用）'),
+            React.createElement(Checkbox.Group, {
+              options: [
+                { label: '苹果', value: 'apple' },
+                { label: '香蕉', value: 'banana' },
+                { label: '梨', value: 'pear', disabled: true },
+              ],
+              value: fruits,
+              onChange: (vals) => setFruits(vals),
+            }),
+            React.createElement('div', { className: 'val' }, `已选：${fruits.join('、') || '(空)'}`)
+          ),
+          React.createElement(
+            'div',
+            { className: 'block' },
+            React.createElement('label', null, 'antd Checkbox 全选（indeterminate 半选联动）'),
+            React.createElement(Checkbox, {
+              checked: indList.length === 2,
+              indeterminate: indList.length === 1,
+              onChange: (e) => setIndList(e.target.checked ? ['a', 'b'] : []),
+            }, '全选'),
+            React.createElement(Checkbox.Group, {
+              options: [{ label: '选项甲', value: 'a' }, { label: '选项乙', value: 'b' }],
+              value: indList,
+              onChange: (vals) => setIndList(vals),
+            }),
+            React.createElement('div', { className: 'val' }, `已选：${indList.join('、') || '(空)'}`)
+          ),
+          React.createElement(
+            'div',
+            { className: 'block' },
+            React.createElement('label', null, 'antd Checkbox.Group 按钮形态（Checkbox.Button）'),
+            React.createElement(Checkbox.Group, {
+              options: [
+                { label: '苹果', value: 'apple' },
+                { label: '香蕉', value: 'banana' },
+                { label: '梨', value: 'pear' },
+              ],
+              value: btnFruits,
+              onChange: (vals) => setBtnFruits(vals),
+            }),
+            React.createElement('div', { className: 'val' }, `已选：${btnFruits.join('、') || '(空)'}`)
+          ),
+          React.createElement(
+            'div',
+            { className: 'block' },
+            React.createElement('label', null, 'antd Radio.Group 单选组（男已选，保密禁用）'),
+            React.createElement(Radio.Group, {
+              value: gender,
+              onChange: (e) => setGender(e.target.value),
+            },
+              React.createElement(Radio, { value: 'male' }, '男'),
+              React.createElement(Radio, { value: 'female' }, '女'),
+              React.createElement(Radio, { value: 'secret', disabled: true }, '保密')
+            ),
+            React.createElement('div', { className: 'val' }, `当前值：${gender}`)
+          ),
+          React.createElement(
+            'div',
+            { className: 'block' },
+            React.createElement('label', null, 'antd Radio.Group 按钮形态（optionType=button）'),
+            React.createElement(Radio.Group, {
+              value: size,
+              optionType: 'button',
+              onChange: (e) => setSize(e.target.value),
+            },
+              React.createElement(Radio.Button, { value: 's' }, '小型'),
+              React.createElement(Radio.Button, { value: 'm' }, '中型'),
+              React.createElement(Radio.Button, { value: 'l' }, '大型')
+            ),
+            React.createElement('div', { className: 'val' }, `当前值：${size}`)
+          ),
+          React.createElement(
+            'div',
+            { className: 'block' },
+            React.createElement('label', null, 'antd Checkbox 独立复选框（组外，受控）'),
+            React.createElement(Checkbox, { checked: alone, onChange: (e) => setAlone(e.target.checked) }, '订阅周报'),
+            React.createElement('div', { className: 'val' }, `当前状态：${alone ? '已勾选' : '未勾选'}`)
+          )
+        )
+      );
+    }
+
+    createRoot(document.getElementById('root')).render(React.createElement(App));
+  </script>
+</body>
+</html>

@@ -53,7 +53,7 @@ function loadSource(name: string): string {
  * 新框架插件复用同名词表时改这里（或按域拆新共享常量），不要只改自己的 actionsMeta。
  */
 const SELECT_ACTION_DOC =
-  '在下拉中选择选项（自动打开弹层并点击文本/标题匹配项，支持 Ant Design、Element、Vant 与 MUI；原生 <select> 由分发器原生交互层兜底 selectOption；树形选择器（TreeSelect/树形下拉）同样用本动作，value 传目标节点可见文本，树形弹层由 tree-select 系列内置插件兜底闭环；级联选择器（Cascader）用本动作时 value 传完整路径「A / B / C」逐级展开点选；Vant 下拉菜单与滚轮选择弹层、MUI Select 与 Autocomplete 同样用本动作）。args.value=选项可见文本或完整路径；Ant Design、Element 普通下拉和原生 select 也支持 args.index（非负整数，0=第一项、1=第二项），按当前可见且未禁用选项排序选择，与 value 二选一；选项未知时不要省略选择参数';
+  '在下拉中选择选项（自动打开弹层并点击文本/标题匹配项，支持 Ant Design、Element、Vant 与 MUI；原生 <select> 由分发器原生交互层兜底 selectOption；树形选择器（TreeSelect/树形下拉）同样用本动作，value 传目标节点可见文本，树形弹层由 tree-select 系列内置插件兜底闭环；级联选择器（Cascader）用本动作时 value 传完整路径「A / B / C」逐级展开点选；Vant 下拉菜单与滚轮选择弹层、MUI Select 与 Autocomplete 同样用本动作；单选按钮组（Radio/RadioGroup，Ant Design 与 Element）也用本动作，value 传目标单选项可见文本，对组容器或组内任一单选项调用均可）。args.value=选项可见文本或完整路径；Ant Design、Element 普通下拉和原生 select 也支持 args.index（非负整数，0=第一项、1=第二项），按当前可见且未禁用选项排序选择，与 value 二选一；选项未知时不要省略选择参数';
 
 const SET_DATE_ACTION_DOC =
   '设置组件库日期选择器（fill 优先，失败走面板翻页与日期格点击；日期时间选择器自动点击确认/确定按钮提交，支持 Ant Design 与 Element；Vant 日期滚轮/日历面板为只读触发器，直接走弹层点选+确认）。args.value=YYYY-MM-DD（日期时间选择器自动补 00:00:00，也可显式带 HH:mm(:ss)）';
@@ -63,6 +63,9 @@ const SET_TIME_ACTION_DOC =
 
 const SET_VALUE_ACTION_DOC =
   '设置滑块（Slider）数值（仅适用于滑块组件，勿用于步进器/评分/开关等其它数值控件；拖拽手柄对齐，Ant Design 与 Element 另支持键盘微调；范围滑块 args.value 传 "a,b" 设两端，单值移动最近手柄；受步长限制请传步长整数倍的值，支持 Ant Design、Element、Vant 与 MUI）。args.value=数值或"a,b"';
+
+const CHECK_ACTION_DOC =
+  '勾选或取消勾选组件库复选框（Ant Design 与 Element 的 Checkbox/复选框，含复选组中的项、按钮形态与全选半选联动）：定位到目标复选框（或其内部的方块/文字）后调用，已处于目标状态时幂等成功；禁用项会失败并说明。args.value=「true」勾选（缺省）或「false」取消勾选，也接受 args.checked 布尔值与「取消」等别名；复选组要勾选某一项请定位到该项再调用，勿对组容器调用';
 
 export const BUILTIN_PLUGIN_DEFS: BuiltinPluginDef[] = [
   {
@@ -150,6 +153,34 @@ export const BUILTIN_PLUGIN_DEFS: BuiltinPluginDef[] = [
     actionsMeta: [{ name: 'select', doc: SELECT_ACTION_DOC, preferFill: false }],
   },
   {
+    name: 'ant-checkbox',
+    version: '1.0.0',
+    description: 'Ant Design 复选框（Checkbox / Checkbox.Group，兼容 antd v5/v6）适配：check 动作（勾选/取消勾选，幂等；点原生 input 提交并轮询受控落定；禁用项报错）（内置）',
+    entryFile: loadSource('ant-checkbox'),
+    actionsMeta: [{ name: 'check', doc: CHECK_ACTION_DOC, label: '勾选', preferFill: false }],
+  },
+  {
+    name: 'el-checkbox',
+    version: '1.0.0',
+    description: 'Element（element-ui / element-plus）复选框（el-checkbox / el-checkbox-button / el-checkbox-group 中的项）适配：check 动作（勾选/取消勾选，幂等；点原生 input 提交并轮询受控落定；禁用项报错）（内置）',
+    entryFile: loadSource('el-checkbox'),
+    actionsMeta: [{ name: 'check', doc: CHECK_ACTION_DOC, label: '勾选', preferFill: false }],
+  },
+  {
+    name: 'ant-radio',
+    version: '1.0.0',
+    description: 'Ant Design 单选按钮（Radio / Radio.Group / Radio.Button，兼容 antd v5/v6）适配：select 动作（组内按可见文本选中，幂等；对组容器或组内任一单选项调用均可；点原生 input 提交并轮询受控落定）（内置）',
+    entryFile: loadSource('ant-radio'),
+    actionsMeta: [{ name: 'select', doc: SELECT_ACTION_DOC, preferFill: false }],
+  },
+  {
+    name: 'el-radio',
+    version: '1.0.0',
+    description: 'Element（element-ui / element-plus）单选按钮（el-radio / el-radio-button / el-radio-group）适配：select 动作（组内按可见文本选中，幂等；对组容器或组内任一单选项调用均可；点原生 input 提交并轮询受控落定）（内置）',
+    entryFile: loadSource('el-radio'),
+    actionsMeta: [{ name: 'select', doc: SELECT_ACTION_DOC, preferFill: false }],
+  },
+  {
     name: 'vant-select',
     version: '1.0.0',
     description: 'Vant 下拉菜单（van-dropdown-menu）适配：select 动作（点标题展开 overlay 选项并点击文本匹配项，选中后自动收起弹层）（内置）',
@@ -214,6 +245,10 @@ export const BUILTIN_PRESET_MEMBERS = [
   'el-time-picker',
   'ant-cascader',
   'el-cascader',
+  'ant-checkbox',
+  'el-checkbox',
+  'ant-radio',
+  'el-radio',
   'mui-select',
   'mui-slider',
   'vant-select',

@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>element-plus checkbox/radio 测试</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/element-plus@2.8.0/dist/index.css" />
+  <style>
+    body { font-family: system-ui, sans-serif; padding: 24px; }
+    .block { margin: 20px 0; }
+    .block > label { display: block; margin-bottom: 6px; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <h3>element-plus (Vue3) Checkbox / Radio 测试页</h3>
+
+  <div id="app">
+    <div class="block">
+      <label>el-checkbox 单个复选框</label>
+      <el-checkbox v-model="single">我已阅读并同意用户协议</el-checkbox>
+      <div>当前状态：{{ single ? '已勾选' : '未勾选' }}</div>
+    </div>
+
+    <div class="block">
+      <label>el-checkbox-group 复选组（苹果已选，梨禁用）</label>
+      <el-checkbox-group v-model="fruits">
+        <el-checkbox label="苹果" value="apple"></el-checkbox>
+        <el-checkbox label="香蕉" value="banana"></el-checkbox>
+        <el-checkbox label="梨" value="pear" disabled></el-checkbox>
+      </el-checkbox-group>
+      <div>已选：{{ fruits.join('、') || '(空)' }}</div>
+    </div>
+
+    <div class="block">
+      <label>el-checkbox 全选（indeterminate 半选联动）</label>
+      <el-checkbox v-model="checkAll" :indeterminate="isIndeterminate" @change="onCheckAll">全选</el-checkbox>
+      <el-checkbox-group v-model="indList" @change="onIndChange">
+        <el-checkbox label="选项甲" value="a"></el-checkbox>
+        <el-checkbox label="选项乙" value="b"></el-checkbox>
+      </el-checkbox-group>
+      <div>已选：{{ indList.join('、') || '(空)' }}</div>
+    </div>
+
+    <div class="block">
+      <label>el-checkbox-button 按钮形态复选组</label>
+      <el-checkbox-group v-model="btnFruits">
+        <el-checkbox-button label="苹果" value="apple"></el-checkbox-button>
+        <el-checkbox-button label="香蕉" value="banana"></el-checkbox-button>
+        <el-checkbox-button label="梨" value="pear"></el-checkbox-button>
+      </el-checkbox-group>
+      <div>已选：{{ btnFruits.join('、') || '(空)' }}</div>
+    </div>
+
+    <div class="block">
+      <label>el-radio-group 单选组（男已选，保密禁用）</label>
+      <el-radio-group v-model="gender">
+        <el-radio value="male">男</el-radio>
+        <el-radio value="female">女</el-radio>
+        <el-radio value="secret" disabled>保密</el-radio>
+      </el-radio-group>
+      <div>当前值：{{ gender }}</div>
+    </div>
+
+    <div class="block">
+      <label>el-radio-button 按钮形态单选组</label>
+      <el-radio-group v-model="size">
+        <el-radio-button value="s">小型</el-radio-button>
+        <el-radio-button value="m">中型</el-radio-button>
+        <el-radio-button value="l">大型</el-radio-button>
+      </el-radio-group>
+      <div>当前值：{{ size }}</div>
+    </div>
+
+    <div class="block">
+      <label>el-checkbox 独立复选框（组外）</label>
+      <el-checkbox v-model="alone">订阅周报</el-checkbox>
+      <div>当前状态：{{ alone ? '已勾选' : '未勾选' }}</div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/vue@3.5.0/dist/vue.global.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/element-plus@2.8.0/dist/index.full.min.js"></script>
+  <script>
+    const { createApp, ref } = Vue;
+    createApp({
+      setup() {
+        const single = ref(false);
+        const fruits = ref(['apple']);
+        const checkAll = ref(false);
+        const isIndeterminate = ref(false);
+        const indList = ref(['a']);
+        const btnFruits = ref(['apple']);
+        const gender = ref('male');
+        const size = ref('m');
+        const alone = ref(false);
+
+        const onCheckAll = (val) => {
+          indList.value = val ? ['a', 'b'] : [];
+          isIndeterminate.value = false;
+        };
+        const onIndChange = (val) => {
+          checkAll.value = val.length === 2;
+          isIndeterminate.value = val.length > 0 && val.length < 2;
+        };
+
+        return {
+          single, fruits, checkAll, isIndeterminate, indList, btnFruits, gender, size, alone,
+          onCheckAll, onIndChange,
+        };
+      },
+    }).use(ElementPlus).mount('#app');
+  </script>
+</body>
+</html>
