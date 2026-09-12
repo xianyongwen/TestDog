@@ -71,6 +71,25 @@ function SortablePlanRow({ id, index, children }: { id: string; index: number; c
   );
 }
 
+/** 计划确认倒计时：截止时刻由服务端 gen:plan 下发（超时服务端即结束任务），剩余不足 10 分钟转警示色。 */
+function PlanCountdown({ deadline }: { deadline: number }) {
+  const { t } = useTranslation();
+  const [left, setLeft] = useState(() => Math.max(0, deadline - Date.now()));
+  useEffect(() => {
+    const timer = setInterval(() => setLeft(Math.max(0, deadline - Date.now())), 1000);
+    return () => clearInterval(timer);
+  }, [deadline]);
+  const totalSec = Math.floor(left / 1000);
+  const hh = Math.floor(totalSec / 3600);
+  const mm = String(Math.floor((totalSec % 3600) / 60)).padStart(2, '0');
+  const ss = String(totalSec % 60).padStart(2, '0');
+  return (
+    <div className={`mb-2 text-xs ${left < 10 * 60_000 ? 'text-orange-500' : 'text-ink-3'}`}>
+      {t('generate.planCountdown', { time: hh > 0 ? `${hh}:${mm}:${ss}` : `${mm}:${ss}` })}
+    </div>
+  );
+}
+
 const ASSERT_TYPES = (t: TFunction) => browserAssertionTypes.map(type => ({ value: type, label: t(`generate.assertTypes.${type}`) }));
 
 export default function Generate() {
@@ -97,6 +116,8 @@ export default function Generate() {
   const [intent, setIntent] = useState<TestIntent>();
   const [confirmedIntent, setConfirmedIntent] = useState<TestIntent>();
   const [plan, setPlan] = useState<PlanStep[] | null>(null);
+  /** 计划确认截止时刻（服务端 gen:plan 下发 planDeadline），0 = 无倒计时。 */
+  const [planDeadline, setPlanDeadline] = useState(0);
   /** 计划确认后进入执行的步骤（只读预览用，区别于逐步生成的实际脚本步骤）。 */
   const [confirmedPlan, setConfirmedPlan] = useState<PlanStep[] | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -178,6 +199,7 @@ export default function Generate() {
         if (msg.intent) setIntent(msg.intent as TestIntent);
       } else if (msg.type === 'gen:plan') {
         setIntent(msg.intent as TestIntent | undefined);
+        setPlanDeadline(typeof msg.planDeadline === 'number' ? (msg.planDeadline as number) : 0);
         setPlan(((msg.steps as PlanStep[]) ?? []).map((s, i) => ({ ...s, id: s.id ?? `p${i}` })));
         const u = msg.usage as TokenUsage | undefined;
         accLiveUsage(u);
@@ -247,6 +269,8 @@ export default function Generate() {
         setBusy(false);
         setAssist(null);
         setManualHint(false);
+        setPlan(null); // 超时/失败后任务已结束，计划确认弹窗不能悬空
+        setPlanDeadline(0);
         setDone(false);
         setEndState(String(msg.message ?? '').includes('取消') ? 'cancelled' : 'error');
         setUsage(msg.usage ?? null);
@@ -388,6 +412,7 @@ export default function Generate() {
   const cancelPlan = () => {
     cancel();
     setPlan(null);
+    setPlanDeadline(0);
   };
 
   const confirmRun = async (force = false) => {
@@ -434,6 +459,7 @@ export default function Generate() {
     setConfirmedPlan(valid);
     setConfirmedIntent(intent);
     setPlan(null);
+    setPlanDeadline(0);
     setBusy(true);
   };
 
@@ -838,6 +864,7 @@ export default function Generate() {
       >
         {plan && (
           <div className="max-h-[60vh] overflow-y-auto">
+            {planDeadline > 0 && <PlanCountdown deadline={planDeadline} />}
             {intent && <TestIntentEditor value={intent} onChange={next => {
               setIntent(next);
               setPlan(current => current?.map(step => {

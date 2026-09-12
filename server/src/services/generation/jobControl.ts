@@ -11,8 +11,9 @@ type Wait =
   | { type: 'plan'; intent?: TestIntent; resolve: (v: ConfirmedPlan | null) => void }
   | { type: 'assist'; resolve: (v: AssistDecision | null) => void };
 
-const PLAN_TIMEOUT_MS = 5 * 60_000;
-const ASSIST_TIMEOUT_MS = 5 * 60_000;
+// 挂起等人的时限：计划确认要审阅/修改步骤，协助改述也要打字，太短会「确认时任务已超时结束」（PLAN 超时即任务失败）
+const PLAN_TIMEOUT_MS = 120 * 60_000;
+const ASSIST_TIMEOUT_MS = 120 * 60_000;
 
 /** 挂起的「等待用户」请求：计划确认 / 定位失败三选一。 */
 const waits = new Map<string, Wait>();
@@ -142,11 +143,12 @@ export function askUser(
   return new Promise<AssistDecision | null>((resolve) => setWait(jobId, { type: 'assist', resolve }, ASSIST_TIMEOUT_MS));
 }
 
-/** 广播计划并挂起等待用户确认/修改（超时返回 null）。 */
+/** 广播计划并挂起等待用户确认/修改（超时返回 null）。planDeadline 为确认截止时刻，供前端弹窗渲染倒计时。 */
 export async function awaitPlanConfirm(jobId: string, plan: PlanStep[], usage: TokenUsage, intent?: TestIntent): Promise<ConfirmedPlan | null> {
-  pub({ type: 'gen:plan', jobId, steps: plan, intent, usage });
+  const planDeadline = Date.now() + PLAN_TIMEOUT_MS;
+  pub({ type: 'gen:plan', jobId, steps: plan, intent, usage, planDeadline });
   return new Promise<ConfirmedPlan | null>((resolve) => {
-    setWait(jobId, { type: 'plan', resolve, intent }, PLAN_TIMEOUT_MS);
+    setWait(jobId, { type: 'plan', resolve, intent }, planDeadline - Date.now());
   });
 }
 

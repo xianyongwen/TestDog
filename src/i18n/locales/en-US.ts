@@ -438,6 +438,7 @@ const enUS = {
     key: 'Key: {{value}}',
     tool: 'Tool',
     planDone: 'Pre-split done. Please confirm the step plan',
+    planCountdown: 'Time left to confirm: {{time}} — the task ends on timeout',
     usageDetail: 'This call used {{total}} tokens（{{input}} in / {{output}} out{{cached}}）',
     cachedHint: ', {{cached}} cached',
     revoked: 'Revoked steps {{from}}~{{to}}; will re-split the remaining flow',

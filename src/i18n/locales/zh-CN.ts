@@ -433,6 +433,7 @@ const zhCN = {
     key: '按键：{{value}}',
     tool: '工具',
     planDone: '预拆分完成，请确认步骤计划',
+    planCountdown: '确认剩余时间 {{time}}，超时任务将自动结束',
     usageDetail:
       '本次调用消耗 {{total}} token（输入 {{input}} / 输出 {{output}}{{cached}}）',
     cachedHint: '，缓存命中 {{cached}}',
