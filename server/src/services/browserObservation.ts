@@ -16,6 +16,9 @@ export interface BrowserObservation {
   pageText: string;
   alerts: string[];
   context: string;
+  /** 带 query 且交互元素 0 命中时的文本兜底：关键词是否存在于 body.innerText 及其上下文片段 */
+  queryTextHit?: boolean | null;
+  queryTextSnippet?: string;
 }
 
 export async function captureObservation(page: any, options: Record<string, unknown> = {}): Promise<BrowserObservation> {
@@ -31,6 +34,12 @@ export function observationText(s: BrowserObservation): string {
     (s.alerts.length ? `\n校验提示：${s.alerts.join('；')}` : '') +
     `\n显示 ${s.offset + 1}~${s.offset + s.lines.length} / ${s.total} 项（全页 ${s.allCount} 项）` +
     (s.nextOffset != null ? `；继续 snapshot(offset=${s.nextOffset}, scope=${s.scope === 'active-overlay' ? 'auto' : s.scope})` : '') +
+    (s.total === 0 && s.queryTextHit === true
+      ? `\n文本兜底：交互元素未命中查询关键词，但页面文本中存在：「${s.queryTextSnippet}」。内容已渲染但不在可交互元素内，可用文本/容器定位断言，不要判定记录缺失。`
+      : '') +
+    (s.total === 0 && s.queryTextHit === false
+      ? '\n页面文本中也未找到查询关键词，目标内容当前确实不存在于页面上。'
+      : '') +
     '\n编号用于 selector；未找到目标可用 snapshot(scope="page",query="关键词") 扩大范围。';
 }
 

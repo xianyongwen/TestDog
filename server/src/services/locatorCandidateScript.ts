@@ -540,6 +540,11 @@ export const CANDIDATE_SCRIPT = PLUGIN_RUNTIME_SCRIPT + String.raw`(() => {
   // 组件库自定义复选框/单选（.el-checkbox 等）：真实 input 隐藏会被下方可见性过滤，不加则该控件永远没有编号，
   // 模型只能按相邻元素编号瞎猜（实测把编号 124 的所属部门下拉当成用户类型复选框点击）→ 编号落在可点击的包裹层上
   var INTERACTIVE_SEL = 'a[href],button,input,select,textarea,[role="button"],[role="combobox"],[role="checkbox"],[role="radio"],[role="tab"],[role="link"],[role="textbox"],[role="option"],[role="menuitem"],[role="switch"],[contenteditable="true"],[tabindex]:not([tabindex="-1"]),.ant-select,.ant-select-item-option,.el-select-dropdown__item,.ant-picker,.el-select,.el-date-editor,.el-checkbox,.el-radio,.el-checkbox-button,.el-radio-button,.ant-checkbox-wrapper,.ant-radio-wrapper';
+  // 自定义点击卡片扫描（仅扫描不直接采集）：列表记录卡片普遍是 div/span onClick（React 合成事件无
+  // onclick 属性，按 cursor:pointer 判定），无 ARIA 语义不在 INTERACTIVE_SEL 内。不采集则整块内容对
+  // 模型不可见——记录已渲染但快照/断言全盲，验收必假阴性（案例 cmtxyqp86 C9：CRM 事件时间轴卡片）。
+  // 只扫文本型标签（input 等原生交互已在上面的选择器内），开销是每元素一次 getComputedStyle（缓存）。
+  var CLICKABLE_SCAN_SEL = 'div,span,li,tr,td,th,section,article,header,footer,label,dd,dt,p,h1,h2,h3,h4,h5,h6';
   window.__ttIndexedEls__ = { byIndex: {}, ids: new WeakMap(), next: 0, documentId: Math.random().toString(36).slice(2), version: 0, signature: '', rows: [] };
 
   /** 元素 → 页内唯一 css 路径（id 优先，其余 nth-of-type 链）。 */
@@ -603,8 +608,24 @@ export const CANDIDATE_SCRIPT = PLUGIN_RUNTIME_SCRIPT + String.raw`(() => {
     const current = {};
     const rows = [];
     const styleCache = new WeakMap();
-    const els = document.body ? document.body.querySelectorAll(INTERACTIVE_SEL) : [];
+    let clickableAncestor = null; // 已采集的指针卡片；cursor 会被子元素继承，后代全部跳过，避免一张卡炸出几十行
+    const els = document.body ? document.body.querySelectorAll(INTERACTIVE_SEL + ',' + CLICKABLE_SCAN_SEL) : [];
     for (const el of els) {
+      const isNative = el.matches(INTERACTIVE_SEL);
+      if (!isNative) {
+        // 便宜的判定放前面，避免对海量非候选节点跑 isShown 的逐级祖先 getComputedStyle。
+        let clickable = el.hasAttribute('onclick');
+        if (!clickable) {
+          let st = styleCache.get(el);
+          if (!st) { st = getComputedStyle(el); styleCache.set(el, st); }
+          clickable = st.cursor === 'pointer';
+        }
+        if (!clickable) continue;
+        if (clickableAncestor && clickableAncestor.contains(el)) continue;
+        if (el.closest(INTERACTIVE_SEL)) continue;    // 原生交互元素内部的指针 span（按钮文字层等）不重复占号
+        if (!visibleTextOf(el, styleCache)) continue; // 无可见文本的指针容器不占号（纯图标点击区采不到，维持现状）
+        clickableAncestor = el;
+      }
       if (!isShown(el)) continue;
       let idx = state.ids.get(el);
       const isNew = !idx || !previous[idx];
@@ -613,7 +634,8 @@ export const CANDIDATE_SCRIPT = PLUGIN_RUNTIME_SCRIPT + String.raw`(() => {
       current[idx] = el;
       const labels = el.labels ? Array.from(el.labels).map(l => visibleTextOf(l, styleCache)).join(' ') : '';
       const labelled = (el.getAttribute('aria-labelledby') || '').split(/\s+/).map(id => document.getElementById(id)).filter(Boolean).map(l => visibleTextOf(l, styleCache)).join(' ');
-      const label = shortStateText(el.getAttribute('aria-label') || labelled || labels || el.getAttribute('placeholder') || el.getAttribute('title') || visibleTextOf(el, styleCache), 64);
+      const labelMax = isNative ? 64 : 120; // 点击卡片靠 label 承载记录文本（标题/摘要），放宽到 120 便于关键词命中
+      const label = shortStateText(el.getAttribute('aria-label') || labelled || labels || el.getAttribute('placeholder') || el.getAttribute('title') || visibleTextOf(el, styleCache), labelMax);
       const role = computeRole(el) || el.tagName.toLowerCase();
       const value = controlState(el);
       const disabled = el.disabled || el.getAttribute('aria-disabled') === 'true' || el.matches('.ant-select-item-option-disabled,.el-select-dropdown__item.is-disabled');
@@ -669,11 +691,19 @@ export const CANDIDATE_SCRIPT = PLUGIN_RUNTIME_SCRIPT + String.raw`(() => {
     const textRoot = root || (activeRoots.length ? activeRoots[activeRoots.length - 1] : document.body);
     const alerts = Array.from(document.querySelectorAll('[role="alert"],.el-form-item__error,.ant-form-item-explain-error')).filter(isShown).map(el => shortStateText(el.innerText, 180)).slice(0, 8);
     const pageText = shortStateText(document.body?.innerText, 12000);
+    // query 文本兜底：快照只含交互元素，内容渲染在非交互容器（列表卡片/纯文本区）时交互元素 0 命中。
+    // 用 body.innerText 二次判定，给模型「内容其实在页面上」的信号与上下文片段，避免把假阴性当记录缺失。
+    let queryTextHit = null; let queryTextSnippet = '';
+    if (query) {
+      const at = pageText.toLowerCase().indexOf(query);
+      queryTextHit = at >= 0;
+      if (at >= 0) queryTextSnippet = shortStateText(pageText.slice(Math.max(0, at - 60), at + query.length + 80), 200);
+    }
     return { version: state.documentId + ':' + state.version, documentId: state.documentId, url: location.href,
       lines: output, total: selected.length, allCount: state.rows.length, offset,
       nextOffset: offset + output.length < selected.length ? offset + output.length : null,
       scope: root ? options.scope : scope === 'auto' && activeRoots.length ? 'active-overlay' : scope,
-      values, structure, pageText, alerts,
+      values, structure, pageText, alerts, queryTextHit, queryTextSnippet,
       context: shortStateText(textRoot?.getAttribute('aria-label') || textRoot?.getAttribute('role') || '', 80) };
   };
 

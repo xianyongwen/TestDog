@@ -3,6 +3,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { chromium, type Browser, type Page } from 'playwright';
 import { browserLaunchOptions } from '../src/browser';
 import { CANDIDATE_SCRIPT, analyzeElement, type AnalyzeResult } from '../src/services/locatorCandidateScript';
+import { observationText } from '../src/services/browserObservation';
 import {
   buildLocatorFromCandidate,
   resolveQuery,
@@ -238,6 +239,69 @@ describe('CANDIDATE_SCRIPT 候选生成与页内计数', () => {
     }
     await target.dispose().catch(() => {});
     await page.close();
+  });
+});
+
+describe('快照采集：自定义点击卡片与 query 文本兜底', () => {
+  it('div onClick 卡片纳入交互元素，query 快照可命中记录标题（cmtxyqp86 C9 回归）', async () => {
+    const page = await newPage(`
+      <button>新建互动事件</button>
+      <div class="card" data-testid="event-card" onclick="void 0" style="cursor:pointer;padding:8px">
+        <span>电话</span> 自动化测试互动事件1789192034362
+      </div>
+    `);
+    const lines = (await page.evaluate(() => (window as any).__ttCollectInteractive())) as string[];
+    const cardLine = lines.find((l) => l.includes('1789192034362'));
+    expect(cardLine).toBeTruthy();
+    const snap = (await page.evaluate(() => (window as any).__ttSnapshot({ scope: 'page', query: '1789192034362' }))) as any;
+    expect(snap.total).toBeGreaterThan(0);
+    await page.close();
+  });
+
+  it('cursor:pointer 的 div 采集；普通 div 与按钮内指针 span 不采集', async () => {
+    const page = await newPage(`
+      <div style="cursor:pointer">记录甲</div>
+      <div>纯文本容器</div>
+      <button style="cursor:pointer">按钮 <span style="cursor:pointer">内层文字</span></button>
+    `);
+    const lines = (await page.evaluate(() => (window as any).__ttCollectInteractive())) as string[];
+    expect(lines.find((l) => l.includes('记录甲'))).toBeTruthy();
+    expect(lines.find((l) => l.includes('纯文本容器'))).toBeFalsy();
+    // 内层 span 落在原生交互元素内部，不重复占号；文本由 button 行承载
+    expect(lines.filter((l) => l.includes('内层文字')).length).toBe(1);
+    await page.close();
+  });
+
+  it('无可见文本的指针容器不占号', async () => {
+    const page = await newPage('<div style="cursor:pointer;width:40px;height:40px;background:#eee"></div><button>保存</button>');
+    const lines = (await page.evaluate(() => (window as any).__ttCollectInteractive())) as string[];
+    expect(lines.length).toBe(1);
+    expect(lines[0]).toContain('保存');
+    await page.close();
+  });
+
+  it('query 快照：内容渲染在非交互容器时给文本兜底信号（queryTextHit/queryTextSnippet）', async () => {
+    const page = await newPage('<div>列表内容：自动化测试互动事件999 摘要文本</div>');
+    const hit = (await page.evaluate(() => (window as any).__ttSnapshot({ scope: 'page', query: '自动化测试互动事件999' }))) as any;
+    expect(hit.total).toBe(0);
+    expect(hit.queryTextHit).toBe(true);
+    expect(hit.queryTextSnippet).toContain('自动化测试互动事件999');
+    const miss = (await page.evaluate(() => (window as any).__ttSnapshot({ scope: 'page', query: '不存在关键词xyz' }))) as any;
+    expect(miss.total).toBe(0);
+    expect(miss.queryTextHit).toBe(false);
+    await page.close();
+  });
+
+  it('observationText：0 命中时按文本兜底结果输出两种提示', async () => {
+    const base = { version: 'd:1', documentId: 'd', url: 'u', lines: [], total: 0, allCount: 0, offset: 0, nextOffset: null, scope: 'page', values: {}, structure: '', pageText: '', alerts: [], context: '' };
+    const hit = observationText({ ...base, queryTextHit: true, queryTextSnippet: '……自动化测试互动事件1789192034362……' } as any);
+    expect(hit).toContain('文本兜底');
+    expect(hit).toContain('1789192034362');
+    const miss = observationText({ ...base, queryTextHit: false } as any);
+    expect(miss).toContain('页面文本中也未找到');
+    const normal = observationText({ ...base } as any);
+    expect(normal).not.toContain('文本兜底');
+    expect(normal).not.toContain('页面文本中也未找到');
   });
 });
 
