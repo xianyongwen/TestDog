@@ -6,6 +6,9 @@
  * 红线：所有落库步骤经 semanticizeLocator（count===1+同节点）；失败尝试天然不入库。
  * 候选采集在动作前（capture-before-mutation）：动作态类（checked/selected…）与可访问名漂移不编入定位器。
  */
+import { executeUpload } from './uploadExecution';
+import { listTestFiles } from './testFileService';
+import { z } from 'zod';
 import type OpenAI from 'openai';
 import type { AgentTool, AgentToolResult } from './toolLoop';
 import type { TestStep, ReviseOp, EmitOutcome } from '../shared/testScript';
@@ -28,6 +31,7 @@ import type { ValueBindingFacade } from './generation/valueBinding';
 
 export interface GenToolContext {
   jobId: string;
+  projectId?: string | null;
   intent?: TestIntent;
   onAssertionPassed?: (step: TestStep) => void;
   signal?: AbortSignal;
@@ -257,6 +261,32 @@ export function buildGenTools(
   askHuman?: (question: string) => Promise<string>,
 ): AgentTool[] {
   const tools: AgentTool[] = [
+    {
+      name: 'list_files', stateful: 'files',
+      description: '分页查询当前项目可上传的测试文件，只返回 ID/名称/类型/大小。upload 的 fileIds 必须来自此列表；没有所需文件时 ask_human，请用户添加测试文件。',
+      parameters: { type: 'object', properties: { offset: { type: 'integer', minimum: 0 }, query: { type: 'string' } } },
+      execute: async a => {
+        const files = (await listTestFiles(ctx.projectId ?? '')).filter(f => !a.query || f.name.includes(String(a.query)));
+        const offset = Math.max(0, Math.floor(Number(a.offset) || 0));
+        return JSON.stringify({ files: files.slice(offset, offset + 30).map(({id,name,mime,size}) => ({id,name,mime,size})), total: files.length, nextOffset: offset + 30 < files.length ? offset + 30 : null });
+      },
+    },
+    {
+      name: 'upload',
+      description: '选择测试文件并记录上传步骤。先 list_files 获取 fileIds。input 模式定位 input[type=file]（允许隐藏）；chooser 模式定位上传按钮，本工具包含点击，不要先 click。完成仅表示已选择文件，随后必须 assert 验证业务结果；结果不确定时不要直接重复上传。',
+      parameters: { type: 'object', properties: { selector: { type: 'string' }, fileIds: { type: 'array', items: { type: 'string' }, minItems: 1, maxItems: 5 }, mode: { type: 'string', enum: ['input', 'chooser'] }, instruction: { type: 'string' } }, required: ['selector', 'fileIds', 'mode', 'instruction'] },
+      execute: async a => {
+        const args = z.object({ selector: z.string().min(1), fileIds: z.array(z.string()).min(1).max(5), mode: z.enum(['input', 'chooser']), instruction: z.string().min(1) }).parse(a);
+        const loc = await resolveLocator(ctx, args.selector, a.snapshotVersion);
+        if (args.mode === 'chooser') { const blocked = await checkOcclusion(ctx, loc); if (blocked) throw new Error(blocked); }
+        const locator = await semanticizeLocator(ctx.pwPage, semanticSource(args.selector), { mode: 'playwright', noRawFallback: true });
+        if (!locator) throw new Error('无法生成可靠的上传定位器，本步未执行');
+        const upload = { fileIds: args.fileIds, mode: args.mode };
+        const names = await executeUpload(ctx.pwPage, loc, upload, ctx.projectId, ctx.signal);
+        const outcome = await ctx.emit({ kind: 'action', action: 'upload', locator, upload, instruction: args.instruction, description: args.instruction });
+        return { status: 'success', recordedStep: outcome.index, text: `已选择文件：${names.join('、')}。${落库提示(ctx, outcome)} 请断言业务上传结果。` };
+      },
+    },
     {
       name: 'snapshot',
       description: '获取带字段值和校验状态的编号快照，默认聚焦活动浮层/视口。可用 scope/query 扩大或缩小范围，offset 翻页。动作已附快照时直接使用，无需重复调用。',
@@ -638,7 +668,7 @@ export function buildGenTools(
     },
   });
 
-  const mutations = new Set(['goto', 'click', 'fill', 'press', 'check', 'select', 'act', 'component_action', 'batch_actions']);
+  const mutations = new Set(['upload', 'goto', 'click', 'fill', 'press', 'check', 'select', 'act', 'component_action', 'batch_actions']);
   const batchTools = new Set(['fill', 'check', 'select']);
   tools.push({
     name: 'batch_actions',

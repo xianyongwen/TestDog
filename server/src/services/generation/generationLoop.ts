@@ -26,10 +26,12 @@ const ASSERT_FAIL_ASSIST_AT = 2;
 /** 观察类工具（与 toolLoop STUCK_MUTATING 互补，新增动作工具默认可重置）：
  *  成功不代表流程推进（页面状态未变），不重置变更类连续失败计数——
  *  否则「断言失败 → snapshot/readText 观察 → 再断言」会不断清零，阈值永远达不到。 */
-const GEN_OBSERVATION_TOOLS = new Set(['snapshot', 'page_tree', 'wait', 'readText', 'see', 'api']);
+const GEN_OBSERVATION_TOOLS = new Set(['snapshot', 'page_tree', 'wait', 'readText', 'see', 'api', 'list_files']);
 
 /** 生成循环的 system prompt：工具使用规范 + 大纲软约束 + 占位符规则（大纲在 user 侧注入）。 */
 const GEN_LOOP_SYSTEM_PROMPT = `你是 Web 测试脚本生成 Agent：通过调用工具在真实浏览器里完成测试目标，每一步成功操作都会自动记录为脚本步骤。
+
+上传文件使用 upload：先 list_files 按用户指定名称取得项目测试文件 ID，禁止编造文件 ID 或把参考附件当作测试文件。chooser 模式包含点击上传按钮，不先 click；input 模式可操作隐藏文件 input，可用 snapshot(scope="page",query="type=file") 查找。文件同名时按大小/ID区分，无法确定则 ask_human。选择完成后用 assert 验证业务结果，不能以选中文件代替上传成功。
 
 操作规范：
 1. 首次动手前获取 snapshot。动作结果若已附最新快照，直接据此继续，不要重复观察。快照默认聚焦浮层/视口，找不到目标用 scope=page + query。文本快照与 see 截图是并列的观测手段：选项列表被虚拟滚动截断、元素文本与预期对不上、编号表里找不到目标、需要确认视觉状态时，直接 see（带 question 聚焦关注点），不要靠反复填写/点击试错；字段值和校验文字仍以文本快照为准。
@@ -100,6 +102,7 @@ async function runScriptReview(o: {
       const label = s.kind === 'assert' ? '断言' : (s.action ?? s.kind);
       const loc = s.locator ? ` locator=${s.locator.strategy}:${s.locator.value}${s.locator.name ? `[${s.locator.name}]` : ''}` : '';
       const param =
+        s.upload ? ` upload=${JSON.stringify(s.upload)}` :
         s.kind === 'navigate'
           ? ` url=${s.url}`
           : s.value != null
@@ -122,7 +125,7 @@ async function runScriptReview(o: {
         {
           role: 'system',
           content:
-            '你是回放测试脚本的审查员。已落步骤与浏览器实际执行一一对应。请找出「失败重试/被后续操作替代」的冗余步骤并清理，保持已验证流程的行为等价，仅清理有明确证据的失败重试冗余，不以步骤最少为目标：\n' +
+            '你是回放测试脚本的审查员。已落步骤与浏览器实际执行一一对应。请找出「失败重试/被后续操作替代」的冗余步骤并清理，保持已验证流程的行为等价，仅清理有明确证据的失败重试冗余，不以步骤最少为目标。upload 文件 ID 或模式不同表示不同操作，不得仅因上传定位器相同而删除：\n' +
             '- 保留：负向测试中的非法/重复输入、失败提交和错误提示断言，它们是测试目标，不是重试冗余；\n' +
             '- 删除：已确认未生效且已被成功重试替代的操作链；不得仅因 URL、元素或值相同就删除重复操作，重复导航可能承担刷新作用；\n' +
             '- 保留：有意的重复操作（循环造数、逐行填写、反复切换等，即使元素与值完全相同）；\n' +
@@ -295,6 +298,7 @@ export async function runGenerationLoop(o: {
   };
 
   const ctx: GenToolContext = {
+    projectId: o.projectId,
     jobId,
     intent: o.intent,
     onAssertionPassed: (step) => {
@@ -563,7 +567,7 @@ export async function runGenerationLoop(o: {
     workingMemory: () => buildWorkingMemory(o.steps, o.goalText) + '\n【验收覆盖】' + JSON.stringify(compactCoverage()) + '\n用 read_coverage 读取完整验收预期；不允许弱化断言。',
     seeAssistAt: cfg.seeAssistAt,
     onStep: ({ index, name, args, result, usageDelta: ud }) => {
-      const label = ({ snapshot: '快照', page_tree: '结构树', goto: '导航', click: '点击', fill: '填写', press: '按键', check: '勾选', select: '选择', wait: '等待', readText: '读取文本', assert: '断言', act: 'AI 兜底', see: '视觉观察', api: '网络请求', component_action: '组件动作', batch_actions: '批量填写', read_goal: '读取目标', read_script: '读取脚本', read_coverage: '验收覆盖', ask_human: '人工求助', finish: '完成' } as any)[name] ?? name;
+      const label = ({ upload: '上传文件', list_files: '测试文件', snapshot: '快照', page_tree: '结构树', goto: '导航', click: '点击', fill: '填写', press: '按键', check: '勾选', select: '选择', wait: '等待', readText: '读取文本', assert: '断言', act: 'AI 兜底', see: '视觉观察', api: '网络请求', component_action: '组件动作', batch_actions: '批量填写', read_goal: '读取目标', read_script: '读取脚本', read_coverage: '验收覆盖', ask_human: '人工求助', finish: '完成' } as any)[name] ?? name;
       let detail = '';
       try {
         detail = JSON.stringify(args ?? {}).slice(0, 160);

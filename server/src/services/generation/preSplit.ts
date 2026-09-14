@@ -13,6 +13,7 @@ import type { PlanStep, SplitImage } from './types';
 export const INTENT_OUTPUT_PROMPT = `
 【测试意图与输出协议（覆盖旧版 steps-only 示例）】
 输出 JSON：{"intent":{"version":1,"scenario":"positive|negative|mixed","objective":"测试目标","preconditions":["必要前置条件"],"data":[{"name":"字段名","value":"测试值或 {{变量}}","policy":"fixed|generated"}],"criteria":[{"id":"C1","description":"验收结果","target":"具体元素/记录/字段范围；使用本次唯一值锚定","source":"用户需求原文或验收依据；推断项明确写待确认","required":true,"assertion":{"type":"text_exact","expected":"完整期望值"}}],"cleanup":[]},"steps":[...]}。
+- 文件上传计划用 action=upload，instruction 明确文件名称和上传目标，不拆成打开系统文件窗口/输入文件路径；执行阶段由 list_files 解析项目测试文件，随后通过业务结果断言验证上传。
 - intent 是待用户确认的验收约定。只覆盖用户要求，不擅自扩大测试范围；未知业务规则写待确认，不从页面当前表现推定正确结果。
 - criteria 至少一个 required=true；每个必验目标都对应一个计划断言，断言步骤携带 criterionId，类型和 expected 与目标完全一致。
 - 支持的浏览器断言：visible/hidden/text(包含)/text_exact(规范化空白后全文相等)/value(输入值精确相等)/checked/unchecked/enabled/disabled/count(匹配节点数，expected 为非负整数字符串)/url(包含)/url_exact(相等)。value/text_exact 可期望空字符串。不要计划生成器不能执行的接口或 WS 断言。

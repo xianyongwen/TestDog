@@ -1,3 +1,5 @@
+import { executeUpload } from './uploadExecution';
+import { withTestFileActivity } from './testFileActivity';
 import { executeLocatorAction, waitForBrowserAssertion } from './browserExecution';
 import { chromium, type Page, type ConsoleMessage, type Response, type WebSocket } from 'playwright';
 import path from 'node:path';
@@ -150,6 +152,10 @@ function substituteStep(
 /** 模块①② 统一回放引擎：playwright-core 确定性执行，失败可自愈降级；启动前先对首个 goto 的 URL 做连通性探测（快速失败）。
  *  返回最终状态；探测失败返回 PROBE_FAILED 哨兵（不 reject），供批量运行终止整批。 */
 export async function runScript(jobId: string, params: RunParams): Promise<string> {
+  return withTestFileActivity(() => runScriptWithFiles(jobId, params));
+}
+
+async function runScriptWithFiles(jobId: string, params: RunParams): Promise<string> {
   const selfHeal = params.selfHeal !== false;
   const headless = params.headless === true;
   const run = await prisma.testRun.create({
@@ -178,6 +184,7 @@ export async function runScript(jobId: string, params: RunParams): Promise<strin
     // 执行与自愈用替换后的值；断言失败信息用原始指令（占位符），避免把真实值写进运行记录。
     // 旧写法 ${systemTime} 作为历史脚本兼容同样被替换（见 substituteAll）。
     // （此块自回放准备之后前移到浏览器启动之前：连通性探测需要替换后的首个 goto URL）
+    const uploadProjectId = await projectOfTestCase(params.testCaseId);
     const envMap = await loadEnvMap(params.testCaseId);
     const sysVars = resolveSystemVars(
       params.steps.flatMap((s) => [s.instruction, s.url, s.value, s.locator?.value, s.locator?.name, s.locator?.scope?.value, s.locator?.scope?.name, s.assertion?.expected, s.assertion?.jsonPath]),
@@ -314,7 +321,7 @@ export async function runScript(jobId: string, params: RunParams): Promise<strin
       let healedLocator: Locator | undefined;
 
       try {
-        await executeStep(page, step, networkEntries, wsEntries);
+        await executeStep(page, step, networkEntries, wsEntries, uploadProjectId);
       } catch (e) {
         // 录制脚本没有 instruction（parseCodegen 只落 description），自愈指令回退到 description，
         // 否则手动录制的脚本永远不触发自愈（文档承诺：选择器失效自动 AI 自愈）。
@@ -418,6 +425,10 @@ export async function runBatch(
   testCaseIds: string[],
   opts: { selfHeal?: boolean; loginConfigId?: string; scriptIds?: Record<string, string> } = {},
 ): Promise<void> {
+  return withTestFileActivity(() => runBatchWithFiles(jobId, testCaseIds, opts));
+}
+
+async function runBatchWithFiles(jobId: string, testCaseIds: string[], opts: { selfHeal?: boolean; loginConfigId?: string; scriptIds?: Record<string, string> }): Promise<void> {
   const total = testCaseIds.length;
   const summary: { testCaseId: string; title: string; status: string }[] = [];
 
@@ -513,8 +524,12 @@ async function resolveStepLocator(page: Page, step: TestStep) {
   }
 }
 
-async function executeStep(page: Page, step: TestStep, networkEntries: NetworkEntry[], wsEntries: WsEntry[]): Promise<void> {
+async function executeStep(page: Page, step: TestStep, networkEntries: NetworkEntry[], wsEntries: WsEntry[], projectId?: string | null): Promise<void> {
   switch (step.action) {
+    case 'upload':
+      if (!step.upload || !step.locator) throw new Error('upload 缺少文件或定位器');
+      await executeUpload(page, await resolveStepLocator(page, step), step.upload, projectId);
+      break;
     case 'goto':
       if (!step.url) throw new Error('goto 缺少 url');
       await page.goto(step.url);
@@ -763,7 +778,7 @@ async function selfHealStep(stagehand: any, shPage: any, page: Page, step: TestS
     sel ? semanticizeLocator(page, sel, { mode: 'playwright' }) : undefined;
   try {
     // 断言失败可能是产品缺陷，自动换目标会改变测试含义；动作仍保留原有自愈。
-    if (step.action === 'assert') return { healed: false }; // 断言失败保留证据，不通过 AI 换目标将真实缺陷变成通过。
+    if (step.action === 'upload' || step.action === 'assert') return { healed: false }; // 断言失败保留证据，不通过 AI 换目标将真实缺陷变成通过。
 
     // act 找不到定位器时不抛异常，而是返回 data.success:false 且 actions 为空，
     // 必须据此判失败，否则会误报"已自愈"而步骤其实未执行。

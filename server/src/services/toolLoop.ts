@@ -56,7 +56,7 @@ const STUCK_ASSIST_AT = 6;
 /** 同签名累计达到该次数 → 终止循环（按累计而非窗口计，防止 assist 重置窗口后无限续空转）。 */
 const STUCK_ABORT_AT = 9;
 /** 参与空转检测的变更类工具；观察类（snapshot/wait/see/readText/assert）重复属正常行为。 */
-const STUCK_MUTATING = new Set(['goto', 'click', 'fill', 'press', 'check', 'select', 'component_action', 'act', 'batch_actions']);
+const STUCK_MUTATING = new Set(['upload', 'goto', 'click', 'fill', 'press', 'check', 'select', 'component_action', 'act', 'batch_actions']);
 /** see（视觉观察）自上次进展（goto/落库新步骤）以来连续达到该次数 → 挂起 gen:assist 人工决策。 */
 const SEE_ASSIST_AT = 4;
 /** 联动死锁检测：select 类成功调用近窗内同对元素的相邻转移达该次数 → 挂起人工决策。 */
@@ -68,6 +68,7 @@ const LINK_WINDOW = 12;
 export function stuckSig(name: string, args: Record<string, unknown>): string | null {
   if (!STUCK_MUTATING.has(name)) return null;
   const sel = String(args.selector ?? '').trim();
+  if (name === 'upload') return `upload ${sel} ${String(args.mode)} ${JSON.stringify(args.fileIds ?? [])}`;
   if (name === 'goto') return `goto ${String(args.url ?? '')}`;
   if (name === 'batch_actions') return `batch ${JSON.stringify(args.actions ?? [])}`;
   if (name === 'check') return `check ${sel} ${args.checked ?? true}`;

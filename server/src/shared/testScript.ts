@@ -33,7 +33,7 @@ export const testStepSchema = z.object({
   criterionId: z.string().optional(), // 对应已确认的验收目标
   instruction: z.string().optional(), // 模块①：LLM 拆出的自然语言子指令；模块②：人类可读描述
   kind: z.enum(['navigate', 'action', 'assert', 'wait']).default('action'),
-  action: z.enum(['goto', 'click', 'fill', 'press', 'check', 'select', 'assert', 'wait', 'raw', 'plugin']),
+  action: z.enum(['goto', 'click', 'fill', 'press', 'check', 'select', 'assert', 'wait', 'raw', 'plugin', 'upload']),
   /// 语义动作步骤（action='plugin' 时必填）：action 为语义动作名；pluginId 为生成期命中的插件提示
   /// （可选，回放按语义动作链重匹配时仅作优先尝试）；args 为动作参数。
   pluginAction: z
@@ -50,6 +50,7 @@ export const testStepSchema = z.object({
   url: z.string().optional(),
   value: z.string().optional(),
   key: z.string().optional(),
+  upload: z.object({ fileIds: z.array(z.string()).min(1).max(5), mode: z.enum(['input', 'chooser']) }).optional(),
   checked: z.boolean().optional(), // 旧脚本缺省 true；false 明确取消勾选
   assertion: z
     .object({
@@ -60,6 +61,8 @@ export const testStepSchema = z.object({
     .optional(),
   code: z.string().optional(), // action='raw' 时保留的原始代码行
   description: z.string().optional(),
+}).superRefine((step, ctx) => {
+  if (step.action === 'upload' && (!step.upload || !step.locator)) ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'upload 必须提供文件、模式及定位器' });
 });
 export type TestStep = z.infer<typeof testStepSchema>;
 

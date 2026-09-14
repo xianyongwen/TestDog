@@ -33,6 +33,7 @@ export const STEP_ACTION_LABEL: Record<string, string> = {
   goto: '打开页面',
   click: '点击',
   fill: '填写',
+  upload: '上传文件',
   press: '按键',
   check: '勾选',
   select: '选择',
