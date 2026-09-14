@@ -12,7 +12,7 @@ export interface AssertionEvidence {
 export function evidenceSignature(steps: TestStep[], index: number, criterion: AcceptanceCriterion): string {
   // 忽略说明文字和之前的断言；前序动作、定位、数据、顺序以及当前断言任一变化都会使证据失效。
   const executable = (s: TestStep) => ({ kind: s.kind, action: s.action, locator: s.locator, url: s.url,
-    value: s.value, key: s.key, checked: s.checked, upload: s.upload, pluginAction: s.pluginAction, code: s.code,
+    value: s.value, key: s.key, checked: s.checked, upload: s.upload, scroll: s.scroll, pluginAction: s.pluginAction, code: s.code,
     assertion: s.assertion, criterionId: s.criterionId });
   const prefix = steps.slice(0, index).filter(s => s.kind !== 'assert').map(executable);
   return createHash('sha256').update(JSON.stringify({ criterion, prefix, step: executable(steps[index]) })).digest('hex');

@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { injectCandidates } from './locatorCandidateScript';
 
 export interface BrowserObservation {
+  scrollPosition?: { left: number; top: number; maxX: number; maxY: number };
   version: string;
   documentId: string;
   url: string;
@@ -30,6 +31,7 @@ export async function captureObservation(page: any, options: Record<string, unkn
 
 export function observationText(s: BrowserObservation): string {
   return `【当前快照 snapshotVersion=${s.version} scope=${s.scope} URL=${s.url}】\n` +
+    (s.scrollPosition ? `页面滚动：${JSON.stringify(s.scrollPosition)}\n` : '') +
     (s.context ? `区域：${s.context}\n` : '') + s.lines.join('\n') +
     (s.alerts.length ? `\n校验提示：${s.alerts.join('；')}` : '') +
     `\n显示 ${s.offset + 1}~${s.offset + s.lines.length} / ${s.total} 项（全页 ${s.allCount} 项）` +
@@ -44,7 +46,7 @@ export function observationText(s: BrowserObservation): string {
 }
 
 export function stateFingerprint(s: BrowserObservation): string {
-  return createHash('sha256').update(JSON.stringify([s.documentId, s.url, s.structure, s.values, s.pageText, s.alerts])).digest('hex');
+  return createHash('sha256').update(JSON.stringify([s.documentId, s.url, s.structure, s.values, s.pageText, s.alerts, s.scrollPosition])).digest('hex');
 }
 
 /** 批处理只容忍当前目标值变化，结构、其他字段或校验变化都需要重新规划。 */

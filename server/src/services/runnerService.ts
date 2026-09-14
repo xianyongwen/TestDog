@@ -1,3 +1,4 @@
+import { executeScroll } from './scrollExecution';
 import { executeUpload } from './uploadExecution';
 import { withTestFileActivity } from './testFileActivity';
 import { executeLocatorAction, waitForBrowserAssertion } from './browserExecution';
@@ -526,6 +527,10 @@ async function resolveStepLocator(page: Page, step: TestStep) {
 
 async function executeStep(page: Page, step: TestStep, networkEntries: NetworkEntry[], wsEntries: WsEntry[], projectId?: string | null): Promise<void> {
   switch (step.action) {
+    case 'scroll':
+      if (!step.scroll) throw new Error('scroll 缺少滚动参数');
+      await executeScroll(page, step.scroll.target === 'page' ? undefined : await resolveStepLocator(page, step), step.scroll);
+      break;
     case 'upload':
       if (!step.upload || !step.locator) throw new Error('upload 缺少文件或定位器');
       await executeUpload(page, await resolveStepLocator(page, step), step.upload, projectId);
@@ -778,7 +783,7 @@ async function selfHealStep(stagehand: any, shPage: any, page: Page, step: TestS
     sel ? semanticizeLocator(page, sel, { mode: 'playwright' }) : undefined;
   try {
     // 断言失败可能是产品缺陷，自动换目标会改变测试含义；动作仍保留原有自愈。
-    if (step.action === 'upload' || step.action === 'assert') return { healed: false }; // 断言失败保留证据，不通过 AI 换目标将真实缺陷变成通过。
+    if (step.action === 'scroll' || step.action === 'upload' || step.action === 'assert') return { healed: false }; // 断言失败保留证据，不通过 AI 换目标将真实缺陷变成通过。
 
     // act 找不到定位器时不抛异常，而是返回 data.success:false 且 actions 为空，
     // 必须据此判失败，否则会误报"已自愈"而步骤其实未执行。

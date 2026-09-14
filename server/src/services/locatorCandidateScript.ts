@@ -544,7 +544,7 @@ export const CANDIDATE_SCRIPT = PLUGIN_RUNTIME_SCRIPT + String.raw`(() => {
   // onclick 属性，按 cursor:pointer 判定），无 ARIA 语义不在 INTERACTIVE_SEL 内。不采集则整块内容对
   // 模型不可见——记录已渲染但快照/断言全盲，验收必假阴性（案例 cmtxyqp86 C9：CRM 事件时间轴卡片）。
   // 只扫文本型标签（input 等原生交互已在上面的选择器内），开销是每元素一次 getComputedStyle（缓存）。
-  var CLICKABLE_SCAN_SEL = 'div,span,li,tr,td,th,section,article,header,footer,label,dd,dt,p,h1,h2,h3,h4,h5,h6';
+  var CLICKABLE_SCAN_SEL = 'main,nav,aside,ul,ol,form,fieldset,div,span,li,tr,td,th,section,article,header,footer,label,dd,dt,p,h1,h2,h3,h4,h5,h6';
   window.__ttIndexedEls__ = { byIndex: {}, ids: new WeakMap(), next: 0, documentId: Math.random().toString(36).slice(2), version: 0, signature: '', rows: [] };
 
   /** 元素 → 页内唯一 css 路径（id 优先，其余 nth-of-type 链）。 */
@@ -584,11 +584,20 @@ export const CANDIDATE_SCRIPT = PLUGIN_RUNTIME_SCRIPT + String.raw`(() => {
     }
     return true;
   }
+  function scrollAxes(el) {
+    if (el.scrollHeight <= el.clientHeight + 1 && el.scrollWidth <= el.clientWidth + 1) return '';
+    const st = getComputedStyle(el);
+    return (el.scrollWidth > el.clientWidth + 1 && /^(auto|scroll|overlay)$/.test(st.overflowX) ? 'x' : '') +
+      (el.scrollHeight > el.clientHeight + 1 && /^(auto|scroll|overlay)$/.test(st.overflowY) ? 'y' : '');
+  }
   function controlState(el) {
     const input = el.matches('input,select,textarea') ? el : el.querySelector('input,select,textarea');
     const target = input || el;
     const parts = [];
-    if (target.type === 'password') parts.push('filled=' + Boolean(target.value));
+    const axes = scrollAxes(el);
+    if (axes) parts.push('scrollable=' + axes + ' scrollLeft=' + Math.round(el.scrollLeft) + ' scrollTop=' + Math.round(el.scrollTop) + ' scrollWidth=' + el.scrollWidth + ' scrollHeight=' + el.scrollHeight + ' clientWidth=' + el.clientWidth + ' clientHeight=' + el.clientHeight);
+    if (target.type === 'file') parts.push('type=file multiple=' + Boolean(target.multiple) + ' accept=' + shortStateText(target.accept) + ' files=' + shortStateText(Array.from(target.files || []).map(f => f.name).join(',')) + (!isShown(target) ? ' hidden=true' : ''));
+    else if (target.type === 'password') parts.push('filled=' + Boolean(target.value));
     else if ('value' in target) parts.push('value=' + shortStateText(target.value));
     if (target.type === 'checkbox' || target.type === 'radio') parts.push('checked=' + target.checked);
     for (const name of ['checked', 'selected', 'expanded', 'invalid', 'required']) {
@@ -612,7 +621,7 @@ export const CANDIDATE_SCRIPT = PLUGIN_RUNTIME_SCRIPT + String.raw`(() => {
     const els = document.body ? document.body.querySelectorAll(INTERACTIVE_SEL + ',' + CLICKABLE_SCAN_SEL) : [];
     for (const el of els) {
       const isNative = el.matches(INTERACTIVE_SEL);
-      if (!isNative) {
+      if (!isNative && !scrollAxes(el)) {
         // 便宜的判定放前面，避免对海量非候选节点跑 isShown 的逐级祖先 getComputedStyle。
         let clickable = el.hasAttribute('onclick');
         if (!clickable) {
@@ -626,7 +635,7 @@ export const CANDIDATE_SCRIPT = PLUGIN_RUNTIME_SCRIPT + String.raw`(() => {
         if (!visibleTextOf(el, styleCache)) continue; // 无可见文本的指针容器不占号（纯图标点击区采不到，维持现状）
         clickableAncestor = el;
       }
-      if (!isShown(el)) continue;
+      if (!isShown(el) && !el.matches('input[type="file"]')) continue;
       let idx = state.ids.get(el);
       const isNew = !idx || !previous[idx];
       if (!idx) { idx = ++state.next; state.ids.set(el, idx); }
@@ -648,7 +657,7 @@ export const CANDIDATE_SCRIPT = PLUGIN_RUNTIME_SCRIPT + String.raw`(() => {
     for (const k of Object.keys(previous)) if (!current[k] && previous[k]?.isConnected) previous[k].removeAttribute('data-tt-idx');
     state.byIndex = current;
     state.rows = rows;
-    const signature = location.href + JSON.stringify(rows.map(({ isNew, ...row }) => row));
+    const signature = location.href + ':' + window.scrollX + ':' + window.scrollY + JSON.stringify(rows.map(({ isNew, ...row }) => row));
     if (signature !== state.signature) { state.version++; state.signature = signature; }
     return rows.map(row => '[' + row.id + ']' + (row.isNew ? '*' : '') + '<' + row.role + (row.label ? ' ' + row.label : '') + '>' + (row.value ? ' ' + row.value : '') + (row.disabled ? ' [disabled]' : '') + (row.context ? ' in=' + row.context : '') + (row.notes ? ' ' + row.notes : ''));
   };
@@ -706,6 +715,7 @@ export const CANDIDATE_SCRIPT = PLUGIN_RUNTIME_SCRIPT + String.raw`(() => {
       nextOffset: offset + output.length < selected.length ? offset + output.length : null,
       scope: root ? options.scope : scope === 'auto' && activeRoots.length ? 'active-overlay' : scope,
       values, structure, pageText, alerts, queryTextHit, queryTextSnippet,
+      scrollPosition: { left: window.scrollX, top: window.scrollY, maxX: Math.max(0, (document.scrollingElement?.scrollWidth || 0) - (document.scrollingElement?.clientWidth || 0)), maxY: Math.max(0, (document.scrollingElement?.scrollHeight || 0) - (document.scrollingElement?.clientHeight || 0)) },
       context: shortStateText(textRoot?.getAttribute('aria-label') || textRoot?.getAttribute('role') || '', 80) };
   };
 

@@ -28,12 +28,29 @@ export const locatorSchema = z.object({
 });
 export type Locator = z.infer<typeof locatorSchema>;
 
+export const scrollSchema = z.object({
+  target: z.enum(['page', 'container', 'element']),
+  mode: z.enum(['by', 'toStart', 'toEnd', 'intoView']),
+  axis: z.enum(['x', 'y']).optional(),
+  distance: z.number().finite().min(-10000).max(10000).optional(),
+}).superRefine((scroll, ctx) => {
+  if ((scroll.target === 'element') !== (scroll.mode === 'intoView'))
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'element 目标仅支持 intoView；页面和容器支持 by/toStart/toEnd' });
+  if (scroll.mode === 'by' && (!scroll.distance || !Number.isFinite(scroll.distance)))
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'by 模式需要非零 distance（-10000~10000 px）' });
+  if (scroll.mode !== 'by' && scroll.distance != null)
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: '仅 by 模式允许 distance' });
+  if (scroll.mode === 'intoView' && scroll.axis != null)
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'intoView 不指定 axis' });
+});
+export type ScrollOptions = z.infer<typeof scrollSchema>;
+
 /** 单个测试步骤。同时携带「原始指令」与「解析出的具体执行目标」。 */
 export const testStepSchema = z.object({
   criterionId: z.string().optional(), // 对应已确认的验收目标
   instruction: z.string().optional(), // 模块①：LLM 拆出的自然语言子指令；模块②：人类可读描述
   kind: z.enum(['navigate', 'action', 'assert', 'wait']).default('action'),
-  action: z.enum(['goto', 'click', 'fill', 'press', 'check', 'select', 'assert', 'wait', 'raw', 'plugin', 'upload']),
+  action: z.enum(['goto', 'click', 'fill', 'press', 'check', 'select', 'assert', 'wait', 'raw', 'plugin', 'upload', 'scroll']),
   /// 语义动作步骤（action='plugin' 时必填）：action 为语义动作名；pluginId 为生成期命中的插件提示
   /// （可选，回放按语义动作链重匹配时仅作优先尝试）；args 为动作参数。
   pluginAction: z
@@ -50,6 +67,7 @@ export const testStepSchema = z.object({
   url: z.string().optional(),
   value: z.string().optional(),
   key: z.string().optional(),
+  scroll: scrollSchema.optional(),
   upload: z.object({ fileIds: z.array(z.string()).min(1).max(5), mode: z.enum(['input', 'chooser']) }).optional(),
   checked: z.boolean().optional(), // 旧脚本缺省 true；false 明确取消勾选
   assertion: z
@@ -62,6 +80,11 @@ export const testStepSchema = z.object({
   code: z.string().optional(), // action='raw' 时保留的原始代码行
   description: z.string().optional(),
 }).superRefine((step, ctx) => {
+  if (step.action === 'scroll') {
+    if (!step.scroll || step.scroll.target !== 'page' && !step.locator || step.scroll.target === 'page' && step.locator)
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'scroll 需要滚动参数；容器/元素必须有定位器，页面滚动不设置定位器' });
+    if (step.kind !== 'action') ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'scroll 必须是 action 步骤' });
+  }
   if (step.action === 'upload' && (!step.upload || !step.locator)) ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'upload 必须提供文件、模式及定位器' });
 });
 export type TestStep = z.infer<typeof testStepSchema>;

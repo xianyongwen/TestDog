@@ -6,6 +6,8 @@
  * 红线：所有落库步骤经 semanticizeLocator（count===1+同节点）；失败尝试天然不入库。
  * 候选采集在动作前（capture-before-mutation）：动作态类（checked/selected…）与可访问名漂移不编入定位器。
  */
+import { executeScroll } from './scrollExecution';
+import { scrollSchema } from '../shared/testScript';
 import { executeUpload } from './uploadExecution';
 import { listTestFiles } from './testFileService';
 import { z } from 'zod';
@@ -261,6 +263,25 @@ export function buildGenTools(
   askHuman?: (question: string) => Promise<string>,
 ): AgentTool[] {
   const tools: AgentTool[] = [
+    {
+      name: 'scroll',
+      description: '滚动页面或容器，或将已挂载元素滚入视口。target=page 无 selector；container/element 必须 selector。page/container 支持 by（distance 非零 px，正下/右负上/左）、toStart/toEnd，axis 默认 y；element 仅 intoView。普通 click 自带滚入视口，无需预先 scroll。虚拟列表逐段滚动后查新快照；atEnd 仅代表当前边界，不代表异步数据已全部加载。',
+      parameters: { type: 'object', properties: { target: { type: 'string', enum: ['page', 'container', 'element'] }, selector: { type: 'string' }, mode: { type: 'string', enum: ['by', 'toStart', 'toEnd', 'intoView'] }, axis: { type: 'string', enum: ['x', 'y'] }, distance: { type: 'number', minimum: -10000, maximum: 10000 }, instruction: { type: 'string' } }, required: ['target', 'mode', 'instruction'] },
+      execute: async a => {
+        const scroll = scrollSchema.parse(a);
+        const instruction = z.string().trim().min(1).parse(a.instruction);
+        if (scroll.target === 'page' && a.selector != null) throw new Error('页面滚动不传 selector');
+        const selector = scroll.target === 'page' ? undefined : z.string().trim().min(1).parse(a.selector);
+        const loc = selector ? await resolveLocator(ctx, selector, a.snapshotVersion) : undefined;
+        const locator = selector ? await semanticizeLocator(ctx.pwPage, semanticSource(sub(ctx, selector) ?? selector), { mode: 'playwright', noRawFallback: true }) : undefined;
+        if (selector && !locator) throw new Error('无法生成可靠的滚动定位器，本步未执行');
+        const result = await executeScroll(ctx.pwPage, loc, scroll, ctx.signal);
+        const summary = { before: result.before[0], after: result.after[0], moved: result.moved, observed: result.observed, settled: result.settled, atStart: result.atStart, atEnd: result.atEnd };
+        const outcome = await ctx.emit({ kind: 'action', action: 'scroll', scroll, ...(locator ? { locator } : {}), instruction, description: instruction });
+        return { status: 'success', recordedStep: outcome.index, progressed: result.moved,
+          text: `滚动已执行。${落库提示(ctx, outcome)} ${JSON.stringify(summary)}${!result.observed ? ' 滚动后目标状态无法读取，请使用新快照确认，不要直接重做。' : !result.moved ? ' 位置未变化，不要重复同向滚动；检查当前边界或目标容器。' : ''} 业务加载结果仍需验证。` };
+      },
+    },
     {
       name: 'list_files', stateful: 'files',
       description: '分页查询当前项目可上传的测试文件，只返回 ID/名称/类型/大小。upload 的 fileIds 必须来自此列表；没有所需文件时 ask_human，请用户添加测试文件。',
@@ -668,7 +689,7 @@ export function buildGenTools(
     },
   });
 
-  const mutations = new Set(['upload', 'goto', 'click', 'fill', 'press', 'check', 'select', 'act', 'component_action', 'batch_actions']);
+  const mutations = new Set(['scroll', 'upload', 'goto', 'click', 'fill', 'press', 'check', 'select', 'act', 'component_action', 'batch_actions']);
   const batchTools = new Set(['fill', 'check', 'select']);
   tools.push({
     name: 'batch_actions',
@@ -734,7 +755,7 @@ export function buildGenTools(
           const after = await captureObservation(ctx.pwPage);
           ctx.lastObservation = after;
           ctx.snapshotVersion = after.version;
-          data.progressed = before ? stateFingerprint(before) !== stateFingerprint(after) : false;
+          data.progressed = (tool.name === 'scroll' && data.progressed === true) || (before ? stateFingerprint(before) !== stateFingerprint(after) : false);
           data.effect = data.progressed ? 'observed' : 'unknown';
           data.stateFingerprint = stateFingerprint(after);
           data.observation = observationText(after);

@@ -33,6 +33,8 @@ const GEN_LOOP_SYSTEM_PROMPT = `你是 Web 测试脚本生成 Agent：通过调�
 
 上传文件使用 upload：先 list_files 按用户指定名称取得项目测试文件 ID，禁止编造文件 ID 或把参考附件当作测试文件。chooser 模式包含点击上传按钮，不先 click；input 模式可操作隐藏文件 input，可用 snapshot(scope="page",query="type=file") 查找。文件同名时按大小/ID区分，无法确定则 ask_human。选择完成后用 assert 验证业务结果，不能以选中文件代替上传成功。
 
+scroll 用于页面/容器滚动或滚入已挂载元素，普通点击无需预先滚动。虚拟列表目标未挂载时，先选实际滚动容器，按一屏以内距离逐段滚动并检查最新快照；连续无变化或已到当前边界时检查加载状态，禁止盲目重复。
+
 操作规范：
 1. 首次动手前获取 snapshot。动作结果若已附最新快照，直接据此继续，不要重复观察。快照默认聚焦浮层/视口，找不到目标用 scope=page + query。文本快照与 see 截图是并列的观测手段：选项列表被虚拟滚动截断、元素文本与预期对不上、编号表里找不到目标、需要确认视觉状态时，直接 see（带 question 聚焦关注点），不要靠反复填写/点击试错；字段值和校验文字仍以文本快照为准。
 2. 独立字段可用 batch_actions 一次规划多个 fill/check/select，宿主串行执行并在变化时停止；按返回的已完成清单继续，不重做。联动字段、提交和弹窗切换单步处理。act 兜底一次只执行一个最匹配候选，复合目标根据新状态继续。取消勾选明确传 checked=false。元素引用：工具的 selector 参数填 snapshot 编号表里的元素编号（如 "12"）；使用编号时携带对应 snapshotVersion；旧版本会被拒绝。编号表里找不到目标、或需要页面层级结构时，才调用 page_tree 获取完整语义树（体积大，不要反复调用）；树内编号不能用作 selector。
@@ -102,6 +104,7 @@ async function runScriptReview(o: {
       const label = s.kind === 'assert' ? '断言' : (s.action ?? s.kind);
       const loc = s.locator ? ` locator=${s.locator.strategy}:${s.locator.value}${s.locator.name ? `[${s.locator.name}]` : ''}` : '';
       const param =
+        s.scroll ? ` scroll=${JSON.stringify(s.scroll)}` :
         s.upload ? ` upload=${JSON.stringify(s.upload)}` :
         s.kind === 'navigate'
           ? ` url=${s.url}`
@@ -567,7 +570,7 @@ export async function runGenerationLoop(o: {
     workingMemory: () => buildWorkingMemory(o.steps, o.goalText) + '\n【验收覆盖】' + JSON.stringify(compactCoverage()) + '\n用 read_coverage 读取完整验收预期；不允许弱化断言。',
     seeAssistAt: cfg.seeAssistAt,
     onStep: ({ index, name, args, result, usageDelta: ud }) => {
-      const label = ({ upload: '上传文件', list_files: '测试文件', snapshot: '快照', page_tree: '结构树', goto: '导航', click: '点击', fill: '填写', press: '按键', check: '勾选', select: '选择', wait: '等待', readText: '读取文本', assert: '断言', act: 'AI 兜底', see: '视觉观察', api: '网络请求', component_action: '组件动作', batch_actions: '批量填写', read_goal: '读取目标', read_script: '读取脚本', read_coverage: '验收覆盖', ask_human: '人工求助', finish: '完成' } as any)[name] ?? name;
+      const label = ({ scroll: '滚动', upload: '上传文件', list_files: '测试文件', snapshot: '快照', page_tree: '结构树', goto: '导航', click: '点击', fill: '填写', press: '按键', check: '勾选', select: '选择', wait: '等待', readText: '读取文本', assert: '断言', act: 'AI 兜底', see: '视觉观察', api: '网络请求', component_action: '组件动作', batch_actions: '批量填写', read_goal: '读取目标', read_script: '读取脚本', read_coverage: '验收覆盖', ask_human: '人工求助', finish: '完成' } as any)[name] ?? name;
       let detail = '';
       try {
         detail = JSON.stringify(args ?? {}).slice(0, 160);
