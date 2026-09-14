@@ -492,7 +492,7 @@ export default function ProjectCases() {
       for (const tc of details) {
         const latest = tc.scripts[0]; // scripts 按 version desc 排序，取最新版本
         if (!latest) { skipped++; continue; }
-        const payload = {
+        const payload = await http.post(`/api/projects/${encodeURIComponent(projectId!)}/test-cases/export`, {
           format: 'testcase',
           version: 1,
           title: tc.title,
@@ -501,7 +501,7 @@ export default function ProjectCases() {
           steps: latest.steps,
           intent: latest.intent,
           rawCode: latest.rawCode ?? '',
-        };
+        });
         const base = sanitizeName(tc.title) || t('projectCases.unnamedCase');
         let name = `${folder}/${base}.testcase`;
         let n = 2;

@@ -1,9 +1,7 @@
-import { testIntentSchema } from '../shared/testIntent';
 import type { FastifyInstance } from 'fastify';
-import { z } from 'zod';
 import { prisma } from '../db';
-import { testStepSchema } from '../shared/testScript';
 import { cleanupScreenshots } from './runs';
+import { exportTestcasePackage, importTestcasePackage, PACKAGE_BODY_LIMIT } from '../services/testcasePackage';
 
 export default async function testCaseRoutes(app: FastifyInstance) {
   app.get('/api/projects/:projectId/test-cases', async (req) =>
@@ -28,30 +26,28 @@ export default async function testCaseRoutes(app: FastifyInstance) {
   });
 
   /** 导入 .testcase 文件：创建用例并写入首个脚本版本（原子事务）。 */
-  app.post('/api/projects/:projectId/test-cases/import', async (req, reply) => {
+  app.post('/api/projects/:projectId/test-cases/export', { bodyLimit: 10 * 1024 * 1024 }, async (req, reply) => {
     const { projectId } = req.params as { projectId: string };
-    const body = (req.body ?? {}) as {
-      title?: string;
-      description?: string;
-      naturalLanguage?: string;
-      intent?: unknown;
-      steps?: unknown;
-      rawCode?: string;
-    };
-    if (!body.title) return reply.code(400).send({ error: '缺少用例标题' });
-    const stepsResult = z.array(testStepSchema).safeParse(body.steps);
-    if (!stepsResult.success) return reply.code(400).send({ error: '步骤数据格式不正确' });
-    const intentResult = testIntentSchema.nullish().transform(value => value ?? undefined).safeParse(body.intent);
-    if (!intentResult.success) return reply.code(400).send({ error: '测试意图格式不正确' });
-    return prisma.$transaction(async (tx) => {
-      const tc = await tx.testCase.create({
-        data: { projectId, title: body.title!, description: body.description ?? null, naturalLanguage: body.naturalLanguage ?? null },
-      });
-      await tx.testScript.create({
-        data: { testCaseId: tc.id, version: 1, steps: stepsResult.data, intent: intentResult.data, rawCode: body.rawCode ?? null },
-      });
-      return tc;
-    });
+    try { return await exportTestcasePackage(projectId, req.body); }
+    catch (error) { return reply.code(400).send({ error: error instanceof Error ? error.message : String(error) }); }
+  });
+
+  app.post('/api/projects/:projectId/test-cases/import', { bodyLimit: PACKAGE_BODY_LIMIT }, async (req, reply) => {
+    const { projectId } = req.params as { projectId: string };
+    if (!await prisma.project.findUnique({ where: { id: projectId } })) return reply.code(404).send({ error: '项目不存在' });
+    try {
+      return await importTestcasePackage(projectId, req.body, body => prisma.$transaction(async (transaction) => {
+        const testCase = await transaction.testCase.create({
+          data: { projectId, title: body.title, description: body.description ?? null, naturalLanguage: body.naturalLanguage ?? null },
+        });
+        await transaction.testScript.create({
+          data: { testCaseId: testCase.id, version: 1, steps: body.steps, intent: body.intent, rawCode: body.rawCode ?? null },
+        });
+        return testCase;
+      }));
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : String(error) });
+    }
   });
 
   app.get('/api/test-cases/:id', async (req, reply) => {
