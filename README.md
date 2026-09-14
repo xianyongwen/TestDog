@@ -10,7 +10,7 @@
 
 [Download the latest installer](https://github.com/xianyongwen/TestDog/releases/latest) · [Quick start](https://softwing.top/testdog-doc/en/guide/getting-started) · [Help docs](https://softwing.top/testdog-doc/en/) · [GitHub](https://github.com/xianyongwen/TestDog)
 
-![TestDog AI generation demo](doc/docs/public/images/ai-generate.gif)
+![TestDog main flow demo](doc/docs/public/images/main-demo.gif)
 
 Watch the short demos: [quick start (45s)](doc/docs/public/videos/quick-start.mp4) · [AI generation (36s)](doc/docs/public/videos/ai-generate.mp4) · [deterministic replay (18s)](doc/docs/public/videos/replay-run.mp4)
 

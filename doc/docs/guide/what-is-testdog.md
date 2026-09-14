@@ -2,7 +2,7 @@
 
 **TestDog** 是一款桌面端测试用例管理工具：用自然语言或手动录制生成 UI 测试脚本，再用 Playwright 按脚本原样回放验证（日常回归不消耗模型 token）。适用于 Web 应用的端到端回归测试。
 
-<video class="doc-video" src="/videos/ai-generate.mp4" autoplay muted loop controls playsinline></video>
+<video class="doc-video" src="/videos/main-demo.mp4" autoplay muted loop controls playsinline></video>
 <p class="doc-video-caption">AI 生成脚本全过程：自然语言发送 → 预拆分计划确认 → 真实浏览器逐步执行 → 落为可回放脚本</p>
 
 ## 核心能力
