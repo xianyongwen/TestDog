@@ -19,6 +19,7 @@ export interface GenerationCheckpoint {
 
 // 浏览器会话仍活着时以内存检查点为准；数据库失败不丢掉可续跑状态。
 const checkpoints = new Map<string, GenerationCheckpoint>();
+export function testFileCheckpointReferences(): unknown[] { return [...checkpoints.values()]; }
 export function clearCheckpoint(jobId: string): void { checkpoints.delete(jobId); }
 
 export async function saveCheckpoint(jobId: string, checkpoint: GenerationCheckpoint): Promise<void> {

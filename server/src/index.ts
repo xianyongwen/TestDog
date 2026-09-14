@@ -12,6 +12,7 @@ import settingsRoutes from './routes/settings';
 import generateRoutes from './routes/generate';
 import recordRoutes from './routes/record';
 import loginConfigRoutes from './routes/loginConfigs';
+import testFileRoutes from './routes/testFiles';
 import attachmentRoutes from './routes/attachments';
 import locatorRoutes from './routes/locator';
 import generationLogRoutes from './routes/generationLogs';
@@ -19,8 +20,10 @@ import pluginRoutes from './routes/plugins';
 import { pruneExpired } from './services/generationLogService';
 import { ensureBuiltinPlugins } from './services/pluginStore';
 import { getConfig } from './config';
+import { installTestFileCleanup } from './services/testFileCleanup';
 
 const app = Fastify({ logger: { level: 'info' } });
+installTestFileCleanup(app);
 
 // 生产期前端跑在 tauri://localhost，直连 127.0.0.1:4123 属跨域，DELETE/PUT 等非简单方法会触发预检。
 // @fastify/cors 默认 methods 仅 GET,HEAD,POST，不含 DELETE -> 预检通过但实际请求被浏览器丢弃（删除静默失败）。
@@ -49,6 +52,7 @@ await app.register(generateRoutes);
 await app.register(recordRoutes);
 await app.register(loginConfigRoutes);
 await app.register(attachmentRoutes);
+await app.register(testFileRoutes);
 await app.register(locatorRoutes);
 await app.register(generationLogRoutes);
 await app.register(pluginRoutes);

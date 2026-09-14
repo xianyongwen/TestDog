@@ -14,6 +14,7 @@ import { appendStep, upsertLog, STEP_TYPE } from './generationLogService';
 import { pub, activeLogIds } from './generation/logBridge';
 import { awaitPlanConfirm, cancelSessionGc, claimJob, createJobRuntime, releaseJob, releaseJobSlot } from './generation/jobControl';
 import { loadCheckpoint, saveCheckpoint, type GenerationCheckpoint } from './generation/checkpoint';
+import { withTestFileActivity } from './testFileActivity';
 import { redactGenerationData, redactGenerationText, setGenerationEnvironment } from './generation/privacy';
 import {
   buildEnvVarHint,
@@ -52,7 +53,7 @@ export async function checkPlanValueConflicts(jobId: string, steps: PlanStep[], 
 export async function generate(jobId: string, params: GenerateParams): Promise<void> {
   const owner = claimJob(jobId);
   if (!owner) throw new Error('该任务正在执行或暂停收尾，请稍后继续');
-  try { await generateOwned(jobId, params); } finally { releaseJobSlot(jobId, owner); }
+  try { await withTestFileActivity(() => generateOwned(jobId, params)); } finally { releaseJobSlot(jobId, owner); }
 }
 
 async function persistPausedCheckpoint(jobId: string, checkpoint: GenerationCheckpoint): Promise<void> {
@@ -248,7 +249,7 @@ async function generateOwned(jobId: string, params: GenerateParams): Promise<voi
 export async function continueGenerate(jobId: string, params: ContinueParams): Promise<void> {
   const owner = claimJob(jobId);
   if (!owner) throw new Error('该任务正在执行或暂停收尾，请稍后继续');
-  try { await continueGenerateOwned(jobId, params); } finally { releaseJobSlot(jobId, owner); }
+  try { await withTestFileActivity(() => continueGenerateOwned(jobId, params)); } finally { releaseJobSlot(jobId, owner); }
 }
 
 async function continueGenerateOwned(jobId: string, params: ContinueParams): Promise<void> {

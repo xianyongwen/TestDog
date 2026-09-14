@@ -15,6 +15,7 @@ import type { TestStep } from '@shared/testScript';
 import { STEP_ACTION_LABEL } from '@shared/constants';
 import StepsTable from '../components/StepsTable';
 import RunLog, { type LogItem } from '../components/RunLog';
+import TestFilePicker, { type TestFileInfo } from '../components/TestFilePicker';
 import AttachmentUpload, { AttachmentChips, type AttachmentItem, type AttachmentUploadHandle } from '../components/AttachmentUpload';
 import { fmtToken, type TokenUsage } from '../utils/token';
 import CacheRatePie from '../components/CacheRatePie';
@@ -113,6 +114,22 @@ export default function Generate() {
   /** 轨迹头部实时累积的 token 消耗：gen:tool/gen:plan 为单次调用增量（累加），gen:done/gen:error 直接对齐任务累计。 */
   const [liveUsage, setLiveUsage] = useState<TokenUsage | null>(null);
   const [attachments, setAttachments] = useState<AttachmentItem[]>([]);
+  const [testFiles, setTestFiles] = useState<TestFileInfo[]>([]);
+  const [testFilesRefreshKey, setTestFilesRefreshKey] = useState(0);
+  const [deletingTestFiles, setDeletingTestFiles] = useState<Set<string>>(new Set());
+  async function deleteTestFile(file: TestFileInfo) {
+    if (!info?.project?.id || deletingTestFiles.has(file.id)) return;
+    setDeletingTestFiles(prev => new Set(prev).add(file.id));
+    try {
+      await http.del(`/api/projects/${encodeURIComponent(info.project.id)}/test-files/${encodeURIComponent(file.id)}`);
+      setTestFiles(prev => prev.filter(item => item.id !== file.id));
+      setTestFilesRefreshKey(prev => prev + 1);
+    } catch (e) {
+      message.error(`删除失败：${String(e)}`);
+    } finally {
+      setDeletingTestFiles(prev => { const next = new Set(prev); next.delete(file.id); return next; });
+    }
+  }
   const [intent, setIntent] = useState<TestIntent>();
   const [confirmedIntent, setConfirmedIntent] = useState<TestIntent>();
   const [plan, setPlan] = useState<PlanStep[] | null>(null);
@@ -793,12 +810,26 @@ export default function Generate() {
           )}
 
           <div className="shrink-0 border-t border-line-subtle bg-elevated p-3">
+            {testFiles.length > 0 && (
+              <div className="mb-3 flex flex-wrap gap-2" aria-label="测试文件">
+                {testFiles.map(file => (
+                  <Tooltip key={file.id} title={`${file.name} · ${file.size} B · 保留原文件供上传与回放`}>
+                    <Tag className="m-0 inline-flex max-w-full items-center" closable
+                      closeIcon={deletingTestFiles.has(file.id) ? <LoadingOutlined spin /> : undefined}
+                      onClose={event => { event.preventDefault(); void deleteTestFile(file); }}>
+                      <span className="block max-w-[280px] truncate">{file.name}</span>
+                    </Tag>
+                  </Tooltip>
+                ))}
+              </div>
+            )}
             <AttachmentUpload ref={attachRef} attachments={attachments} onChange={setAttachments} max={5}>
               <Space direction="vertical" className="w-full" size={12}>
                 <div className='flex gap-2.5'>
                   <Tooltip title={t('generate.addAttachment')}>
                     <Button icon={<PaperClipOutlined />} onClick={() => attachRef.current?.pick()} className="shrink-0" />
                   </Tooltip>
+                  <TestFilePicker projectId={info?.project?.id} onFilesChange={setTestFiles} refreshKey={testFilesRefreshKey} compact />
                   <Input placeholder={t('common.baseUrlUrl')} value={startUrl} onChange={(e) => setStartUrl(e.target.value)} />
                   <Space className="shrink-0">
                     <span className="text-[13px]">{t('generate.loginConfig')}</span>
