@@ -511,7 +511,7 @@ export default function TestCaseDetail() {
             label: t('caseDetail.scriptsTab'),
             children: (
               <div className="flex h-full min-h-0 gap-4">
-                <div className="flex w-[360px] shrink-0 flex-col min-h-0">
+                <div className="flex w-[380px] shrink-0 flex-col min-h-0">
                   <SortableTable
                     rowKey="id"
                     size="small"
