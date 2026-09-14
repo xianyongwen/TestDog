@@ -124,22 +124,28 @@ export default function Plugins() {
   };
 
   const columns = [
-    { title: t('plugins.colName'), dataIndex: 'name', render: (n: string, r: PluginRow) => (
+    { title: t('plugins.colName'), dataIndex: 'name', width: 200, ellipsis: true, render: (n: string, r: PluginRow) => (
       <span className="text-ink font-medium">{n}<span className="ml-2 text-xs text-ink-3">v{r.version}</span></span>
     ) },
     { title: t('plugins.colSource'), dataIndex: 'builtin', width: 88, render: (b: boolean) => (b ? <Tag color="blue">{t('plugins.sourceBuiltin')}</Tag> : <Tag>{t('plugins.sourceUpload')}</Tag>) },
-    { title: t('plugins.colPreset'), dataIndex: 'presetNames', render: (names: string[]) => names?.length
-      ? <>{names.map((n) => <Tag key={n}>{n}</Tag>)}</>
+    { title: t('plugins.colPreset'), dataIndex: 'presetNames', width: 180, render: (names: string[]) => names?.length
+      ? <div className="flex flex-wrap gap-1">{names.map((n) => <Tag key={n} title={n} className="!m-0 max-w-full truncate">{n}</Tag>)}</div>
       : <span className="text-ink-3">{t('plugins.noPreset')}</span> },
     { title: t('plugins.colActions'), dataIndex: 'actions', width: 110, render: (a: PluginRow['actions'], r: PluginRow) => {
       const metas = a ?? [];
       return metas.length
-        ? <Tooltip title={metas.map((m) => (m.doc ? `${m.label || m.name}：${m.doc}` : m.label || m.name)).join('\n')}><Badge count={metas.length} color="var(--tk-accent)" /></Tooltip>
+        ? <Tooltip title={<div style={{ maxHeight: 'min(360px, 60vh)', overflowY: 'auto', overscrollBehavior: 'contain', whiteSpace: 'pre-wrap' }}>
+            {metas.map((m) => (m.doc ? `${m.label || m.name}：${m.doc}` : m.label || m.name)).join('\n\n')}
+          </div>}><Badge count={metas.length} color="var(--tk-accent)" /></Tooltip>
         : (r.builtin
           ? <span className="text-ink-3">—</span>
           : <Tooltip title={t('plugins.actionsHint')}><span className="text-ink-3">{t('plugins.actionsAfterTest')}</span></Tooltip>);
     } },
-    { title: t('plugins.colDesc'), dataIndex: 'description', ellipsis: true, render: (v: string) => v || '—' },
+    { title: t('plugins.colDesc'), dataIndex: 'description', ellipsis: { showTitle: false }, render: (description: string) => description
+      ? <Tooltip title={<div style={{ maxHeight: 'min(360px, 60vh)', overflowY: 'auto', overscrollBehavior: 'contain', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{description}</div>}>
+          <span className="block truncate">{description}</span>
+        </Tooltip>
+      : '—' },
     { title: t('common.actions'), fixed: 'right' as const, key: 'op', width: 140, render: (_: unknown, r: PluginRow) => (
       <Space>
         <Tooltip title={t('plugins.tryRun')}>
@@ -183,7 +189,7 @@ export default function Plugins() {
       <Tabs className="flex-1 min-h-0 tabs-fill" activeKey={tab} onChange={setTab} items={[
         { key: 'plugins', label: <span><ApiOutlined /> {t('plugins.tabPlugins')}</span>, children: (
           <SortableTable<PluginRow> rowKey="id" loading={loading} dataSource={list} columns={columns}
-            className="auto-height-table" scroll={{ x: 'max-content', y: 'max-content' }}
+            className="auto-height-table" tableLayout="fixed" scroll={{ x: 960, y: 'max-content' }}
             locale={{ emptyText: <Empty description={t('plugins.emptyHint')} /> }} />
         ) },
         { key: 'presets', label: <span><AppstoreOutlined /> {t('plugins.tabPresets')}</span>, children: <PresetTab onChanged={reload} /> },
