@@ -1,18 +1,20 @@
+import TestFilePicker from './TestFilePicker';
+import LocatorScopeEditor from './LocatorScopeEditor';
 import { browserAssertionTypes, expectedAssertionTypes } from '@shared/testIntent';
 import { useEffect, useRef, useState } from 'react';
-import { App, Button, Input, Modal, Select, Space, Tag, Tooltip } from 'antd';
+import { App, Button, Input, InputNumber, Modal, Select, Space, Tag, Tooltip } from 'antd';
 import { AimOutlined, ArrowDownOutlined, ArrowUpOutlined, CloseCircleOutlined, DeleteOutlined, LoadingOutlined, PlusOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
-import type { Locator, TestStep } from '@shared/testScript';
+import { locatorScopeSchema, type Locator, type TestStep } from '@shared/testScript';
 import { extractVars, KNOWN_SYSTEM_NAMES } from '@shared/envVars';
 import { STEP_ACTION_LABEL, stepActionDisplay } from '@shared/constants';
 import { http, pluginsApi } from '../api/client';
 import { arrayMove } from '@dnd-kit/sortable';
 import SortableTable from './SortableTable';
 
-const ACTIONS = ['goto', 'click', 'fill', 'press', 'check', 'select', 'assert', 'wait', 'raw'] as const;
+const ACTIONS = ['goto', 'click', 'fill', 'press', 'check', 'select', 'upload', 'scroll', 'assert', 'wait', 'raw'] as const;
 /** 项目可用的插件语义动作（/api/plugin-actions 条目），与普通动作并列进动作下拉。 */
 interface PluginVocabEntry {
   name: string;
@@ -28,7 +30,7 @@ const STRATEGY_LABEL = (t: TFunction): Record<string, string> => ({
   alt: t('stepsTable.strategyLabel.alt'),
   title: t('stepsTable.strategyLabel.title'),
 });
-const NEEDS_LOCATOR = ['click', 'fill', 'press', 'check', 'select', 'assert', 'plugin'];
+const NEEDS_LOCATOR = ['click', 'fill', 'press', 'check', 'select', 'upload', 'scroll', 'assert', 'plugin'];
 
 interface Props {
   steps: TestStep[];
@@ -83,6 +85,7 @@ export default function StepsTable({ steps, onChange, extra, envVarKeys, pickSta
   /** 等待选择登录配置的行号；点击「弹窗内」标签时先弹框再拾取。 */
   const [pickLoginFor, setPickLoginFor] = useState<number | null>(null);
   const [pickLoginChoice, setPickLoginChoice] = useState('');
+  const [pickPurpose, setPickPurpose] = useState<'target' | 'scope'>('target');
   /** 项目可用的插件语义动作词表（动作下拉并列追加）；无项目上下文时为空、下拉保持原样。 */
   const [pluginVocab, setPluginVocab] = useState<PluginVocabEntry[]>([]);
   useEffect(() => {
@@ -122,7 +125,7 @@ export default function StepsTable({ steps, onChange, extra, envVarKeys, pickSta
     onChange([...steps, { kind: 'action', action: 'click', locator: { strategy: 'css', value: '' } }]);
 
   /** 在浏览器中拾取元素定位器：启动 headed 页面 → 用户点击元素 → 轮询结果 → 回填当前步骤。 */
-  const pickLocator = async (i: number, loginOverride?: string | null) => {
+  const pickLocator = async (i: number, loginOverride?: string | null, purpose: 'target' | 'scope' = 'target') => {
     if (!pickStartUrl) return;
     // 目标页优先取脚本里 goto 步的地址（解析 {{baseUrl}}），否则用起始地址
     const gotoUrl = steps.find((s) => s.action === 'goto')?.url;
@@ -135,6 +138,7 @@ export default function StepsTable({ steps, onChange, extra, envVarKeys, pickSta
     try {
       const res = await http.post<{ pickId?: string; error?: string }>('/api/locator/pick', {
         url,
+        purpose,
         loginConfigId: loginOverride === undefined ? pickLoginConfigId : loginOverride || undefined,
         ...(pickProjectId ? { projectId: pickProjectId } : {}),
       });
@@ -143,10 +147,15 @@ export default function StepsTable({ steps, onChange, extra, envVarKeys, pickSta
         await http.post(`/api/locator/pick/${res.pickId}/cancel`).catch(() => {});
         return;
       }
-      message.info(t('stepsTable.pickInfo'));
+      message.info(t(purpose === 'scope' ? 'stepsTable.pickScopeInfo' : 'stepsTable.pickInfo'));
       const locator = await pollPickResult(res.pickId, () => cancelled);
       if (locator) {
-        applyPicked(i, locator);
+        if (purpose === 'scope') {
+          if (locator.scope) throw new Error(t('stepsTable.pickScopeInvalid'));
+          const scope = locatorScopeSchema.safeParse(locator);
+          if (!scope.success) throw new Error(t('stepsTable.pickScopeInvalid'));
+          updateLoc(i, { scope: scope.data });
+        } else applyPicked(i, locator);
         message.success(t('stepsTable.picked'));
       }
     } catch (e) {
@@ -242,7 +251,7 @@ export default function StepsTable({ steps, onChange, extra, envVarKeys, pickSta
                 const meta = pluginVocab.find((x) => x.name === s.slice('plugin:'.length));
                 update(i, { action: 'plugin', pluginAction: { action: meta?.name ?? s.slice('plugin:'.length), ...(meta?.label ? { label: meta.label } : {}) } });
               } else {
-                update(i, { action: s as TestStep['action'], pluginAction: undefined });
+                update(i, { action: s as TestStep['action'], pluginAction: undefined, scroll: s === 'scroll' ? { target: 'page', mode: 'by', axis: 'y', distance: 600 } : undefined, ...(s === 'scroll' ? { kind: 'action', locator: undefined } : {}) });
               }
             }}
           />
@@ -253,7 +262,7 @@ export default function StepsTable({ steps, onChange, extra, envVarKeys, pickSta
       title: t('stepsTable.selectStrategy'),
       width: 120,
       render: (_v, r, i) =>
-        NEEDS_LOCATOR.includes(r.action) ? (
+        (NEEDS_LOCATOR.includes(r.action) && !(r.action === 'scroll' && (r.scroll?.target ?? 'page') === 'page')) ? (
           <Select
             size="small"
             value={r.locator?.strategy}
@@ -263,6 +272,7 @@ export default function StepsTable({ steps, onChange, extra, envVarKeys, pickSta
             onChange={(v) => {
               const step = steps[i];
               const newLoc = { ...(step.locator ?? { strategy: 'css' as const, value: '' }), strategy: v };
+              if (v === 'response' || v === 'websocket') newLoc.scope = undefined;
               if (r.action !== 'assert') {
                 update(i, { locator: newLoc });
                 return;
@@ -289,7 +299,7 @@ export default function StepsTable({ steps, onChange, extra, envVarKeys, pickSta
     {
       title: t('stepsTable.locatorValue'),
       render: (_v, r, i) => {
-        if (!NEEDS_LOCATOR.includes(r.action)) return <span className="text-ink-3">-</span>;
+        if (!(NEEDS_LOCATOR.includes(r.action) && !(r.action === 'scroll' && (r.scroll?.target ?? 'page') === 'page'))) return <span className="text-ink-3">-</span>;
         let input: React.ReactNode;
         let varText: string | undefined;
         if (r.locator?.strategy === 'role') {
@@ -314,21 +324,25 @@ export default function StepsTable({ steps, onChange, extra, envVarKeys, pickSta
         const canPick =
           !!pickStartUrl && r.locator?.strategy !== 'response' && r.locator?.strategy !== 'websocket';
         const picking = pickingIdx === i;
+        const hasElementLocator = r.locator?.strategy !== 'response' && r.locator?.strategy !== 'websocket';
+        const compactLocator = hasElementLocator && !r.locator?.scope;
         return (
-          <div>
-            <div className="flex items-center gap-1">
-              {r.locator?.scope && (
-                <Tooltip
-                  title={t('stepsTable.scopedTooltip', {
-                    strategy: r.locator.scope.strategy === 'role' ? `role=${r.locator.scope.value}` : `${r.locator.scope.strategy}=${r.locator.scope.value}`,
-                  })}
-                >
-                  <Tag color="blue" className="m-0 shrink-0 text-[11px] leading-[18px]">{t('stepsTable.inModal')}</Tag>
-                </Tooltip>
-              )}
+          <div className={compactLocator ? 'flex flex-wrap items-center gap-1' : undefined}>
+            {hasElementLocator && <div className={compactLocator ? 'order-2 shrink-0' : undefined}>
+              <LocatorScopeEditor scope={r.locator?.scope} onChange={scope => updateLoc(i, { scope })}
+                onPick={canPick ? () => {
+                  setPickPurpose('scope');
+                  setPickLoginFor(i);
+                  setPickLoginChoice(pickLoginConfigId ?? '');
+                } : undefined}
+                picking={picking && pickPurpose === 'scope'} pickDisabled={pickingIdx !== null}
+                onCancelPick={() => pickCancelRef.current?.()} />
+            </div>}
+            {hasElementLocator && r.locator?.scope && <div className="mb-1 text-xs text-ink-2">{t('stepsTable.targetElement')}</div>}
+            <div className={`flex items-center gap-1${compactLocator ? ' order-1 min-w-0 flex-1' : ''}`}>
               {input}
               {canPick &&
-                (picking ? (
+                (picking && pickPurpose === 'target' ? (
                   <Space size={0}>
                     <Tooltip title={t('stepsTable.picking')}>
                       <Button size="small" type="text" icon={<LoadingOutlined spin />} />
@@ -345,6 +359,7 @@ export default function StepsTable({ steps, onChange, extra, envVarKeys, pickSta
                       disabled={pickingIdx !== null}
                       icon={<AimOutlined />}
                       onClick={() => {
+                        setPickPurpose('target');
                         setPickLoginFor(i);
                         setPickLoginChoice(pickLoginConfigId ?? '');
                       }}
@@ -352,7 +367,10 @@ export default function StepsTable({ steps, onChange, extra, envVarKeys, pickSta
                   </Tooltip>
                 ))}
             </div>
-            <VarHints text={varText} envVarKeys={envVarKeys} />
+            <div className={compactLocator ? 'order-3 w-full empty:hidden' : undefined}>
+              <VarHints text={varText} envVarKeys={envVarKeys} />
+            </div>
+            {hasElementLocator && r.locator?.scope && <VarHints text={`${r.locator.scope.value} ${r.locator.scope.name ?? ''}`} envVarKeys={envVarKeys} />}
           </div>
         );
       },
@@ -363,7 +381,30 @@ export default function StepsTable({ steps, onChange, extra, envVarKeys, pickSta
       render: (_v, r, i) => {
         let input: React.ReactNode;
         let varText: string | undefined;
-        if (r.action === 'goto') {
+        if (r.action === 'scroll') {
+          const scroll = r.scroll ?? { target: 'page' as const, mode: 'by' as const, axis: 'y' as const, distance: 600 };
+          input = <Space direction="vertical" size={4}>
+            <Select size="small" style={{ width: 160 }} popupMatchSelectWidth={180} value={scroll.target} options={[{value:'page',label:'页面'}, {value:'container',label:'滚动容器'}, {value:'element',label:'目标元素'}]}
+              onChange={target => update(i, { kind: 'action', scroll: target === 'element' ? { target, mode: 'intoView' } : { target, mode: 'by', axis: 'y', distance: 600 }, ...(target === 'page' ? { locator: undefined } : {}) })} />
+            {scroll.target !== 'element' && <>
+              <Select size="small" style={{ width: 160 }} popupMatchSelectWidth={180} value={scroll.mode} options={[{value:'by',label:'相对滚动'}, {value:'toStart',label:'滚动到起点'}, {value:'toEnd',label:'滚动到末端'}]}
+                onChange={mode => update(i, { scroll: { ...scroll, mode, distance: mode === 'by' ? scroll.distance ?? 600 : undefined } })} />
+              <Select size="small" style={{ width: 160 }} popupMatchSelectWidth={180} value={scroll.axis ?? 'y'} options={[{value:'y',label:'垂直'}, {value:'x',label:'水平'}]}
+                onChange={axis => update(i, { scroll: { ...scroll, axis } })} />
+              {scroll.mode === 'by' && <Tooltip title="像素；正数向下/右，负数向上/左">
+                <InputNumber size="small" min={-10000} max={10000} value={scroll.distance} placeholder="滚动距离 px"
+                  onChange={distance => update(i, { scroll: { ...scroll, distance: distance ?? undefined } })} />
+              </Tooltip>}
+            </>}
+          </Space>;
+        } else if (r.action === 'upload') {
+          input = <Space direction="vertical" size={4}>
+            <Select size="small" value={r.upload?.mode ?? 'chooser'} options={[{value:'chooser',label:'上传按钮'}, {value:'input',label:'文件 input'}]}
+              onChange={mode => update(i, { upload: { fileIds: r.upload?.fileIds ?? [], mode } })} />
+            <TestFilePicker projectId={projectId ?? pickProjectId} value={r.upload?.fileIds}
+              onChange={fileIds => update(i, { upload: { mode: r.upload?.mode ?? 'chooser', fileIds } })} />
+          </Space>;
+        } else if (r.action === 'goto') {
           varText = r.url;
           input = <Input size="small" placeholder="URL" value={r.url} onChange={(e) => update(i, { url: e.target.value })} />;
         } else if (r.action === 'fill' || r.action === 'select') {
@@ -463,7 +504,7 @@ export default function StepsTable({ steps, onChange, extra, envVarKeys, pickSta
     },
     {
       title: t('common.actions'),
-      width: 160,
+      width: 120,
       render: (_v, _r, i) => (
         <Space size={4}>
           {extra?.(steps[i], i)}
@@ -509,11 +550,11 @@ export default function StepsTable({ steps, onChange, extra, envVarKeys, pickSta
         onOk={() => {
           const i = pickLoginFor;
           setPickLoginFor(null);
-          if (i !== null) void pickLocator(i, pickLoginChoice || null);
+          if (i !== null) void pickLocator(i, pickLoginChoice || null, pickPurpose);
         }}
         onCancel={() => setPickLoginFor(null)}
       >
-        <div className="mb-2 text-xs text-ink-2">{t('stepsTable.pickModalHint')}</div>
+        <div className="mb-2 text-xs text-ink-2">{t(pickPurpose === 'scope' ? 'stepsTable.pickScopeInfo' : 'stepsTable.pickModalHint')}</div>
         <Select
           className="!w-full"
           value={pickLoginChoice}

@@ -56,7 +56,7 @@ async function resolvePickViewport(projectId?: string, loginConfigId?: string): 
 }
 
 /** 启动拾取会话：打开目标 URL，注入拾取脚本，随后由用户点击元素。 */
-export async function startPick(pickId: string, url: string, loginConfigId?: string, projectId?: string): Promise<void> {
+export async function startPick(pickId: string, url: string, loginConfigId?: string, projectId?: string, scopeOnly = false): Promise<void> {
   // 登录态：复用登录配置的 storageState（cookie + localStorage），不存在则退化为未登录
   let storageState: unknown;
   if (loginConfigId) {
@@ -103,14 +103,14 @@ export async function startPick(pickId: string, url: string, loginConfigId?: str
         if (v.type === 'preview') {
           // 预览：用真实 Playwright 验证候选并把结果回写页面，让预览栏显示最终会落库的定位器（预览即所见）
           // 注意：预览栏读取 __testToolPickResult__.locator，须以 { locator } 包装，直接写 Locator 对象会恒判失败
-          const result = await verifyLocators(s.page, v.candidates ?? []);
+          const result = await verifyLocators(s.page, v.candidates ?? [], scopeOnly);
           await s.page
             .evaluate((loc) => {
               (globalThis as any).__testToolPickResult__ = { locator: loc };
             }, result.locator ?? null)
             .catch(() => {});
         } else if (v.type === 'pick') {
-          const result = await verifyLocators(s.page, v.candidates ?? []);
+          const result = await verifyLocators(s.page, v.candidates ?? [], scopeOnly);
           if (result.locator) await finalize(pickId, { state: 'done', locator: result.locator });
           else
             await finalize(pickId, {
@@ -182,7 +182,7 @@ async function finalize(pickId: string, result: { state: 'done' | 'cancelled' | 
  * count===1 且命中元素与用户点击的元素是同一节点；目标已被 SPA 重渲染替换（引用脱离文档）时，
  * 若 URL 未变则退化为仅按唯一性采信。返回首个通过的候选。
  */
-export async function verifyLocators(page: Page, candidates: PickCandidate[]): Promise<VerifyResult> {
+export async function verifyLocators(page: Page, candidates: PickCandidate[], scopeOnly = false): Promise<VerifyResult> {
   const target = await page.evaluateHandle(() => (globalThis as any).__testToolPickEl__ ?? null).catch(() => null);
   if (!target) return { tried: ['目标元素已失效'] };
 
@@ -200,7 +200,28 @@ export async function verifyLocators(page: Page, candidates: PickCandidate[]): P
     fallback = !!pickUrl && page.url() === pickUrl;
   }
 
-  const res = await verifyCandidates(page, target, candidates, { fallback, enableRecompute: !fallback });
+  if (scopeOnly) {
+    candidates = candidates.filter(candidate => candidate.strategy !== 'xpath').map(candidate => ({ ...candidate, scope: undefined }));
+    const css = await target.evaluate((element: any) => {
+      if (!element?.isConnected) return null;
+      const parts: string[] = [];
+      let current = element;
+      while (current?.nodeType === 1) {
+        const escapedId = current.id ? '#' + (globalThis as any).CSS.escape(current.id) : '';
+        if (escapedId && current.ownerDocument.querySelectorAll(escapedId).length === 1) {
+          parts.unshift(escapedId);
+          break;
+        }
+        const tag = current.localName;
+        const siblings = Array.from(current.parentElement?.children ?? [current]).filter((sibling: any) => sibling.localName === tag);
+        parts.unshift(`${tag}:nth-of-type(${siblings.indexOf(current) + 1})`);
+        current = current.parentElement;
+      }
+      return parts.join(' > ');
+    }).catch(() => null);
+    if (css) candidates.push({ strategy: 'css', value: css });
+  }
+  const res = await verifyCandidates(page, target, candidates, { fallback, enableRecompute: !fallback && !scopeOnly });
   await target.dispose().catch(() => {});
   return res;
 }

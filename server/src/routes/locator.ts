@@ -5,15 +5,16 @@ import { startPick, getPick, cancelPick } from '../services/locatorPickerService
 export default async function locatorRoutes(app: FastifyInstance) {
   /** 启动拾取：打开 headed 浏览器到目标页，等待用户在页面上点击元素（窗口尺寸按项目配置）。 */
   app.post('/api/locator/pick', async (req, reply) => {
-    const { url, loginConfigId, projectId } = (req.body ?? {}) as {
+    const { url, loginConfigId, projectId, purpose } = (req.body ?? {}) as {
       url?: string;
       loginConfigId?: string;
       projectId?: string;
+      purpose?: string;
     };
     if (!url?.trim()) return reply.code(400).send({ error: '缺少页面地址' });
     const pickId = randomUUID();
     try {
-      await startPick(pickId, url.trim(), loginConfigId, projectId?.trim() || undefined);
+      await startPick(pickId, url.trim(), loginConfigId, projectId?.trim() || undefined, purpose === 'scope');
     } catch (e) {
       return reply.code(500).send({ error: `启动拾取失败：${String(e)}` });
     }
