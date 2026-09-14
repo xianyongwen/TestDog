@@ -9,6 +9,10 @@ import exLogin from '../../downloads/skills/generate-testcase/examples/login-flo
 import exApi from '../../downloads/skills/generate-testcase/examples/api-json-assert.testcase?raw';
 import exWs from '../../downloads/skills/generate-testcase/examples/websocket-notify.testcase?raw';
 
+import featureReference from '../../downloads/skills/generate-testcase/references/upload-scroll-scope.md?raw';
+import exUploadScrollScope from '../../downloads/skills/generate-testcase/examples/upload-scroll-scope.testcase?raw';
+import exComponents from '../../downloads/skills/generate-testcase/examples/component-actions.testcase?raw';
+
 const enc = new TextEncoder();
 
 const README = `generate-testcase 技能 — 供编程 agent 生成可导入本工具的 .testcase 用例
@@ -29,6 +33,9 @@ export function downloadSkillZip() {
     { name: 'generate-testcase/examples/login-flow.testcase', data: enc.encode(exLogin) },
     { name: 'generate-testcase/examples/api-json-assert.testcase', data: enc.encode(exApi) },
     { name: 'generate-testcase/examples/websocket-notify.testcase', data: enc.encode(exWs) },
+    { name: 'generate-testcase/references/upload-scroll-scope.md', data: enc.encode(featureReference) },
+    { name: 'generate-testcase/examples/upload-scroll-scope.testcase', data: enc.encode(exUploadScrollScope) },
+    { name: 'generate-testcase/examples/component-actions.testcase', data: enc.encode(exComponents) },
     { name: 'README.txt', data: enc.encode(README) },
   ];
   const blob = new Blob([buildZip(files)], { type: 'application/zip' });

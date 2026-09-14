@@ -56,7 +56,7 @@ UI assertions share the same semantics as AI generation, retried within a timeou
 
 ## Self-healing
 
-- When a selector no longer matches (e.g. after a frontend redesign), replay automatically switches to **AI self-healing** using the step's natural-language instruction, then continues.
+- For ordinary actions other than `upload` and `scroll`, when a selector no longer matches (e.g. after a frontend redesign), replay automatically switches to **AI self-healing** using the step's natural-language instruction, then continues.
 - Self-healed locators can be **written back** to the original script with one click, effective for the next run.
 - **Assertions are never self-healed**: a failed assertion may be a real product defect, and re-targeting would turn it into a pass — failures are kept as-is for you to judge.
 
@@ -64,3 +64,10 @@ UI assertions share the same semantics as AI generation, retried within a timeou
 
 - Run list and per-step details live under **Run Records** (see [Run records](/en/menus/runs)): per-step status, duration, failure screenshots and console/network capture.
 - Results can be exported as **JSON / Excel** (test report).
+
+## Uploads, scrolling and scoped targets
+
+- `upload` resolves project file IDs, checks original bytes, then selects files through a file input or a button-triggered chooser. Removing a file tag does not break existing replay. Imported v2 packages remap IDs automatically; assert the business outcome after selection.
+- `scroll` replays page/container movement or scrolls a mounted element into view using the saved parameters. Current-end detection is not an assertion that an infinite list is exhausted.
+- `locator.scope` restricts target lookup to a parent DOM container. Keep the parent unique; UI assertions check that scope exists uniquely. Edit/pick/remove the scope in the step table.
+- Upload, scroll and assertion steps do not use generic AI self-healing. Inspect the failure and correct the file, locator or parameters before rerunning.

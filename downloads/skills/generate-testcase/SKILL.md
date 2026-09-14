@@ -1,6 +1,6 @@
 ---
 name: generate-testcase
-description: 生成可导入「测试工具」桌面应用、由 Playwright 确定性回放并验证的 .testcase 测试用例文件（JSON）。当开发者要求为 Web 应用编写/生成/补齐端到端测试用例、UI 自动化测试、接口响应断言、WebSocket 消息断言、回归用例时使用。生成后用本机 Playwright 跑一遍 smoke test 校验所有定位器在目标应用上能解析、副作用成立，失败则改 locator/拆步重跑直到全过；之后 .testcase 可在测试工具中导入并由 Playwright 一键运行验证（断言 UI 可见性/不可见/文本包含与全等/元素值/勾选与可用状态/元素计数/URL 包含与全等/接口状态码/响应体/JSON 字段/WebSocket 消息，组件库控件可用语义动作回放，失败步骤自动截图、采集 console 与 network），或经本地 HTTP API（127.0.0.1:4123）直接推送。
+description: 为 Web 应用生成可导入 TestDog 的 .testcase 端到端测试用例，支持 UI、接口与 WebSocket 断言、组件动作、文件上传、滚动和作用域定位。用于编写或补齐 E2E/回归用例；按实际运行结果报告验证状态。
 ---
 
 # 生成测试工具用例（.testcase）
@@ -13,7 +13,7 @@ description: 生成可导入「测试工具」桌面应用、由 Playwright 确�
 - **验证范围**：UI 断言（`visible` / `hidden` / `text` / `text_exact` / `value` / `checked` / `unchecked` / `enabled` / `disabled` / `count` / `url` / `url_exact`，总预算 10s 自动轮询）、HTTP 响应断言（`response_status` / `response_body` / `response_json`，按 URL 关键词匹配运行中最近响应）、WebSocket 断言（`ws_sent` / `ws_received`，按 URL 关键词匹配帧）。**断言失败不自愈**（AI 换目标会把产品缺陷变成「通过」，断言失败一律保留证据直接记 FAILED）。
 - **组件语义动作**：组件库（Ant Design / Element Plus / Element UI / Vant / MUI）的非原生控件（Select/DatePicker/Cascader/Slider/Checkbox/Radio 等）可用 `action: "plugin"` 语义动作回放，引擎自动探测控件、执行动作并后验，失败按「语义链 → 原生兜底 → AI 自愈」降级。
 - **失败可观测**：失败步骤自动截图、采集 `console` 与 `network`（截断 20KB）一并落库；运行步骤级进度与最终 PASSED / FAILED 经 WebSocket 实时推送。
-- **定位器失效可自愈**：动作步骤带 `instruction` 时，定位失败后经 CDP 附加 Stagehand 用 AI 重新定位元素，无需重写用例。
+- **定位器失效可自愈**：普通动作步骤（不含 upload/scroll/assert）带 `instruction` 时，定位失败后经 CDP 附加 Stagehand 用 AI 重新定位元素，无需重写用例。
 - **批量回放**：`runBatch` 顺序串跑多个用例（固定无头），汇总 PASSED / FAILED 状态。
 
 ## 何时使用
@@ -30,6 +30,10 @@ description: 生成可导入「测试工具」桌面应用、由 Playwright 确�
 ## 产出物
 
 一个或多个 `.testcase` 文件（UTF-8 JSON，扩展名 `.testcase`）。每个文件 = 一个测试用例（含首个脚本版本 v1）。顶层可附 `intent`（测试意图，可选，见 schema 第 8 节）——手写用例通常省略，运行期也不参与校验。
+
+## 上传、滚动与作用域
+
+涉及 `upload`、`scroll` 或 `locator.scope` 时，先读 [专用参考](references/upload-scroll-scope.md)：它说明动作组合、可移植文件资源、父子定位及验证边界。含上传的导入包需带真实文件的 v2 `files`；不能只写服务器上的文件 ID。步骤编辑器可添加/修改/拾取/删除作用域。
 
 ## 工作流
 
@@ -53,14 +57,17 @@ description: 生成可导入「测试工具」桌面应用、由 Playwright 确�
    - **每次运行都要唯一/随机的数据用系统变量**：需要「重跑不撞残留」的临时数据（临时用户名、编号、标题、手机号、邮箱、证件号），把系统变量拼进 `value`——写法与环境变量统一都是双花括号：`{{systemTime}}`（当前时间戳）、`{{randomNumber}}`（随机数字，可写 `{{randomNumber:8}}` 指定位数）、`{{randomChinese}}`（随机汉字，可写 `{{randomChinese:4}}` 指定字数）、`{{randomPhone}}`（随机手机号）、`{{randomEmail}}`（随机邮箱）、`{{randomIdCard}}`（随机 18 位身份证号）。系统变量由运行引擎内置、每次运行生成新值，无需在项目设置里定义；同名单词若恰好定义了环境变量则以环境变量为准。
    - 在用例 `description` 里**只列出真正需要项目设置里定义的变量**（通常就 `baseUrl`，加上确实复用的账号），不要把一次性测试数据也塞进变量清单。
 5. **按 schema 写文件**：字段与枚举必须精确。**务必先读 [testcase-schema.md](./testcase-schema.md)** 获取完整字段表与执行语义，照表填写——枚举拼错会导致导入被后端校验拒绝（HTTP 400）。
-6. **本地 Playwright 预校验**（强烈推荐，见下文「本地预校验」一节）：写完文件**不立刻交付**，先用本机 Playwright 跑一遍目标 URL 上的每一步 locator，确认能解析到元素；不通过则改 locator / 拆步，重跑直至全过。
+6. **本地 Playwright 预校验**（强烈推荐，见下文「本地预校验」一节）：写完文件**不立刻交付**，先用本机 Playwright 跑一遍目标 URL 上的每一步 locator，确认能解析到元素；不通过则根据证据修正 locator / 拆步并复验；无法验证或仍失败时如实报告，不无限重试。
 7. **参考示例**：`examples/` 下有覆盖 UI/接口/WS 三类断言的完整范例，可直接对照。
    - [examples/login-flow.testcase](./examples/login-flow.testcase) — 导航/填写/点击 + UI 断言 + 接口状态码断言 + URL 断言 + 环境变量
    - [examples/api-json-assert.testcase](./examples/api-json-assert.testcase) — 下拉/勾选 + 接口 JSON 字段断言 + 响应体断言 + 等待
    - [examples/websocket-notify.testcase](./examples/websocket-notify.testcase) — WebSocket 发送/接收断言
+   - [examples/upload-scroll-scope.testcase](./examples/upload-scroll-scope.testcase) — 上传原文件的 v2 包、容器滚动与父作用域
    - [examples/component-actions.testcase](./examples/component-actions.testcase) — 组件语义动作（plugin）+ 强断言（text_exact/value/count/checked）
 
 ## 本地预校验（Playwright smoke run）
+
+以下模板是基础动作示例，不完整覆盖 TestDog 引擎。含 upload/scroll 时按专用参考使用实际回放或实现等价 smoke，不能跳过后声称通过；无法运行时说明阻塞与未验证项。失败先查证原因，仅修正已确认的定位/脚本错误，不弱化预期或无限重试。
 
 **目的**：生成 `.testcase` 后、用真实浏览器把每一步定位器在目标应用上跑一遍，**确认所有 `locator` 都能解析到至少 1 个元素**（`goto`/`wait`/`assert url` 校验副作用），失败就改 locator / 拆步 / 加 `wait`，不要把带病 locator 交付出去。
 
@@ -112,6 +119,10 @@ def resolve(step):
     if s.get("locator"):
         s["locator"]["value"] = sub(s["locator"]["value"])
         if s["locator"].get("name"): s["locator"]["name"] = sub(s["locator"]["name"])
+    if (s.get("locator") or {}).get("scope"):
+        scope = s["locator"]["scope"]
+        scope["value"] = sub(scope["value"])
+        if scope.get("name"): scope["name"] = sub(scope["name"])
     if s.get("assertion"):
         s["assertion"]["expected"] = sub(s["assertion"]["expected"])
         if s["assertion"].get("jsonPath"): s["assertion"]["jsonPath"] = sub(s["assertion"]["jsonPath"])
@@ -119,22 +130,31 @@ def resolve(step):
         s["pluginAction"]["args"] = {k: sub(v) if isinstance(v, str) else v for k, v in s["pluginAction"]["args"].items()}
     return s
 
+def locate(root, loc):
+    strategy, value = loc["strategy"], loc["value"]
+    if strategy == "role": return root.get_by_role(loc.get("role") or value, name=loc.get("name"))
+    methods = {"testid": "get_by_test_id", "label": "get_by_label", "placeholder": "get_by_placeholder",
+               "text": "get_by_text", "alt": "get_by_alt_text", "title": "get_by_title"}
+    if strategy in methods: return getattr(root, methods[strategy])(value)
+    return root.locator("xpath=" + value if strategy == "xpath" else value)
+
 def to_pw(page, step):
     """把一个 TestStep 翻译成 Playwright 调用并执行；返回 (ok, detail)。"""
     a = step["action"]
+    if a in ("upload", "scroll"):
+        raise NotImplementedError("Use TestDog replay for upload/scroll; see references/upload-scroll-scope.md")
     if a == "goto":
         page.goto(step["url"], timeout=10000); return (True, f"goto {step['url']}")
     if a == "wait":
         page.wait_for_timeout(int(step.get("value") or 1000)); return (True, f"wait {step.get('value')}ms")
     loc = step.get("locator") or {}
-    L = page.get_by_test_id(loc["value"]) if loc.get("strategy")=="testid" \
-        else page.get_by_role(loc["role"], name=loc.get("name")) if loc.get("strategy")=="role" \
-        else page.get_by_label(loc["value"]) if loc.get("strategy")=="label" \
-        else page.get_by_placeholder(loc["value"]) if loc.get("strategy")=="placeholder" \
-        else page.get_by_text(loc["value"]) if loc.get("strategy")=="text" \
-        else page.get_by_alt_text(loc["value"]) if loc.get("strategy")=="alt" \
-        else page.get_by_title(loc["value"]) if loc.get("strategy")=="title" \
-        else page.locator(loc["value"])  # css / xpath
+    root = page
+    if loc.get("scope"):
+        parent = loc["scope"]
+        assert not parent.get("scope"), "nested scope is unsupported"
+        root = locate(page, parent)
+        assert root.count() == 1, "scope must match exactly one container"
+    L = locate(root, loc) if loc else page.locator("body")
     if a in ("click","check"):
         L.first.set_checked(step.get("checked", True)) if a == "check" else L.first.click(timeout=5000)
         return (True, f"{a} {loc}")
@@ -220,7 +240,7 @@ Node 版（若项目已用 Playwright TS）也按相同思路写 `playwright.chr
    - UI 断言（`visible` / `hidden` / `text` / `text_exact` / `value` / `checked` / `unchecked` / `enabled` / `disabled` / `count` / `url` / `url_exact`）、组件语义动作（`plugin`）、接口断言（`response_status` / `response_body` / `response_json`）、WebSocket 断言（`ws_sent` / `ws_received`）。
    - 失败步骤自动截图、采集 `console` 与 `network`（最近 20KB）落库，可点开步骤查看。
    - 步骤级进度与运行日志经 WebSocket 实时推送，UI 上能看到「运行中 / 已通过 / 失败」。
-3. 定位器失效时若动作步填了 `instruction`，自动降级 AI 自愈（经 CDP 附加 Stagehand 重新定位）；自愈成功则步骤记 PASSED 并标注「已自愈」、展示自愈后的新定位器。**断言失败不自愈**（换目标会把真实缺陷变成通过）。
+3. 定位器失效时若动作步填了 `instruction`，自动降级 AI 自愈（经 CDP 附加 Stagehand 重新定位）；自愈成功则步骤记 PASSED 并标注「已自愈」、展示自愈后的新定位器。**upload、scroll 和断言失败不走通用 AI 自愈**。
 4. 「批量运行」入口可串跑多个用例（无头模式），汇总 PASSED / FAILED。
 
 > 生成用例不是「写完即正确」——**必须实际点运行过一遍并全部 PASSED**，才算这条用例可作为回归基线。生成时记得用 `{{baseUrl}}` 等占位符，避免硬编码环境域名导致在他环境跑挂。
@@ -258,14 +278,14 @@ curl -X POST http://127.0.0.1:4123/api/projects \
   | getByTitle | `title` | `getByTitle('关闭')` | ★★★★ | 推荐 |
   | CSS | `css` | `button.login` | ★★★ | 兜底 |
   | XPath | `xpath` | `//button[text()='登录']` | ★★ | 最后考虑 |
-- **枚举精确**：`action` ∈ goto/click/fill/press/check/select/assert/wait/raw/plugin；`kind` ∈ navigate/action/assert/wait；`locator.strategy` ∈ role/label/text/placeholder/testid/alt/title/css/xpath/response/websocket；`assertion.type` ∈ visible/hidden/text/text_exact/value/checked/unchecked/enabled/disabled/count/url/url_exact/response_status/response_body/response_json/ws_sent/ws_received。拼错=导入 400。
+- **枚举精确**：`action` ∈ goto/click/fill/press/check/select/assert/wait/raw/plugin/upload/scroll；`kind` ∈ navigate/action/assert/wait；`locator.strategy` ∈ role/label/text/placeholder/testid/alt/title/css/xpath/response/websocket；`assertion.type` ∈ visible/hidden/text/text_exact/value/checked/unchecked/enabled/disabled/count/url/url_exact/response_status/response_body/response_json/ws_sent/ws_received。拼错=导入 400。
 - **check 与取消勾选**：`action: "check"` 缺省勾选；取消勾选写 `"checked": false`（没有 uncheck 动作）。断言勾选状态用 `assertion.type` = `checked`/`unchecked`。
 - **组件库控件用语义动作**：Ant Design / Element Plus / Element UI / Vant / MUI 的 Select/DatePicker/Cascader/Slider/TimePicker/TreeSelect/Checkbox/Radio 等非原生控件，操作步骤写 `action: "plugin"` + `pluginAction: {action, args}`（常用 `select`/`set_date`/`set_time`/`set_value`/`check`，参数表见 schema 第 6 节），`pluginId` 建议省略（引擎自动探测控件匹配插件）。原生控件仍用 click/fill/select。
 - **role 定位器**要同时填 `value` 和 `role`（同值），`name` 可选：`{"strategy":"role","value":"button","role":"button","name":"登录"}`。
 - **接口/WS 断言**用 `locator.strategy` = `response`/`websocket`，`locator.value` 是 URL 关键词子串（如 `/api/login`），不是 CSS 选择器。
 - **wait** 的 `value` 是毫秒数字符串（`"2000"` = 2 秒）。
 - **press** 的 `key` 用 Playwright 键名（`Enter`/`Escape`/`Tab`/`ArrowDown`…），默认 `Enter`。
-- **每步写 instruction**：自愈依赖它（动作步失效时可救回；断言步失败不自愈，AI 换目标会把产品缺陷变成「通过」）。同时填 `description`（界面「说明」列），简述意图/预期。
+- **每步写 instruction**：自愈依赖它（普通动作失效时可救回；upload/scroll/assert 不走通用 AI 自愈）。同时填 `description`（界面「说明」列），简述意图/预期。
 - **断言前按需加 wait**：`url`/`url_exact` 断言不等待跳转语义，点击跳转后要先加 `wait`（如 500ms）或前方加 `visible` 断言；其余 UI 断言（10s 轮询）与 `response_*`/`ws_*`（约 1s）已自动等待，别重复加。
 - **建议生成用例跑完尽量不增删系统数据**：创建类操作断言通过后**可紧跟删除步骤**清理（如「新建 → 断言 → 删除 → 断言已删除」）；但**不要拦截接口**——接口必须真实调用，接口/WS 断言正是基于真实请求。
 - **唯一/随机测试数据用系统变量**：需要唯一值的字段（临时用户名/编号/标题/手机号/邮箱/证件号）把系统变量拼进 value，写法与环境变量统一都是双花括号：`{{systemTime}}`（当前时间戳）、`{{randomNumber}}`（随机数字，如 `{{randomNumber:8}}`）、`{{randomChinese}}`（随机汉字，如 `{{randomChinese:4}}`）、`{{randomPhone}}`（随机手机号）、`{{randomEmail}}`（随机邮箱）、`{{randomIdCard}}`（随机 18 位身份证号），如 `test_user_{{systemTime}}`、`user_{{randomChinese}}`；运行引擎每次运行生成新值，避免重跑撞到上次残留。

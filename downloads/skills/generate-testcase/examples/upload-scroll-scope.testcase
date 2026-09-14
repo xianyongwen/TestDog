@@ -1,0 +1,78 @@
+{
+  "format": "testcase",
+  "version": 2,
+  "title": "上传客户文件并在列表中验证",
+  "description": "演示约定：/customers 有导入按钮、客户列表和结果行；请按实际应用修改定位器与结果。项目需配置 baseUrl。",
+  "steps": [
+    {
+      "kind": "navigate",
+      "action": "goto",
+      "url": "{{baseUrl}}/customers",
+      "instruction": "打开客户页面",
+      "description": "进入客户列表"
+    },
+    {
+      "kind": "action",
+      "action": "upload",
+      "locator": {
+        "strategy": "testid",
+        "value": "customer-file-input",
+        "scope": {
+          "strategy": "testid",
+          "value": "customer-import"
+        }
+      },
+      "upload": {
+        "fileIds": [
+          "customers-csv"
+        ],
+        "mode": "input"
+      },
+      "instruction": "选择客户 CSV 文件",
+      "description": "上传包含 Alice 的客户文件"
+    },
+    {
+      "kind": "action",
+      "action": "scroll",
+      "locator": {
+        "strategy": "testid",
+        "value": "customer-list"
+      },
+      "scroll": {
+        "target": "container",
+        "mode": "toEnd",
+        "axis": "y"
+      },
+      "instruction": "滚动客户列表到当前末端",
+      "description": "查看列表末端的导入结果"
+    },
+    {
+      "kind": "assert",
+      "action": "assert",
+      "locator": {
+        "strategy": "testid",
+        "value": "customer-name",
+        "scope": {
+          "strategy": "testid",
+          "value": "customer-row-Alice"
+        }
+      },
+      "assertion": {
+        "type": "text_exact",
+        "expected": "Alice"
+      },
+      "instruction": "验证导入记录的客户姓名",
+      "description": "客户姓名为 Alice"
+    }
+  ],
+  "files": [
+    {
+      "id": "customers-csv",
+      "name": "customers.csv",
+      "mime": "text/csv",
+      "size": 11,
+      "sha256": "6ba76a9b473c0b5a11613189c98613259be57bc19adbefb4b660d50ad4d382c8",
+      "data": "bmFtZQpBbGljZQo="
+    }
+  ]
+}

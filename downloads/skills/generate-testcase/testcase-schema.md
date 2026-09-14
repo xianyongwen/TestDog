@@ -19,7 +19,7 @@
 }
 ```
 
-- 导入接口读取：`title`（必填）、`description`、`naturalLanguage`、`intent`（可选，按测试意图 schema 校验，非法则 400 `测试意图格式不正确`）、`steps`（按 TestStep 校验）、`rawCode`。`format`/`version` 被忽略，但保留以兼容导出格式（桌面端导出的 `.testcase` 与本结构一致）。
+- 导入读取 title、description、naturalLanguage、intent、steps、rawCode 及可选 files。format 若提供必须为 testcase；version 若提供只接受 1 或 2。无上传资源通常为 v1，包含上传资源用 v2；资源校验与 ID 重映射见下方「上传文件」说明。
 - 文件扩展名必须 `.testcase`，内容为 JSON（建议 pretty-print）。
 
 ## 2. TestStep 字段
@@ -27,13 +27,15 @@
 | 字段 | 类型 | 说明 |
 |---|---|---|
 | `instruction` | string | 自然语言子指令。**强烈建议必填**：回放时若定位器失效，自愈模块靠它用 AI 重新定位元素；缺失则不自愈直接失败。 |
-| `kind` | `navigate`\|`action`\|`assert`\|`wait` | 步骤类别（默认 `action`）。执行引擎只看 `action`，`kind` 仅供分类展示，但应与 `action` 一致。 |
+| `kind` | `navigate`\|`action`\|`assert`\|`wait` | 步骤类别（默认 `action`）。执行行为由 `action` 决定，`kind` 应与其一致；`scroll` 必须为 `action`。 |
 | `action` | enum | 决定执行什么。见下表。 |
 | `locator` | object | 元素定位器 `{strategy, value, role?, name?, scope?}`。需要定位元素的 action 必填（见第 4 节）。 |
 | `url` | string | `action=goto` 时必填。支持 `{{var}}` 占位符（环境变量与系统变量统一写法）。 |
 | `value` | string | `fill` 的输入文本 / `select` 的选项值 / `wait` 的毫秒数（字符串）。支持 `{{var}}` 占位符。 |
 | `key` | string | `press` 的按键名（如 `Enter`、`Escape`、`Tab`），默认 `Enter`。 |
 | `checked` | boolean | 仅 `action=check`：缺省/`true` = 勾选；`false` = **取消勾选**（`setChecked(false)`）。 |
+| `upload` | object | `action=upload` 必填 `{fileIds, mode}`，资源随顶层 files 携带。 |
+| `scroll` | object | `action=scroll` 必填 `{target, mode, axis?, distance?}`，见第 3.1 节。 |
 | `pluginAction` | object | 仅 `action=plugin`：`{action, args?, pluginId?, label?}`，组件语义动作，见第 6 节。 |
 | `assertion` | object | `action=assert` 时必填 `{type, expected?, jsonPath?}`，见第 5 节。 |
 | `criterionId` | string | 可选。对应 `intent.criteria[].id`（验收目标）。运行期不校验、仅随步骤透传；由 AI 生成流程写入，手写用例无 intent 时可省略。 |
@@ -53,7 +55,16 @@
 | `assert` | assert | 视类型 | — | — | — | — | — | ✅ | 见断言表 |
 | `wait` | wait | 否 | — | ✅(毫秒) | — | — | — | — | 等待 N 毫秒（`value` 为数字字符串，默认 1000） |
 | `plugin` | action | ✅(一般) | — | 视动作 | — | — | ✅ | — | 组件语义动作，见第 6 节 |
+| `upload` | action | ✅ | — | — | — | — | — | — | 必填 upload；input 或 chooser 模式 |
+| `scroll` | action | page 不设，其余必填 | — | — | — | — | — | — | 必填 scroll；页面/容器/滚入元素 |
 | `raw` | action | — | — | — | — | — | — | — | 当前跳过，勿用 |
+
+### 3.1 上传文件与滚动参数
+
+- `upload: {fileIds: string[], mode: "input" | "chooser"}`：1~5 个不同文件，单文件最多 20MB。input 定位文件 input（可隐藏）；chooser 定位上传按钮并包含点击。后续断言业务结果，不把文件选择成功当作业务完成。
+- `scroll: {target: "page" | "container" | "element", mode: "by" | "toStart" | "toEnd" | "intoView", axis?: "x" | "y", distance?: number}`：page 无定位器；container/element 需要定位器；element 仅 intoView，其余目标不使用 intoView。by 必须有非零 distance（-10000~10000 px）；其他模式不传 distance。axis 默认 y，intoView 不传 axis。kind 必须 action。
+- 上传、滚动不走通用 AI 自愈；参数变化会使生成期旧验收证据失效。
+- 可移植上传包顶层 `files` 每项为 `{id, name, mime, size, sha256, data}`；data 为原文件标准 base64，size 为原字节数，sha256 为实际字节的 SHA-256。导入创建目标项目文件并重写 ID。完整限制、生成方法与作用域注意事项见 [专用参考](references/upload-scroll-scope.md)，可运行格式示例见 [upload-scroll-scope.testcase](examples/upload-scroll-scope.testcase)。示例需适配实际页面。
 
 ## 4. locator.strategy 与 Playwright 映射
 
@@ -86,7 +97,7 @@
 ```json
 { "strategy": "role", "value": "button", "role": "button", "name": "确定", "scope": { "strategy": "role", "value": "dialog", "role": "dialog" } }
 ```
-对应 `getByRole('dialog').getByRole('button', {name:'确定'})`。scope 的 strategy 取 testid/role/label/placeholder/text/alt/title/css（不含 xpath/response/websocket），value 语义同主定位。给弹窗内元素写用例时优先加 `role=dialog` 作用域（或该弹窗唯一的 css/id）；普通页面元素无需 scope。**注意**：回放要求 scope 恰好命中 1 个容器，命中 0 个或多个直接判失败。
+对应 `getByRole('dialog').getByRole('button', {name:'确定'})`。scope 的 strategy 取 testid/role/label/placeholder/text/alt/title/css（不含 xpath/response/websocket），value 语义同主定位。给弹窗内元素写用例时优先加 `role=dialog` 作用域（或该弹窗唯一的 css/id）；普通页面元素无需 scope。**注意**：scope 应恰好命中 1 个容器；断言会校验父范围唯一性，不用 `.first()` 掩盖错误。scope 不递归嵌套。步骤表支持添加、展开编辑、折叠、单独拾取和删除作用域，拾取/删除不替换主目标；response/websocket 与页面滚动不使用作用域。
 
 ## 5. assertion.type 与所需字段
 
@@ -255,8 +266,8 @@
 - `check` 取消勾选要写 `"checked": false`，不能写 `action: "uncheck"`（没有这个动作）。
 - 组件库非原生控件（Select/DatePicker/Cascader/Slider/Checkbox/Radio 等）优先用 `action: "plugin"`（第 6 节），原生 `click`/`selectOption` 对弹层/虚拟列表极脆。
 - `goto` 的 `url` 尽量用 `{{baseUrl}}` 前缀，避免硬编码环境域名。
-- 每步都写 `instruction`——定位器失效时自愈靠它救回（断言步除外：断言失败一律不自愈）。
+- 每步都写 `instruction`——定位器失效时自愈靠它救回（upload/scroll/assert 不走通用 AI 自愈）。
 - 一个 `.testcase` 文件只含一个用例；多场景拆成多个文件。
 - locator 需求：`url`/`url_exact` 不需要 locator；`text` 可省略（整页断言，不推荐）；其余 UI 断言需要普通元素 locator；`response_*`/`ws_*` 需要 `locator.strategy` 为 `response`/`websocket`。
 - `url` / `url_exact` 断言**不等待跳转语义**：点击触发跳转后紧接 url 断言可能因跳转未完成而失败，需先加 `wait` 或在前方加 `visible` 断言。
-- `scope` 命中 0 个或多个容器都直接失败，容器定位器要足够唯一。
+- 父 `scope` 应唯一；UI 断言会检查父范围唯一存在，普通动作按范围组合目标定位器，不应依赖多范围匹配。
