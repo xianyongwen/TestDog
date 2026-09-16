@@ -1,3 +1,4 @@
+import { correctJob } from '../services/generation/jobControl';
 import type { TestIntent } from '../shared/testIntent';
 import type { FastifyInstance } from 'fastify';
 import { randomUUID } from 'node:crypto';
@@ -83,6 +84,14 @@ export default async function generateRoutes(app: FastifyInstance) {
     const r = assistStep(jobId, d);
     if (r !== true) return { error: typeof r === 'string' ? r : '该任务不在等待用户协助状态' };
     return { ok: true };
+  });
+
+  app.post('/api/generate/:jobId/correct', async (req) => {
+    const { jobId } = req.params as { jobId: string };
+    const { instruction } = (req.body ?? {}) as { instruction?: unknown };
+    if (typeof instruction !== 'string' || !instruction.trim() || instruction.length > 8000)
+      return { error: '请输入 1～8000 字的纠正描述' };
+    return correctJob(jobId, instruction.trim()) ? { ok: true } : { error: '当前不在脚本执行阶段，请等待开始执行或继续生成后再发送纠正' };
   });
 
   /** 暂停生成：中断执行但保留浏览器会话（30 分钟内可通过 continue 继续）。 */

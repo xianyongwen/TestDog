@@ -359,6 +359,9 @@ const zhCN = {
   },
 
   generate: {
+    sendCorrection: '发送纠正',
+    correctionPlaceholder: '输入纠正说明，如：先选择部门，再选择账号（Enter 发送，Shift+Enter 换行）',
+    correctionSent: '纠正已接收，将在当前操作结束后用于后续执行',
     title: '生成脚本{{suffix}}',
     help1: '自然语言 → 预拆分步骤计划 → 确认 → 逐步用 act/observe 定位执行 → 记录为可回放脚本',
     help2:

@@ -552,7 +552,11 @@ export async function runGenerationLoop(o: {
     return assistFollowup(decision, context);
   };
 
+  const corrections: string[] = [];
+  correctionQueues.set(jobId, corrections);
   const loop = await runToolLoop({
+    hasPendingInput: () => corrections.length > 0,
+    takePendingInput: () => corrections.splice(0),
     client,
     model: cfg.openaiModel,
     reasoningEffort: cfg.reasoningEffort,

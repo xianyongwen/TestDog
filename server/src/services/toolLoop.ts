@@ -121,6 +121,9 @@ export interface ToolLoopOpts {
   usageKey: string; // usage 记账的 jobId
   signal?: AbortSignal;
   /** 可选：模型调 finish 时的校验。返回 null 接受并结束；返回字符串则拒绝本次 finish，把该消息回灌给模型继续（如「脚本必须以断言结尾」）。 */
+  /** 在工具边界接收用户纠正，旧响应不再执行。 */
+  hasPendingInput?: () => boolean;
+  takePendingInput?: () => string[];
   validateFinish?: (args: Record<string, unknown>) => Promise<string | null>;
   /**
    * 可选：工具执行异常时先问钩子。返回 null → 错误照常回灌（模型自行调整重试）；
@@ -306,7 +309,8 @@ export async function runToolLoop(opts: ToolLoopOpts): Promise<ToolLoopResult> {
         const memory = redactGenerationText(usageKey, opts.workingMemory());
         const previous = (messages as any[]).find(m => m.__ttMemory)?.content ?? '';
         const facts = recentEvidence.length ? recentEvidence.join('\n') : String(previous).slice(-2500);
-        messages.splice(2, cutAt - 2, { role: 'user', content: `【已执行事实；原始轨迹保留在日志】\n${memory}\n【近期证据与失败原因】\n${facts}\n未列为完成的目标仍需验证。`, __ttMemory: true } as any);
+        const corrections = messages.slice(2, cutAt).filter(m => (m as any).__ttCorrection);
+        messages.splice(2, cutAt - 2, ...corrections, { role: 'user', content: `【已执行事实；原始轨迹保留在日志】\n${memory}\n【近期证据与失败原因】\n${facts}\n未列为完成的目标仍需验证。`, __ttMemory: true } as any);
         const live = new Set((messages as any[]).filter(m => m.role === 'tool').map(m => m.tool_call_id));
         for (const id of statefulSlots.keys()) if (!live.has(id)) statefulSlots.delete(id);
       }
@@ -333,6 +337,7 @@ export async function runToolLoop(opts: ToolLoopOpts): Promise<ToolLoopResult> {
         delete m.__ttSlotKind;
         continue;
       }
+      if (m.__ttCorrection) continue;
       const text = typeof m.content === 'string' ? m.content : '';
       if (text.length > TRIM_KEEP_CHARS * 2) {
         m.content = `${text.slice(0, TRIM_KEEP_CHARS)}…（历史已压缩）`;
@@ -347,6 +352,9 @@ export async function runToolLoop(opts: ToolLoopOpts): Promise<ToolLoopResult> {
 
   for (let i = 0; i < maxSteps && steps < maxSteps; i++) {
     if (signal?.aborted) break;
+    for (const content of opts.takePendingInput?.() ?? []) {
+      messages.push({ role: 'user', content: redactGenerationText(usageKey, `【用户纠正】${content}\n请先确认当前页面状态，再按最新说明调整后续执行。已完成操作不会自动回滚；验收标准如需改变，请请求用户修订。`), __ttCorrection: true } as any);
+    }
     compressIfNeeded();
     round = i + 1;
     // 快照必须在 LLM 调用之前：调用返回时 usage 已入账，若在调用后才取快照，差分恒为 0。
@@ -378,6 +386,7 @@ export async function runToolLoop(opts: ToolLoopOpts): Promise<ToolLoopResult> {
     }
     // 记录本轮主调用输入（=当前上下文大小），供下轮水位判断；此区间仅该调用，差分即其输入
     lastRoundInput = getUsage(usageKey).inputTokens - base.inputTokens;
+    if (opts.hasPendingInput?.()) continue; // 丢弃纠正到达前发出的模型请求结果
     const msg = redactGenerationData(usageKey, completion.choices?.[0]?.message);
     const toolCalls = msg?.tool_calls ?? [];
 
@@ -403,6 +412,10 @@ export async function runToolLoop(opts: ToolLoopOpts): Promise<ToolLoopResult> {
     let prev = base;
     const answeredIds = new Set<string>();
     for (const tc of toolCalls) {
+      if (opts.hasPendingInput?.()) {
+        messages.push({ role: 'tool', tool_call_id: tc.id, content: '（未执行：用户已纠正，等待重新规划）' });
+        continue;
+      }
       if (signal?.aborted || finished || steps >= maxSteps) {
         // 中止时为剩余 tool_calls 补占位消息：否则 messages 留下孤儿 tool_calls（协议违规，续跑时网关 400）
         messages.push({ role: 'tool', tool_call_id: tc.id, content: finished ? '（未执行：任务已结束）' : signal?.aborted ? '（已中止）' : '（未执行：已达到工具步数上限）' } as OpenAI.ChatCompletionMessageParam);
@@ -431,6 +444,7 @@ export async function runToolLoop(opts: ToolLoopOpts): Promise<ToolLoopResult> {
           rejectMsg = '（已中止）';
         }
         if (signal?.aborted) rejectMsg = '（已中止）';
+        if (opts.hasPendingInput?.()) rejectMsg = '用户已发送纠正，请先处理最新说明再完成。';
         if (rejectMsg) {
           result = rejectMsg;
         } else {
@@ -611,6 +625,7 @@ export async function runToolLoop(opts: ToolLoopOpts): Promise<ToolLoopResult> {
       }
       return { finished: false, finishMessage: stuckAbortMsg, steps };
     }
+    if (finished && opts.hasPendingInput?.()) finished = null;
     if (finished) break;
   }
 

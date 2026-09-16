@@ -103,6 +103,8 @@ export default function Generate() {
   const [startUrl, setStartUrl] = useState('');
   const [loginConfigId, setLoginConfigId] = useState<string | undefined>(undefined);
   const [busy, setBusy] = useState(false);
+  const [correcting, setCorrecting] = useState(false);
+  const correctingRef = useRef(false);
   /** 计划确认中（服务端 LLM 取值审查有秒级延迟，按钮转 loading 防重复点击）。 */
   const [confirming, setConfirming] = useState(false);
   const [steps, setSteps] = useState<TestStep[]>([]);
@@ -374,6 +376,27 @@ export default function Generate() {
       setManualHint(false);
       setEndState('cancelled'); // 同步归一按钮状态，不依赖 WS 事件到达时机
       setDone(false);
+    }
+  };
+
+  const sendCorrection = async () => {
+    const jobId = jobIdRef.current;
+    const instruction = nl.trim();
+    if (!jobId || !busy || !instruction || plan || manualHint || correctingRef.current) return;
+    correctingRef.current = true;
+    setCorrecting(true);
+    try {
+      const res = await http.post<{ ok?: boolean; error?: string }>(`/api/generate/${jobId}/correct`, { instruction });
+      if (res.error) { message.error(res.error); return; }
+      if (jobIdRef.current !== jobId) return;
+      setNl(current => current.trim() === instruction ? '' : current);
+      setAssist(null);
+      message.success(t('generate.correctionSent'));
+    } catch (error) {
+      message.error(String(error));
+    } finally {
+      correctingRef.current = false;
+      setCorrecting(false);
     }
   };
 
@@ -846,16 +869,18 @@ export default function Generate() {
                 <Input.TextArea
                   rows={2}
                   placeholder={
-                    endState === 'stopped'
+                    busy ? t('generate.correctionPlaceholder') : endState === 'stopped'
                       ? t('generate.stoppedPlaceholder')
                       : t('generate.normalPlaceholder')
                   }
                   value={nl}
                   onChange={(e) => setNl(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey && !busy) {
+                    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
                       e.preventDefault();
-                      start();
+                      if (busy) void sendCorrection();
+                      else if (endState === 'stopped') void continueRun();
+                      else void start();
                     }
                   }}
                   onPaste={(e) => {
@@ -873,6 +898,7 @@ export default function Generate() {
                   <div className="flex gap-2.5">
                     {!busy && endState !== 'stopped' && <Button type="primary" disabled={attachments.some((a) => a.status === 'uploading')} onClick={start}><ThunderboltOutlined className="mr-1.5" />{t('generate.send')}</Button>}
                     {endState === 'stopped' && !busy && <Button type="primary" disabled={attachments.some((a) => a.status === 'uploading')} onClick={continueRun}><PlayCircleOutlined className="mr-1.5" />{t('generate.continueGen')}</Button>}
+                    {busy && <Button type="primary" loading={correcting} disabled={!nl.trim() || !!plan || manualHint} onClick={sendCorrection}>{t('generate.sendCorrection')}</Button>}
                     {busy && <Button type="primary" onClick={pauseGen}><PauseOutlined className="mr-1.5" />{t('generate.pause')}</Button>}
                     {busy && <Button type="primary" onClick={cancel}><CloseCircleOutlined className="mr-1.5" />{t('generate.cancel')}</Button>}
                     {(endState === 'done' || endState === 'stopped' || endState === 'cancelled') && steps.length > 0 && <Button type="primary" onClick={save}><SaveOutlined className="mr-1.5" />{t('generate.saveScript')}</Button>}

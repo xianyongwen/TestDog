@@ -362,6 +362,9 @@ const enUS = {
   },
 
   generate: {
+    sendCorrection: 'Send correction',
+    correctionPlaceholder: 'Describe a correction (Enter to send, Shift+Enter for a new line)',
+    correctionSent: 'Correction received; it will guide execution after the current operation',
     title: 'Generate Script{{suffix}}',
     help1: 'Natural language → pre-split step plan → confirm → execute step by step with act/observe → record as a replayable script',
     help2:

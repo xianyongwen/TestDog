@@ -38,6 +38,19 @@ export function releaseJobSlot(jobId: string, owner?: symbol): void {
   if (!owner || runningJobs.get(jobId) === owner) runningJobs.delete(jobId);
 }
 
+/** 仅执行循环存活期间接受纠正，避免向已完成任务发送成功。 */
+export const correctionQueues = new Map<string, string[]>();
+export function correctJob(jobId: string, instruction: string): boolean {
+  const queue = correctionQueues.get(jobId);
+  if (!queue || !isJobRunning(jobId)) return false;
+  const text = redactGenerationData(jobId, instruction);
+  queue.push(text);
+  // 正在等待人工说明时，同时解除挂起；队列负责完整地注入 user 消息。
+  if (waits.get(jobId)?.type === 'assist') resolveWait(jobId, { decision: 'redescribe', instruction: text });
+  pub({ type: 'gen:status', jobId, message: `用户纠正：${text}` });
+  return true;
+}
+
 function setWait(jobId: string, wait: Wait, timeoutMs: number): void {
   waits.set(jobId, wait);
   const t = setTimeout(() => resolveWait(jobId, null), timeoutMs);
@@ -173,6 +186,7 @@ export function createJobRuntime(jobId: string): JobRuntime {
   const cancel = (message: string) => {
     paused = false;
     cancelled = true;
+    correctionQueues.delete(jobId);
     abortCtrl.abort();
     resolveWait(jobId, null);
     void closeSession(jobId).catch(() => {});
@@ -190,6 +204,7 @@ export function createJobRuntime(jobId: string): JobRuntime {
     if (cancelled) return;
     paused = true;
     cancelled = true; // 复用取消的循环退出与跳过逻辑
+    correctionQueues.delete(jobId);
     abortCtrl.abort();
     resolveWait(jobId, null);
     pub({ type: 'gen:status', jobId, message: '正在暂停，等待当前操作记录和保存完成…' });
