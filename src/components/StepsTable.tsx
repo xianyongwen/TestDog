@@ -139,6 +139,7 @@ export default function StepsTable({ steps, onChange, extra, envVarKeys, pickSta
       const res = await http.post<{ pickId?: string; error?: string }>('/api/locator/pick', {
         url,
         purpose,
+        scope: purpose === 'target' ? steps[i].locator?.scope : undefined,
         loginConfigId: loginOverride === undefined ? pickLoginConfigId : loginOverride || undefined,
         ...(pickProjectId ? { projectId: pickProjectId } : {}),
       });

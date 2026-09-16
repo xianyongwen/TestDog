@@ -1,20 +1,24 @@
 import type { FastifyInstance } from 'fastify';
 import { randomUUID } from 'node:crypto';
+import { locatorScopeSchema } from '../shared/testScript';
 import { startPick, getPick, cancelPick } from '../services/locatorPickerService';
 
 export default async function locatorRoutes(app: FastifyInstance) {
   /** 启动拾取：打开 headed 浏览器到目标页，等待用户在页面上点击元素（窗口尺寸按项目配置）。 */
   app.post('/api/locator/pick', async (req, reply) => {
-    const { url, loginConfigId, projectId, purpose } = (req.body ?? {}) as {
+    const { url, loginConfigId, projectId, purpose, scope } = (req.body ?? {}) as {
       url?: string;
       loginConfigId?: string;
       projectId?: string;
       purpose?: string;
+      scope?: unknown;
     };
     if (!url?.trim()) return reply.code(400).send({ error: '缺少页面地址' });
+    const parsedScope = locatorScopeSchema.optional().safeParse(scope);
+    if (!parsedScope.success) return reply.code(400).send({ error: '作用域格式无效' });
     const pickId = randomUUID();
     try {
-      await startPick(pickId, url.trim(), loginConfigId, projectId?.trim() || undefined, purpose === 'scope');
+      await startPick(pickId, url.trim(), loginConfigId, projectId?.trim() || undefined, purpose === 'scope', parsedScope.data);
     } catch (e) {
       return reply.code(500).send({ error: `启动拾取失败：${String(e)}` });
     }

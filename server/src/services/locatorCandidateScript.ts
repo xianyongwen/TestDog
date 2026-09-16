@@ -758,7 +758,8 @@ export const CANDIDATE_SCRIPT = PLUGIN_RUNTIME_SCRIPT + String.raw`(() => {
   };
 
   /** 供后端对「仍存活」的目标元素按当前页面状态实时重算 CSS 兜底。 */
-  window.__ttPickCss = function (el) {
+  window.__ttPickCss = function (el, anchor) {
+    if (anchor) return { css: computeCss(el, anchor), scope: null };
     const ms = el && el.closest ? findModalScope(el) : null;
     return {
       css: ms ? computeCss(el, ms.container) : computeCss(el),
