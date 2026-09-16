@@ -771,8 +771,14 @@ function RunDetail({
           {
             title: t('caseDetail.info'),
             dataIndex: 'message',
+            width: 400,
             render: (_v, r) => (
-              <span>
+              <span
+                className="block max-w-[384px] truncate"
+                title={[r.message, r.healed && r.healedLocator ? describeLocator(r.healedLocator) : '']
+                  .filter(Boolean)
+                  .join('\n')}
+              >
                 {r.message}
                 {r.healed && r.healedLocator ? (
                   // 自愈步展示智能体重新定位得到的新定位器（历史记录亦从落库的 healedLocator 渲染）
