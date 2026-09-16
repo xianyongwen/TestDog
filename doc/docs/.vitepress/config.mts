@@ -16,7 +16,8 @@ const sidebar = (p = '') => [
     items: [
       { text: '下载安装', link: `${p}/download` },
       { text: '简介', link: `${p}/guide/what-is-testdog` },
-      { text: '快速开始', link: `${p}/guide/getting-started` }
+      { text: '快速开始', link: `${p}/guide/getting-started` },
+      { text: '更新日志', link: `${p}/guide/changelog` }
     ]
   },
   {
@@ -65,7 +66,8 @@ const enSidebar = (p = '') => [
     items: [
       { text: 'Download', link: `${p}/download` },
       { text: 'Introduction', link: `${p}/guide/what-is-testdog` },
-      { text: 'Getting Started', link: `${p}/guide/getting-started` }
+      { text: 'Getting Started', link: `${p}/guide/getting-started` },
+      { text: 'Changelog', link: `${p}/guide/changelog` }
     ]
   },
   {
