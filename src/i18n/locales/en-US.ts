@@ -612,7 +612,7 @@ const enUS = {
     title: 'Login Config Manager{{suffix}}',
     alert: 'Record login state: open browser → sign in manually → click "Stop & Save"',
     alertDesc:
-      'A login config stores the browser state after login (Cookie + localStorage). When running scripts, select the config and the browser starts logged in. Note: closing the browser during recording cancels it without saving; click "Cancel Recording" to abort, or "Stop & Save" after signing in to keep the login state.',
+      'A login config stores the browser state after login (Cookie + localStorage). When running scripts, select the config and the browser starts logged in. Closing the browser while recording or re-recording automatically creates or updates the config using the latest captured state. Click "Cancel Recording" to discard it.',
     name: 'Name',
     isDefault: 'Default',
     setDefault: 'Set as Default',

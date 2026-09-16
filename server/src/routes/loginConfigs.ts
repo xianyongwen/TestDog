@@ -96,8 +96,8 @@ export default async function loginConfigRoutes(app: FastifyInstance) {
     const viewport = readViewport(project?.viewport);
     const { randomUUID } = await import('node:crypto');
     const jobId = randomUUID();
-    await startLoginRecording(jobId, url, viewport);
-    return { jobId };
+    const { closed } = await startLoginRecording(jobId, url, viewport);
+    return { jobId, closed };
   });
 
   /** 停止录制并返回捕获的 storageState。 */

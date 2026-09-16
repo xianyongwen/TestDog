@@ -44,6 +44,8 @@ export default function LoginConfigManager({
   const [saving, setSaving] = useState(false);
   const [logs, setLogs] = useState<LogItem[]>([]);
   const jobIdRef = useRef<string | null>(null);
+  const savingRef = useRef(false);
+  const stopRef = useRef<() => Promise<void>>(async () => {});
   // 正在重新录制的配置：停止时更新该配置而非新建
   const [refreshing, setRefreshing] = useState<LoginConfig | null>(null);
 
@@ -80,6 +82,8 @@ export default function LoginConfigManager({
       if (!jobIdRef.current || msg.jobId !== jobIdRef.current) return;
       if (msg.type === 'loginconfig:status') {
         setLogs((p) => [...p, { color: msg.status === 'warning' ? 'orange' : 'blue', title: String(msg.message ?? '') }]);
+      } else if (msg.type === 'loginconfig:closed') {
+        void stopRef.current();
       } else if (msg.type === 'loginconfig:error') {
         // 浏览器被直接关闭等异常：取消录制过程，复位 UI
         jobIdRef.current = null;
@@ -102,11 +106,15 @@ export default function LoginConfigManager({
     setLogs([]);
     setRecording(true);
     try {
-      const { jobId } = await http.post<{ jobId: string }>(
+      const { jobId, closed } = await http.post<{ jobId: string; closed: boolean }>(
         `/api/projects/${project.id}/login-configs/record/start`,
         { url: targetUrl },
       );
       jobIdRef.current = jobId;
+      if (closed) {
+        await stopRef.current();
+        return;
+      }
       setLogs((p) => [
         ...p,
         {
@@ -122,7 +130,8 @@ export default function LoginConfigManager({
   };
 
   const stop = async () => {
-    if (!project || !jobIdRef.current) return;
+    if (!project || !jobIdRef.current || savingRef.current) return;
+    savingRef.current = true;
     setSaving(true);
     try {
       const { storageState } = await http.post<{ storageState: unknown }>('/api/login-configs/record/stop', {
@@ -142,13 +151,16 @@ export default function LoginConfigManager({
       jobIdRef.current = null;
       load();
     } catch (e) {
+      jobIdRef.current = null;
       message.error(t('loginConfig.saveFailed', { err: String(e) }));
       setRecording(false);
       setRefreshing(null);
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   };
+  stopRef.current = stop;
 
   /** 取消录制：通知服务端关闭浏览器并丢弃会话，立即复位 UI。 */
   const cancel = async () => {
