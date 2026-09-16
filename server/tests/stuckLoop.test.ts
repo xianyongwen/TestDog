@@ -226,7 +226,7 @@ describe('runToolLoop 观察空转保护（see 连击）', () => {
       resp(call('finish', {}, 'fz')),
     ]);
     const messages: any[] = [{ role: 'user', content: '目标' }];
-    const onStuck = vi.fn(async (_name: string, _args: Record<string, unknown>, _count: number, _kind?: 'repeat' | 'observe' | 'linkage') => null);
+    const onStuck = vi.fn(async (_name: string, _args: Record<string, unknown>, _count: number, _kind?: 'repeat' | 'observe' | 'linkage' | 'cycle') => null);
     await runToolLoop({
       client, model: 'm', tools: [seeTool, gotoTool, finishTool], messages: messages as any,
       maxSteps: 20, usageKey: JOB, onStep: () => {}, onStuck,
@@ -246,7 +246,7 @@ describe('runToolLoop 观察空转保护（see 连击）', () => {
     ]);
     const messages: any[] = [{ role: 'user', content: '目标' }];
     const results: string[] = [];
-    const onStuck = vi.fn(async (_name: string, _args: Record<string, unknown>, _count: number, _kind?: 'repeat' | 'observe' | 'linkage') => null);
+    const onStuck = vi.fn(async (_name: string, _args: Record<string, unknown>, _count: number, _kind?: 'repeat' | 'observe' | 'linkage' | 'cycle') => null);
     await runToolLoop({
       client, model: 'm', tools: [seeTool, clickTool, finishTool], messages: messages as any,
       maxSteps: 20, usageKey: JOB, onStep: ({ result: r }) => { results.push(r); }, onStuck,
@@ -290,7 +290,7 @@ describe('runToolLoop 观察空转保护（see 连击）', () => {
       resp(call('finish', {}, 'fz')),
     ]);
     const messages: any[] = [{ role: 'user', content: '目标' }];
-    const onStuck = vi.fn(async (_name: string, _args: Record<string, unknown>, _count: number, _kind?: 'repeat' | 'observe' | 'linkage') => '【人工介入】');
+    const onStuck = vi.fn(async (_name: string, _args: Record<string, unknown>, _count: number, _kind?: 'repeat' | 'observe' | 'linkage' | 'cycle') => '【人工介入】');
     await runToolLoop({
       client, model: 'm', tools: [seeTool, landingClick, finishTool], messages: messages as any,
       maxSteps: 20, usageKey: JOB, onStep: () => {}, onStuck,
@@ -311,7 +311,7 @@ describe('runToolLoop 观察空转保护（see 连击）', () => {
     ]);
     const messages: any[] = [{ role: 'user', content: '目标' }];
     const results: string[] = [];
-    const onStuck = vi.fn(async (_name: string, _args: Record<string, unknown>, _count: number, _kind?: 'repeat' | 'observe' | 'linkage') => null);
+    const onStuck = vi.fn(async (_name: string, _args: Record<string, unknown>, _count: number, _kind?: 'repeat' | 'observe' | 'linkage' | 'cycle') => null);
     await runToolLoop({
       client, model: 'm', tools: [seeTool, finishTool], messages: messages as any,
       maxSteps: 20, usageKey: JOB, onStep: ({ result: r }) => { results.push(r); }, onStuck,

@@ -1,4 +1,5 @@
 import type OpenAI from 'openai';
+import { ShortCycleGuard } from './shortCycleGuard';
 import type { ReasoningEffort } from '../config';
 import { getUsage, type TokenUsage } from './tokenUsage';
 import { redactGenerationData, redactGenerationText } from './generation/privacy';
@@ -139,13 +140,14 @@ export interface ToolLoopOpts {
    * 可选：空转保护升级回调（窗口内同签名变更类操作反复出现达 STUCK_ASSIST_AT，或 see 观察空转达 SEE_ASSIST_AT，
    * 或 select 类调用在两元素间交替翻转达 LINK_FLIP_TRANSITIONS）。
    * kind 缺省为 'repeat'（同签名重复）；'observe'为 see 连续无进展；'linkage'为联动字段死锁（detail 携带两元素的可读描述）。
+   * 'cycle' 为同一动作与状态轨迹连续重复至少三轮。
    * 返回 null → 照常回灌并追加空转警告；返回字符串 →作为替换结果回灌（并重置该签名的窗口计数）。
    */
   onStuck?: (
     name: string,
     args: Record<string, unknown>,
     count: number,
-    kind?: 'repeat' | 'observe' | 'linkage',
+    kind?: 'repeat' | 'observe' | 'linkage' | 'cycle',
     detail?: string,
   ) => Promise<string | null>;
   /**
@@ -235,10 +237,10 @@ export async function runToolLoop(opts: ToolLoopOpts): Promise<ToolLoopResult> {
     }
   }
   let lastObservedFingerprint: string | undefined;
-  let unchangedObservations = 0;
   const recentEvidence: string[] = [];
 
   // —— 空转保护状态：滑动窗口（近期签名）+ 同签名累计（防 assist 重置后无限续空转）+ assist 闩锁 ——
+  const cycleGuard = new ShortCycleGuard();
   let stuckHist: string[] = [];
   const stuckTotal = new Map<string, number>();
   const stuckAssistLatched = new Set<string>();
@@ -484,7 +486,15 @@ export async function runToolLoop(opts: ToolLoopOpts): Promise<ToolLoopResult> {
       // —— 空转保护：滑动窗口内同签名变更类操作反复出现时分级干预 ——
       // 执行/记录和任务进展分离。宿主有实际状态信号时优先使用；兼容其他调用方的探针。
       const toolName = tc.function?.name ?? '';
-      const progressed = !finished && resultData?.progressed != null ? resultData.progressed : toolOk && !finished ? Boolean(isProgress?.(toolName)) : false;
+      const progressed = toolOk && !finished && (resultData?.progressed ?? Boolean(isProgress?.(toolName)));
+      if (progressed) {
+        stuckHist = [];
+        stuckTotal.clear();
+        stuckAssistLatched.clear();
+        seeStreak = 0;
+        lastObservedFingerprint = undefined;
+      }
+      let guardIntervened = humanIntervened;
       const sig = stuckSig(toolName, args);
       if (sig && !finished && !progressed && !signal?.aborted) {
         stuckHist.push(sig);
@@ -500,6 +510,7 @@ export async function runToolLoop(opts: ToolLoopOpts): Promise<ToolLoopResult> {
           stuckAssistLatched.add(sig);
           let override: string | null = null;
           try {
+            guardIntervened = true;
             override = onStuck ? await onStuck(toolName, args, inWindow) : null;
           } catch {
             override = null; // 钩子异常按 null 处理，不阻断主循环
@@ -520,31 +531,50 @@ export async function runToolLoop(opts: ToolLoopOpts): Promise<ToolLoopResult> {
       // 仅计成功执行：失败的观察/动作不重置也不累计（失败本身会走 onFailure/同签名空转通道）
       const observationTool = ['see', 'snapshot', 'page_tree', 'readText', 'api'].includes(toolName);
       const fingerprint = resultData?.stateFingerprint ?? (observationTool && toolName !== 'see' ? `${toolName}:${result}` : undefined);
-      if (fingerprint) {
-        if (fingerprint === lastObservedFingerprint) unchangedObservations++;
-        else { lastObservedFingerprint = fingerprint; unchangedObservations = 0; }
-      }
-      if (observationTool && !finished && toolOk && !signal?.aborted && (toolName === 'see' || unchangedObservations > 0)) {
-        seeStreak++;
-        if (seeStreak >= SEE_ASSIST_LIMIT) {
+      if (toolOk && !finished && !signal?.aborted) {
+        const changed = fingerprint != null && fingerprint !== lastObservedFingerprint;
+        if (changed) seeStreak = 0;
+        if (fingerprint != null) lastObservedFingerprint = fingerprint;
+        // With a fingerprint, every observer uses the same consecutive-state rule.
+        // Legacy see tools without one retain their bounded observation budget.
+        if (observationTool && !progressed && (!changed || fingerprint == null)) seeStreak++;
+        if (observationTool && seeStreak >= SEE_ASSIST_LIMIT && !guardIntervened && !stuckAbortMsg) {
           let override: string | null = null;
+          guardIntervened = true;
           try {
             override = onStuck ? await onStuck(toolName, args, seeStreak, 'observe') : null;
-          } catch {
-            override = null; // 钩子异常按 null 处理，不阻断主循环
-          }
-          if (override != null) { result = override; humanIntervened = true; } // 人工决策作为替换结果回灌（与同签名空转同模式）
+          } catch { /* Fall back to a warning. */ }
+          if (override != null) { result = override; humanIntervened = true; }
           else result += observeWarnText(seeStreak);
-          seeStreak = 0; // 介入后给新一轮预算
+          seeStreak = 0;
         }
-      } else if (tool && !finished && progressed) {
-        unchangedObservations = 0;
-        seeStreak = 0; // 实际状态推进，重置观察连击
+      }
+      // State changes do not clear this trajectory: A -> B -> A is precisely
+      // the loop that a per-action progressed flag cannot detect.
+      if (sig && !finished && !signal?.aborted) {
+        if (!toolOk || !resultData?.stateFingerprint || humanIntervened) cycleGuard.resetWindow();
+        else {
+          const cycle = cycleGuard.record(sig, resultData.stateFingerprint);
+          if (cycle) {
+            const detail = `最近相同操作与页面状态以 ${cycle.period} 步为周期连续重复至少 3 轮`;
+            if (cycle.abort) {
+              stuckAbortMsg = `空转保护：${detail}，累计检测到 ${cycle.count} 次循环复现，已自动终止本次生成`;
+              result += '\n（空转保护：本次生成已被强制终止）';
+            } else if (cycle.assist && !guardIntervened && !stuckAbortMsg) {
+              guardIntervened = true;
+              let override: string | null = null;
+              try { override = onStuck ? await onStuck(toolName, args, cycle.count, 'cycle', detail) : null; }
+              catch { /* Fall back to a warning. */ }
+              if (override != null) { result = override; humanIntervened = true; }
+              else result += `\n⚠️ 系统提示：${detail}。请检查前置条件或改变策略，无法解决时使用 ask_human 求助。`;
+            }
+          }
+        }
       }
       // —— 联动死锁保护：select 类成功调用在两个元素间交替（选择其一另一个被页面回设）达阈值 → 挂起人工决策 ——
       // 仅计成功执行：失败的 select 不构成「选上又被联动打回」的翻转证据（失败本身走 onFailure/同签名空转通道）；
       // 与同签名重复通道不会同时达到挂起阈值（同签名占窗 6+ 时窗口余量不足以构成 4 次转移），不会连环弹窗。
-      if (!finished && toolOk && tool && !signal?.aborted && isSelectLike(toolName, args) && (resultData?.resetFields == null || resultData.resetFields.length > 0)) {
+      if (!finished && toolOk && tool && !signal?.aborted && !guardIntervened && !stuckAbortMsg && isSelectLike(toolName, args) && (resultData?.resetFields == null || resultData.resetFields.length > 0)) {
         const sel = String(args.selector ?? '').trim();
         if (sel) {
           linkHist.push(sel);
@@ -566,10 +596,16 @@ export async function runToolLoop(opts: ToolLoopOpts): Promise<ToolLoopResult> {
         }
       }
       if (humanIntervened && !signal?.aborted) {
+        cycleGuard.resetWindow();
+        seeStreak = 0;
+        lastObservedFingerprint = undefined;
+        linkHist = [];
+        linkLabels.clear();
         // 人工处理可能已改动页面，不能继续附上介入之前的观测。
         resultData = { ...resultData, text: result, observation: undefined, observationKind: undefined };
         try {
           const fresh = await tools.find(t => t.name === 'snapshot')?.execute({});
+          if (fresh != null && typeof fresh !== 'string' && fresh.stateFingerprint && fresh.stateFingerprint !== resultData?.stateFingerprint) cycleGuard.reset();
           if (fresh != null) resultData = { ...resultData, text: result, observation: typeof fresh === 'string' ? fresh : fresh.text, observationKind: 'snapshot' };
         } catch { result += '\n人工处理后请重新 snapshot 获取当前页面。'; }
       }

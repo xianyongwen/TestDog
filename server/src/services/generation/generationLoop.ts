@@ -11,7 +11,7 @@ import { buildGenTools, type GenToolContext } from '../generationToolHost';
 import { NetworkCapture } from '../networkCaptureService';
 import { enabledActionVocabulary } from '../pluginStore';
 import { getUsage } from '../tokenUsage';
-import { askUser, revokeHandlers } from './jobControl';
+import { askUser, revokeHandlers, correctionQueues } from './jobControl';
 import { pub, pubToolWithUsage, updateToolAssistant } from './logBridge';
 import { createManualCapture } from './manualCapture';
 import { normalizeStepSystemVars, safeJsonParse, stripFences } from './util';
@@ -528,24 +528,28 @@ export async function runGenerationLoop(o: {
     name: string,
     args: Record<string, unknown>,
     count: number,
-    kind?: 'repeat' | 'observe' | 'linkage',
+    kind?: 'repeat' | 'observe' | 'linkage' | 'cycle',
     detail?: string,
   ): Promise<string | null> => {
     const context =
-      kind === 'observe'
-        ? `连续 ${count} 次观察无进展`
-        : kind === 'linkage'
-          ? `疑似联动字段的组合已交替重试 ${count} 轮`
-          : `相同操作已重复 ${count} 次无进展`;
+      kind === 'cycle'
+        ? (detail ?? '相同操作与页面状态反复循环')
+        : kind === 'observe'
+          ? `连续 ${count} 次观察无进展`
+          : kind === 'linkage'
+            ? `疑似联动字段的组合已交替重试 ${count} 轮`
+            : `相同操作已重复 ${count} 次无进展`;
     const decision = await askUser(jobId, {
       stepIndex: o.steps.length,
       kind: 'tool',
       instruction:
-        kind === 'observe'
-          ? `观察空转保护：已连续 ${count} 次观察仍无进展，疑似找不到目标入口`
-          : kind === 'linkage'
-            ? `联动死锁保护：${detail ?? '两个下拉字段'}已交替成功选择 ${count} 轮，选择其一后另一个被页面回设，疑似联动字段（当前组合不被页面接受）`
-            : `空转保护：工具「${name}」相同操作已重复 ${count} 次无进展`,
+        kind === 'cycle'
+          ? `短周期循环保护：${detail ?? '相同操作与页面状态反复循环'}，请检查前置条件或调整策略`
+          : kind === 'observe'
+            ? `观察空转保护：已连续 ${count} 次观察仍无进展，疑似找不到目标入口`
+            : kind === 'linkage'
+              ? `联动死锁保护：${detail ?? '两个下拉字段'}已交替成功选择 ${count} 轮，选择其一后另一个被页面回设，疑似联动字段（当前组合不被页面接受）`
+              : `空转保护：工具「${name}」相同操作已重复 ${count} 次无进展`,
       canManual: true,
     });
     if (o.isCancelled()) return null;
@@ -587,6 +591,8 @@ export async function runGenerationLoop(o: {
     // see 截图的「模型作答」在下一轮 completion 到达（toolLoop 回调），回填对应 GenerationStep.assistant
     onAssistantContent: (stepIndex, content) => updateToolAssistant(jobId, stepIndex, content),
   }).finally(() => {
+    correctionQueues.delete(jobId);
+    for (const content of corrections) messages.push({ role: 'user', content: `【用户纠正】${content}`, __ttCorrection: true } as any);
     revokeHandlers.delete(jobId);
     network.dispose();
     o.onCheckpoint?.(messages);
