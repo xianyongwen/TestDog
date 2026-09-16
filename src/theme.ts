@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { theme as antdTheme, type ThemeConfig } from 'antd';
+import { isTauri } from '@tauri-apps/api/core';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 
 /** 主题三态：跟随系统 / 强制浅色 / 强制深色 */
 export type ThemeMode = 'light' | 'dark' | 'system';
@@ -29,6 +31,13 @@ export function useThemeMode(): [ThemeMode, 'light' | 'dark', (m: ThemeMode) => 
   const [resolved, setResolved] = useState<'light' | 'dark'>(() => resolveMode(getStoredMode()));
 
   useEffect(() => {
+    // CSS 主题不会改变 Windows 原生标题栏，需同时同步窗口主题。
+    // 跟随系统时必须清除原生主题覆盖，避免 WebView 的媒体查询停留在强制主题。
+    if (isTauri()) {
+      void getCurrentWindow().setTheme(mode === 'system' ? null : mode).catch((error) => {
+        console.error('Failed to sync native window theme:', error);
+      });
+    }
     const next = resolveMode(mode);
     setResolved(next);
     applyTheme(next);
