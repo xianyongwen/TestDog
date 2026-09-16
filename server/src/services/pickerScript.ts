@@ -32,23 +32,24 @@ const PICKER_UI_SCRIPT = String.raw`(() => {
 
   // 顶部状态栏：始终 pointer-events:auto（鼠标事件不穿透到底层元素，避免底层显示悬停选框），可拖动移动、可展开显示完整信息
   const bar = document.createElement('div');
-  bar.style.cssText = 'position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:2147483647;background:#7c3aed;color:#fff;padding:6px 12px;border-radius:6px;font-size:13px;box-shadow:0 2px 12px rgba(0,0,0,.25);display:flex;align-items:center;gap:8px;white-space:nowrap;pointer-events:auto;user-select:none;cursor:grab;max-width:80%;';
+  bar.style.cssText = 'position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:2147483647;background:#7c3aed;color:#fff;padding:6px 12px;border-radius:6px;font-size:13px;box-shadow:0 2px 12px rgba(0,0,0,.25);display:flex;align-items:center;gap:8px;white-space:nowrap;pointer-events:auto;user-select:none;cursor:grab;max-width:80%;box-sizing:border-box;';
   const barHint = document.createElement('span');
+  barHint.style.cssText = 'min-width:0;overflow:hidden;text-overflow:ellipsis;';
   barHint.textContent = '拾取元素：普通点击可正常展开页面；按住 Alt 点击要拾取的元素，再点「确认拾取」完成 · Esc 取消';
   const barPick = document.createElement('span');
-  barPick.style.cssText = 'display:none;align-items:center;gap:6px;';
+  barPick.style.cssText = 'display:none;align-items:center;gap:6px;min-width:0;flex:1 1 auto;';
   const barCandidate = document.createElement('span');
-  barCandidate.style.cssText = 'max-width:420px;overflow:hidden;text-overflow:ellipsis;';
+  barCandidate.style.cssText = 'max-width:420px;min-width:0;flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;overflow-wrap:anywhere;';
   const confirmBtn = document.createElement('button');
   confirmBtn.textContent = '确认拾取';
-  confirmBtn.style.cssText = 'background:#22c55e;color:#fff;border:none;border-radius:4px;padding:2px 10px;font-size:12px;cursor:pointer;';
+  confirmBtn.style.cssText = 'background:#22c55e;color:#fff;border:none;border-radius:4px;padding:2px 10px;font-size:12px;cursor:pointer;flex-shrink:0;white-space:nowrap;';
   const cancelBtn = document.createElement('button');
   cancelBtn.textContent = '取消';
-  cancelBtn.style.cssText = 'background:rgba(255,255,255,.25);color:#fff;border:none;border-radius:4px;padding:2px 10px;font-size:12px;cursor:pointer;';
+  cancelBtn.style.cssText = 'background:rgba(255,255,255,.25);color:#fff;border:none;border-radius:4px;padding:2px 10px;font-size:12px;cursor:pointer;flex-shrink:0;white-space:nowrap;';
   const expandBtn = document.createElement('button');
   expandBtn.textContent = '▾';
   expandBtn.title = '展开/收起完整信息';
-  expandBtn.style.cssText = 'background:transparent;color:#fff;border:none;border-radius:4px;padding:2px 4px;font-size:12px;cursor:pointer;';
+  expandBtn.style.cssText = 'background:transparent;color:#fff;border:none;border-radius:4px;padding:2px 4px;font-size:12px;cursor:pointer;flex-shrink:0;white-space:nowrap;';
   barPick.appendChild(barCandidate);
   barPick.appendChild(confirmBtn);
   barPick.appendChild(cancelBtn);

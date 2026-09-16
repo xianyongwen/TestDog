@@ -1,14 +1,13 @@
 import 'dotenv/config';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { chromium, type Browser, type Page } from 'playwright';
-import { browserLaunchOptions } from '../src/browser';
 import { PICKER_SCRIPT } from '../src/services/pickerScript';
 import { verifyLocators } from '../src/services/locatorPickerService';
 
 let browser: Browser;
 
 beforeAll(async () => {
-  browser = await chromium.launch(browserLaunchOptions({ headless: true }));
+  browser = await chromium.launch({ headless: true });
 });
 
 afterAll(async () => {
@@ -87,4 +86,32 @@ describe('拾取预览回写形状（__testToolPickResult__ 应为 { locator }�
     expect(bar).toBe('无唯一可用定位器，将回退 css/xpath');
     await page.close();
   });
+});
+
+
+it('keeps confirmation controls inside a narrow viewport with a long locator preview', async () => {
+  const page = await browser.newPage({ viewport: { width: 360, height: 800 } });
+  try {
+    await page.setContent('<input style="margin-top:120px" placeholder="What needs to be done?">');
+    await page.evaluate(PICKER_SCRIPT);
+    await page.getByPlaceholder('What needs to be done?').click({ modifiers: ['Alt'] });
+    await runPreviewVerify(page);
+    await page.waitForFunction(() => document.querySelector('[data-tt-picker-host]')?.textContent?.includes('Playwright 验证通过'));
+    const confirm = page.getByRole('button', { name: '确认拾取', exact: true });
+    const checkControls = async () => {
+      for (const name of ['确认拾取', '取消', '▾', '▴']) {
+        const button = page.getByRole('button', { name, exact: true });
+        if (!await button.count()) continue;
+        const bounds = await button.boundingBox();
+        expect(bounds).not.toBeNull();
+        expect(bounds!.x).toBeGreaterThanOrEqual(0);
+        expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(360);
+      }
+    };
+    await checkControls();
+    await page.getByRole('button', { name: '▾', exact: true }).click();
+    await checkControls();
+    await confirm.click();
+    expect(await page.evaluate(() => (globalThis as any).__testToolPick__?.type)).toBe('pick');
+  } finally { await page.close(); }
 });
