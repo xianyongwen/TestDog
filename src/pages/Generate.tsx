@@ -581,7 +581,18 @@ export default function Generate() {
   };
   const addPlanStep = () =>
     setPlan((p) => (p ? [...p, { id: crypto.randomUUID(), kind: 'action', instruction: '', action: 'click' }] : p));
-  const removePlanStep = (i: number) => setPlan((p) => (p ? p.filter((_, idx) => idx !== i) : p));
+  const removePlanStep = (i: number) => {
+    const removed = plan?.[i];
+    setPlan((p) => (p ? p.filter((_, idx) => idx !== i) : p));
+    // 仅清理被删除断言关联的目标；其他步骤仍引用时保留，避免悬空引用。
+    if (removed?.kind === 'assert' && removed.criterionId &&
+      !plan?.some((step, idx) => idx !== i && step.criterionId === removed.criterionId)) {
+      setIntent(current => current ? {
+        ...current,
+        criteria: current.criteria.filter(c => c.id !== removed.criterionId),
+      } : current);
+    }
+  };
   const planSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
