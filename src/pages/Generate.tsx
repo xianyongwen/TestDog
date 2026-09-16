@@ -116,7 +116,9 @@ export default function Generate() {
   /** 轨迹头部实时累积的 token 消耗：gen:tool/gen:plan 为单次调用增量（累加），gen:done/gen:error 直接对齐任务累计。 */
   const [liveUsage, setLiveUsage] = useState<TokenUsage | null>(null);
   const [attachments, setAttachments] = useState<AttachmentItem[]>([]);
+  // 输入区只展示本次进入页面后添加的文件，不回填项目历史文件库。
   const [testFiles, setTestFiles] = useState<TestFileInfo[]>([]);
+  useEffect(() => { setTestFiles([]); }, [caseId]);
   const [testFilesRefreshKey, setTestFilesRefreshKey] = useState(0);
   const [deletingTestFiles, setDeletingTestFiles] = useState<Set<string>>(new Set());
   async function deleteTestFile(file: TestFileInfo) {
@@ -852,7 +854,7 @@ export default function Generate() {
                   <Tooltip title={t('generate.addAttachment')}>
                     <Button icon={<PaperClipOutlined />} onClick={() => attachRef.current?.pick()} className="shrink-0" />
                   </Tooltip>
-                  <TestFilePicker projectId={info?.project?.id} onFilesChange={setTestFiles} refreshKey={testFilesRefreshKey} compact />
+                  <TestFilePicker key={caseId} projectId={info?.project?.id} onUploaded={file => setTestFiles(prev => [...prev, file])} refreshKey={testFilesRefreshKey} compact />
                   <Input placeholder={t('common.baseUrlUrl')} value={startUrl} onChange={(e) => setStartUrl(e.target.value)} />
                   <Space className="shrink-0">
                     <span className="text-[13px]">{t('generate.loginConfig')}</span>
