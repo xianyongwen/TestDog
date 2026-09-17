@@ -12,6 +12,7 @@ import { pub } from './logBridge';
 import { scheduleSessionGc } from './jobControl';
 import { buildAttachmentParts, normalizeStepSystemVars, safeJsonParse } from './util';
 import type { SplitImage } from './types';
+import type { GenMsgI18n } from '../../ws/hub';
 import type { TestStep } from '../../shared/testScript';
 import { redactGenerationData } from './privacy';
 
@@ -35,19 +36,32 @@ export function loadGenAttachments(jobId: string, ids: string[]): { text: string
     return null;
   }
   const { text, images } = buildAttachmentParts(atts);
+  const names = atts.map((a) => a.name).join(', ');
   const visionNote = images.length ? `；其中 ${images.length} 张图片已以多模态直接发给主模型` : '';
-  pub({ type: 'gen:status', jobId, message: `[附件] 已加载 ${atts.length} 个文件：${atts.map((a) => a.name).join('、')}${visionNote}` });
+  pub({
+    type: 'gen:status',
+    jobId,
+    message: `[附件] 已加载 ${atts.length} 个文件：${atts.map((a) => a.name).join('、')}${visionNote}`,
+    i18n: images.length
+      ? { key: 'genStatus.attachmentsLoadedVision', params: { count: atts.length, names, images: images.length } }
+      : { key: 'genStatus.attachmentsLoaded', params: { count: atts.length, names } },
+  });
   return { text, images };
 }
 
 /** 落库 emit：归一化旧写法后 push 步骤并广播 gen:step。index 以 offsetOf() 动态偏移
- *  （续跑模式撤销决策可能中途裁掉 baseSteps 尾部，固定偏移会让 gen:step 索引错位）。 */
-export function createStepEmitter(jobId: string, steps: TestStep[], offsetOf: () => number): (step: TestStep) => Promise<void> {
-  return async (step: TestStep): Promise<void> => {
+ *  （续跑模式撤销决策可能中途裁掉 baseSteps 尾部，固定偏移会让 gen:step 索引错位）。
+ *  i18n 可选携带固定文案词条（如打开起始页），只进 WS 事件，不进落库的 TestStep。 */
+export function createStepEmitter(
+  jobId: string,
+  steps: TestStep[],
+  offsetOf: () => number,
+): (step: TestStep, i18n?: GenMsgI18n) => Promise<void> {
+  return async (step, i18n) => {
     step = redactGenerationData(jobId, step);
     normalizeStepSystemVars(step); // 原地归一化，push/pub 同一对象（引用一致性）
     steps.push(step);
-    pub({ type: 'gen:step', jobId, index: offsetOf() + steps.length - 1, step });
+    pub({ type: 'gen:step', jobId, index: offsetOf() + steps.length - 1, step, ...(i18n ? { i18n } : {}) });
   };
 }
 
@@ -149,13 +163,15 @@ async function connectPwView(jobId: string, page: any): Promise<{ pwBrowser: any
   return { pwBrowser: null, pwPage: null, error: lastErr ?? '连接失败' };
 }
 
-/** 加载登录配置的 storageState；不存在或为空时 ok=false 并带回描述性 name 供状态提示。 */
-export async function loadLoginStorageState(loginConfigId: string): Promise<{ storageState: unknown; name: string; ok: boolean }> {
+/** 加载登录配置的 storageState；不存在或为空时 ok=false，reason 供前端 i18n 区分两种未登录文案。 */
+export async function loadLoginStorageState(
+  loginConfigId: string,
+): Promise<{ storageState: unknown; name: string; ok: boolean; reason?: 'missing' | 'empty' }> {
   const cfg = await prisma.loginConfig.findUnique({ where: { id: loginConfigId }, select: { storageState: true, name: true } });
-  if (!cfg) return { storageState: null, name: `${loginConfigId} 不存在`, ok: false };
+  if (!cfg) return { storageState: null, name: `${loginConfigId} 不存在`, ok: false, reason: 'missing' };
   // Prisma Json 字段读出即为已解析对象；兼容历史字符串。
   const ss = typeof cfg.storageState === 'string' ? safeJsonParse(cfg.storageState) : cfg.storageState;
-  if (!ss) return { storageState: null, name: `「${cfg.name}」状态为空`, ok: false };
+  if (!ss) return { storageState: null, name: `「${cfg.name}」状态为空`, ok: false, reason: 'empty' };
   return { storageState: ss, name: cfg.name, ok: true };
 }
 

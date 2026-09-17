@@ -47,7 +47,7 @@ export function correctJob(jobId: string, instruction: string): boolean {
   queue.push(text);
   // 正在等待人工说明时，同时解除挂起；队列负责完整地注入 user 消息。
   if (waits.get(jobId)?.type === 'assist') resolveWait(jobId, { decision: 'redescribe', instruction: text });
-  pub({ type: 'gen:status', jobId, message: `用户纠正：${text}` });
+  pub({ type: 'gen:status', jobId, message: `用户纠正：${text}`, i18n: { key: 'genStatus.correction', params: { text } } });
   return true;
 }
 
@@ -207,7 +207,7 @@ export function createJobRuntime(jobId: string): JobRuntime {
     correctionQueues.delete(jobId);
     abortCtrl.abort();
     resolveWait(jobId, null);
-    pub({ type: 'gen:status', jobId, message: '正在暂停，等待当前操作记录和保存完成…' });
+    pub({ type: 'gen:status', jobId, message: '正在暂停，等待当前操作记录和保存完成…', i18n: { key: 'genStatus.pausing' } });
   };
   pauseHandlers.set(jobId, pause);
   return { abortCtrl, isCancelled: () => cancelled, isPaused: () => paused, cancel, pause };

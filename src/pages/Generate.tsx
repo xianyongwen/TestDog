@@ -18,6 +18,7 @@ import TestFilePicker, { type TestFileInfo } from '../components/TestFilePicker'
 import AttachmentUpload, { AttachmentChips, type AttachmentItem, type AttachmentUploadHandle } from '../components/AttachmentUpload';
 import { fmtToken, type TokenUsage } from '../utils/token';
 import { genToolLabel } from '../utils/genToolLabel';
+import { genI18nText } from '../utils/genI18nText';
 import CacheRatePie from '../components/CacheRatePie';
 
 interface CaseInfo { id: string; title: string; project: { id: string; name: string; baseUrl?: string; envVars?: { key: string }[]; loginConfigs?: { id: string; name: string; isDefault: boolean }[] } }
@@ -206,11 +207,12 @@ export default function Generate() {
     return ws.on((msg) => {
       if (!jobIdRef.current || msg.jobId !== jobIdRef.current) return;
       if (msg.type === 'gen:status') {
-        setLogs((p) => [...p, { color: 'blue', title: String(msg.message ?? '') }]);
+        setLogs((p) => [...p, { color: 'blue', title: genI18nText(t, msg.i18n, String(msg.message ?? '')) }]);
       } else if (msg.type === 'gen:tool') {
         const st = (msg.step as any) ?? {};
         const u = msg.usage as TokenUsage | undefined;
-        const parts = [String(st.actionDetail ?? ''), String(st.result ?? '')].filter(Boolean);
+        // result 可能是服务端固定文案（带 i18n 词条）；actionDetail 为结构化数据（url=...）原样展示
+        const parts = [String(st.actionDetail ?? ''), genI18nText(t, st.i18n, String(st.result ?? ''))].filter(Boolean);
         accLiveUsage(u);
         setLogs((p) => [...p, { color: 'blue', title: <span>{t('generate.tool')} <Tag>{genToolLabel(t, st.actionLabel)}</Tag></span>, desc: parts.length ? parts.join(' · ') : undefined, usage: u ? { total: u.totalTokens, cached: u.cachedTokens, input: u.inputTokens } : undefined }]);
       } else if (msg.type === 'gen:coverage') {
@@ -254,7 +256,7 @@ export default function Generate() {
         setLogs((p) => [...p, { color: 'orange', title: t('generate.revoked', { from, to }) }]);
       } else if (msg.type === 'gen:assist-status') {
         if (msg.status === 'manual') setManualHint(true);
-        setLogs((p) => [...p, { color: 'blue', title: String(msg.message ?? '') }]);
+        setLogs((p) => [...p, { color: 'blue', title: genI18nText(t, msg.i18n, String(msg.message ?? '')) }]);
       } else if (msg.type === 'gen:step') {
         setSteps((prev) => {
           const next = [...prev];
@@ -263,7 +265,9 @@ export default function Generate() {
           return next;
         });
         setManualHint(false);
-        setLogs((p) => [...p, { color: (msg.step as any)?.error ? 'orange' : 'green', title: t('generate.stepInfo', { index: msg.index, instruction: (msg.step as any)?.instruction ?? '' }), desc: (msg.step as any)?.locator ? t('generate.locatorInfo', { strategy: (msg.step as any).locator.strategy, value: (msg.step as any).locator.value }) : undefined }]);
+        // 固定文案指令（如打开起始页）按 i18n 词条翻译；模型产出的指令为用户内容原样展示
+        const stepInstruction = genI18nText(t, msg.i18n, String((msg.step as any)?.instruction ?? ''));
+        setLogs((p) => [...p, { color: (msg.step as any)?.error ? 'orange' : 'green', title: t('generate.stepInfo', { index: msg.index, instruction: stepInstruction }), desc: (msg.step as any)?.locator ? t('generate.locatorInfo', { strategy: (msg.step as any).locator.strategy, value: (msg.step as any).locator.value }) : undefined }]);
       } else if (msg.type === 'gen:revise') {
         // 模型修订了已落步骤（改参数/删冗余）：base 之前的前缀是用户可见的基础步骤（续跑），后半整表替换
         const base = (msg.base as number) ?? 0;

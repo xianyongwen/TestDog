@@ -1,9 +1,17 @@
 import type { WebSocket } from 'ws';
 
+/** 服务端固定文案的 i18n 载荷：key 为前端词条全名（如 genStatus.loginLoaded），params 为插值参数。
+ *  携带 i18n 的事件必须同时带原文 message/result（旧客户端展示与落库兜底）。 */
+export interface GenMsgI18n {
+  key: string;
+  params?: Record<string, string | number>;
+}
+
 /** 服务端 -> 客户端的消息（均带 jobId 关联，前端按 jobId 过滤）。 */
 export interface ServerMsg {
   type: string;
   jobId?: string;
+  i18n?: GenMsgI18n;
   [key: string]: unknown;
 }
 

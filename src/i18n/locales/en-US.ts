@@ -589,6 +589,31 @@ const enUS = {
     manual_capture: 'Manual Capture',
   },
 
+  // Server-fixed trace strings (WS i18n payloads / generation log args.i18n); raw text is the fallback
+  genStatus: {
+    checkpointSaveFailed: 'Failed to save the checkpoint to the database; state kept in memory — you can continue generation in the current session',
+    viewport: '[Browser window] Using project config {{width}}×{{height}}',
+    loginLoaded: '[Login config] Loaded "{{name}}"; generating with logged-in state',
+    loginMissing: '[Login config] {{id}} not found; generating without login',
+    loginEmpty: '[Login config] "{{name}}" has an empty state; generating without login',
+    attachmentsLoaded: '[Attachments] Loaded {{count}} file(s): {{names}}',
+    attachmentsLoadedVision: '[Attachments] Loaded {{count}} file(s): {{names}}; {{images}} image(s) were sent to the main model as multimodal input',
+    outlineConfirmedStart: 'Outline confirmed ({{count}} steps for reference); starting agent generation…',
+    outlineConfirmedContinue: 'Outline confirmed ({{count}} steps for reference); continuing agent generation…',
+    noResumeState: 'No resumable loop state; falling back to a regular continue',
+    correction: 'User correction: {{text}}',
+    pausing: 'Pausing; waiting for the current action to be recorded and saved…',
+    manualHint: 'Please complete this step in the browser (click / type / press Enter)…',
+    openStartPage: 'Open start page',
+    navigatedTo: 'Navigated to {{url}}',
+    planConfirmWait: 'Pre-split done. Please confirm the step plan ({{count}} steps)',
+    coverageUpdated: 'Acceptance coverage updated',
+    revokedSteps: 'Revoked steps {{from}}~{{to}}',
+    stepsRevised: 'AI revised script steps ({{count}} ops)',
+    pausedCanContinue: 'Paused. You can continue generation',
+    genDoneCount: 'Generation done, {{count}} steps total',
+  },
+
   genRecordDetail: {
     title: 'Generation Record Detail',
     step: 'Step {{index}}',

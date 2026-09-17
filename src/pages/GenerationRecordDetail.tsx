@@ -6,6 +6,7 @@ import type { TFunction } from 'i18next';
 import { http } from '../api/client';
 import { fmtToken, type TokenUsage } from '../utils/token';
 import { genToolLabel } from '../utils/genToolLabel';
+import { genI18nText, stepArgsI18n } from '../utils/genI18nText';
 import CacheRatePie from '../components/CacheRatePie';
 
 const { Text, Paragraph } = Typography;
@@ -103,12 +104,17 @@ function StepBody({ step }: { step: GenStep }) {
     );
   };
   const hasLLM = step.system || step.user || step.assistant;
+  // 服务端固定文案按落库的 args.i18n 词条翻译；旧记录无该字段，回退原文。
+  // tool 行的词条只对应 result，message（actionDetail）是结构化参数（url=...）原样展示。
+  const ai18n = stepArgsI18n(step.args);
+  const note = step.type === 'tool' ? (step.message ?? '') : genI18nText(t, ai18n, step.message ?? '');
+  const result = step.type === 'tool' ? genI18nText(t, ai18n, step.result ?? '') : (step.result ?? '');
   return (
     <div>
       {step.message && (
         <Paragraph className="mb-2">
           <Text strong>{t('genRecordDetail.note')}</Text>
-          {step.message}
+          {note}
         </Paragraph>
       )}
       {step.error && (
@@ -131,9 +137,9 @@ function StepBody({ step }: { step: GenStep }) {
         <div className="mb-2">
           <Space className="mb-1">
             <Text strong>{t('genRecordDetail.result')}</Text>
-            <Button size="small" type="text" icon={<CopyOutlined />} onClick={() => copy(step.result!)} />
+            <Button size="small" type="text" icon={<CopyOutlined />} onClick={() => copy(result)} />
           </Space>
-          <CodeBlock value={step.result} />
+          <CodeBlock value={result} />
         </div>
       )}
       {step.args != null && (
@@ -265,6 +271,11 @@ export default function GenerationRecordDetail({
                 const tagLabel = s.type === 'tool' && s.tool ? genToolLabel(t, s.tool) : meta.label;
                 const u = s.usage;
                 const usageText = u ? t('genRecordDetail.usageText', { total: fmtToken(u.totalTokens), cached: fmtToken(u.cachedTokens) }) : '';
+                // 状态类行固定文案按 args.i18n 词条翻译（tool 行的 message 是结构化参数，不走词条）；旧记录回退原文
+                const userTrunc = s.user ? s.user.slice(0, 40) + (s.user.length > 40 ? '…' : '') : '—';
+                const rowText = s.type !== 'tool' && s.message
+                  ? genI18nText(t, stepArgsI18n(s.args), s.message)
+                  : (s.message || genToolLabel(t, s.tool) || userTrunc);
                 return {
                   key: s.id,
                   label: (
@@ -275,7 +286,7 @@ export default function GenerationRecordDetail({
                       <Tag color={meta.color}>{tagLabel}</Tag>
                       {s.stepIndex != null && <Text type="secondary">{t('genRecordDetail.step', { index: s.stepIndex })}</Text>}
                       <Text className="max-w-[360px]" ellipsis>
-                        {s.message || genToolLabel(t, s.tool) || (s.user ? s.user.slice(0, 40) + (s.user.length > 40 ? '…' : '') : '—')}
+                        {rowText}
                       </Text>
                       {u && usageText && (
                         <Text type="secondary">

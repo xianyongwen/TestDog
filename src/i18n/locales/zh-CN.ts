@@ -584,6 +584,31 @@ const zhCN = {
     manual_capture: '手动捕获',
   },
 
+  // 服务端固定文案词条（WS i18n 载荷 / 生成记录 args.i18n）；原文为兜底展示
+  genStatus: {
+    checkpointSaveFailed: '检查点写入数据库失败，已保留内存状态，可在当前会话继续生成',
+    viewport: '[浏览器窗口] 按项目配置使用 {{width}}×{{height}}',
+    loginLoaded: '[登录配置] 已加载「{{name}}」，以已登录状态生成',
+    loginMissing: '[登录配置] {{id}} 不存在，以未登录状态生成',
+    loginEmpty: '[登录配置] 「{{name}}」状态为空，以未登录状态生成',
+    attachmentsLoaded: '[附件] 已加载 {{count}} 个文件：{{names}}',
+    attachmentsLoadedVision: '[附件] 已加载 {{count}} 个文件：{{names}}；其中 {{images}} 张图片已以多模态直接发给主模型',
+    outlineConfirmedStart: '大纲已确认（{{count}} 步参考），开始智能体生成…',
+    outlineConfirmedContinue: '大纲已确认（{{count}} 步参考），继续智能体生成…',
+    noResumeState: '无可续跑的循环状态，改为常规继续生成',
+    correction: '用户纠正：{{text}}',
+    pausing: '正在暂停，等待当前操作记录和保存完成…',
+    manualHint: '请在浏览器中完成该步骤（点击/输入/回车）…',
+    openStartPage: '打开起始页',
+    navigatedTo: '已导航到 {{url}}',
+    planConfirmWait: '预拆分完成，请确认步骤计划（{{count}} 步）',
+    coverageUpdated: '验收覆盖已更新',
+    revokedSteps: '已撤销第 {{from}}~{{to}} 步',
+    stepsRevised: '模型修订脚本步骤（{{count}} 项操作）',
+    pausedCanContinue: '已暂停，可继续生成',
+    genDoneCount: '生成完成，共 {{count}} 步',
+  },
+
   genRecordDetail: {
     title: '生成记录详情',
     step: '第 {{index}} 步',

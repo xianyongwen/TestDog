@@ -127,7 +127,7 @@ export function createManualCapture(deps: ManualCaptureDeps): (context: string) 
     } catch {
       /* 注入失败不阻塞：轮询侧会兜底重注入 */
     }
-    pub({ type: 'gen:assist-status', jobId, status: 'manual', message: '请在浏览器中完成该步骤（点击/输入/回车）…' });
+    pub({ type: 'gen:assist-status', jobId, status: 'manual', message: '请在浏览器中完成该步骤（点击/输入/回车）…', i18n: { key: 'genStatus.manualHint' } });
     const evt = await pollCapturedEvent();
     if (isCancelled()) return '（生成已取消）';
     if (!evt) return `人工协助超时未响应：${context}`;

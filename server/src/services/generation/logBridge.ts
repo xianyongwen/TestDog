@@ -1,4 +1,4 @@
-import { publish, type ServerMsg } from '../../ws/hub';
+import { publish, type GenMsgI18n, type ServerMsg } from '../../ws/hub';
 import { appendStep, markFinished, markStatus, STEP_TYPE, updateStepAssistant, type GenLogStatus } from '../generationLogService';
 import type { TokenUsage } from '../tokenUsage';
 import { trunc } from './util';
@@ -6,6 +6,12 @@ import { redactGenerationData, redactGenerationText } from './privacy';
 
 /** jobId -> 当前活跃 logId 的运行时映射。done/error 时清空；paused 时保留以便 continue 续写。 */
 export const activeLogIds = new Map<string, string>();
+
+/** 把 i18n 载荷并进步骤 args（无 i18n 时保持原 args），供生成记录详情回放翻译。 */
+function argsWithI18n(args: unknown, i18n: GenMsgI18n | undefined): unknown {
+  if (!i18n) return args ?? null;
+  return { ...(typeof args === 'object' && args ? args : {}), i18n };
+}
 
 /** publish 的本地包装：发送 WS 同时把事件落到生成记录。 */
 export function pub(msg: ServerMsg): void {
@@ -19,7 +25,7 @@ export function pub(msg: ServerMsg): void {
 function logFromWsEvent(msg: ServerMsg, logId: string): void {
   switch (msg.type) {
     case 'gen:status':
-      appendStep(logId, { type: STEP_TYPE.STATUS, message: String(msg.message ?? '') });
+      appendStep(logId, { type: STEP_TYPE.STATUS, message: String(msg.message ?? ''), args: msg.i18n ? { i18n: msg.i18n } : undefined });
       return;
     case 'gen:tool': {
       const s = (msg.step as any) ?? {};
@@ -29,7 +35,7 @@ function logFromWsEvent(msg: ServerMsg, logId: string): void {
         tool: String(s.actionLabel ?? ''),
         message: String(s.actionDetail ?? ''),
         result: String(s.result ?? ''),
-        args: (msg.args ?? null) as any,
+        args: argsWithI18n(msg.args, s.i18n),
         usage: (msg.usage as TokenUsage) ?? null,
       });
       return;
@@ -39,23 +45,28 @@ function logFromWsEvent(msg: ServerMsg, logId: string): void {
       appendStep(logId, {
         type: STEP_TYPE.STATUS,
         message: `预拆分完成，请确认步骤计划（${Array.isArray(msg.steps) ? msg.steps.length : 0} 步）`,
+        args: argsWithI18n(undefined, { key: 'genStatus.planConfirmWait', params: { count: Array.isArray(msg.steps) ? msg.steps.length : 0 } }),
       });
       return;
     case 'gen:coverage':
-      appendStep(logId, { type: STEP_TYPE.STATUS, message: '验收覆盖已更新', args: { coverage: msg.coverage } });
+      appendStep(logId, {
+        type: STEP_TYPE.STATUS,
+        message: '验收覆盖已更新',
+        args: argsWithI18n({ coverage: msg.coverage }, { key: 'genStatus.coverageUpdated' }),
+      });
       return;
     case 'gen:revoke':
       appendStep(logId, {
         type: STEP_TYPE.REVOKE,
         message: `已撤销第 ${msg.from}~${msg.to} 步`,
-        args: { from: msg.from, to: msg.to, nl: msg.nl },
+        args: argsWithI18n({ from: msg.from, to: msg.to, nl: msg.nl }, { key: 'genStatus.revokedSteps', params: { from: msg.from as number, to: msg.to as number } }),
       });
       return;
     case 'gen:revise':
       appendStep(logId, {
         type: STEP_TYPE.REVISE,
         message: `模型修订脚本步骤（${Array.isArray(msg.ops) ? msg.ops.length : 0} 项操作）`,
-        args: { ops: msg.ops, base: msg.base },
+        args: argsWithI18n({ ops: msg.ops, base: msg.base }, { key: 'genStatus.stepsRevised', params: { count: Array.isArray(msg.ops) ? msg.ops.length : 0 } }),
       });
       return;
     case 'gen:assist':
@@ -67,10 +78,10 @@ function logFromWsEvent(msg: ServerMsg, logId: string): void {
       });
       return;
     case 'gen:assist-status':
-      appendStep(logId, { type: STEP_TYPE.STATUS, message: String(msg.message ?? '') });
+      appendStep(logId, { type: STEP_TYPE.STATUS, message: String(msg.message ?? ''), args: msg.i18n ? { i18n: msg.i18n } : undefined });
       return;
     case 'gen:paused':
-      appendStep(logId, { type: STEP_TYPE.STATUS, message: '已暂停，可继续生成' });
+      appendStep(logId, { type: STEP_TYPE.STATUS, message: '已暂停，可继续生成', args: argsWithI18n(undefined, { key: 'genStatus.pausedCanContinue' }) });
       if (msg.jobId) markStatus(msg.jobId as string, 'PAUSED');
       return;
     case 'gen:done': {
@@ -81,7 +92,7 @@ function logFromWsEvent(msg: ServerMsg, logId: string): void {
       appendStep(logId, {
         type: STEP_TYPE.DONE,
         message: `生成完成，共 ${stepCount} 步`,
-        args: { stepCount, intent: (msg.script as any)?.intent },
+        args: argsWithI18n({ stepCount, intent: (msg.script as any)?.intent }, { key: 'genStatus.genDoneCount', params: { stepCount } }),
       });
       if (msg.jobId) {
         markFinished(msg.jobId as string, 'DONE', {

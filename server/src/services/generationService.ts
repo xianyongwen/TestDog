@@ -58,7 +58,7 @@ export async function generate(jobId: string, params: GenerateParams): Promise<v
 
 async function persistPausedCheckpoint(jobId: string, checkpoint: GenerationCheckpoint): Promise<void> {
   try { await saveCheckpoint(jobId, checkpoint); } catch {
-    pub({ type: 'gen:status', jobId, message: '检查点写入数据库失败，已保留内存状态，可在当前会话继续生成' });
+    pub({ type: 'gen:status', jobId, message: '检查点写入数据库失败，已保留内存状态，可在当前会话继续生成', i18n: { key: 'genStatus.checkpointSaveFailed' } });
   }
 }
 
@@ -116,11 +116,20 @@ async function generateOwned(jobId: string, params: GenerateParams): Promise<voi
     let pwBrowser: any = null; // 精确验证用的 playwright 连接（与 stagehand 同一浏览器）
     let pwPage: any = null;
     const viewport = await loadProjectViewport(params.projectId);
-    if (viewport) pub({ type: 'gen:status', jobId, message: `[浏览器窗口] 按项目配置使用 ${viewport.width}×${viewport.height}` });
+    if (viewport) pub({ type: 'gen:status', jobId, message: `[浏览器窗口] 按项目配置使用 ${viewport.width}×${viewport.height}`, i18n: { key: 'genStatus.viewport', params: { width: viewport.width, height: viewport.height } } });
     try {
       if (params.loginConfigId) {
         const login = await loadLoginStorageState(params.loginConfigId);
-        pub({ type: 'gen:status', jobId, message: login.ok ? `[登录配置] 已加载「${login.name}」，以已登录状态生成` : `[登录配置] ${login.name}，以未登录状态生成` });
+        pub({
+          type: 'gen:status',
+          jobId,
+          message: login.ok ? `[登录配置] 已加载「${login.name}」，以已登录状态生成` : `[登录配置] ${login.name}，以未登录状态生成`,
+          i18n: login.ok
+            ? { key: 'genStatus.loginLoaded', params: { name: login.name } }
+            : login.reason === 'missing'
+              ? { key: 'genStatus.loginMissing', params: { id: params.loginConfigId } }
+              : { key: 'genStatus.loginEmpty', params: { name: login.name } },
+        });
         stagehand = login.ok ? await createSessionWithStorageState(jobId, login.storageState, viewport) : await createSession(jobId, { viewport });
       } else {
         stagehand = await createSession(jobId, { viewport });
@@ -150,12 +159,15 @@ async function generateOwned(jobId: string, params: GenerateParams): Promise<voi
       pwPage = setup.pwPage;
       if (job.isCancelled()) return;
 
-      // 起始页：自动导航并记录为第 0 步（保持「生成脚本必带 goto」的行为）
+      // 起始页：自动导航并记录为第 0 步（保持「生成脚本必带 goto」的行为）。
+      // instruction/description 是落进脚本的内容（与模型产出同性质，保持原文）；
+      // i18n 只挂在 WS 事件上供轨迹展示翻译。
       if (params.startUrl) {
         const realUrl = sub(params.startUrl) ?? params.startUrl;
         await page.goto(realUrl);
-        await emit({ kind: 'navigate', action: 'goto', url: params.startUrl, instruction: '打开起始页', description: '打开起始页' });
-        pub({ type: 'gen:tool', jobId, index: 1, step: { actionLabel: 'goto', actionDetail: `url=${params.startUrl}`, result: `已导航到 ${await page.url()}` } });
+        const gotoUrl = await page.url();
+        await emit({ kind: 'navigate', action: 'goto', url: params.startUrl, instruction: '打开起始页', description: '打开起始页' }, { key: 'genStatus.openStartPage' });
+        pub({ type: 'gen:tool', jobId, index: 1, step: { actionLabel: 'goto', actionDetail: `url=${params.startUrl}`, result: `已导航到 ${gotoUrl}`, i18n: { key: 'genStatus.navigatedTo', params: { url: gotoUrl } } } });
       }
 
       const client = createGatewayClient(jobId);
@@ -186,7 +198,7 @@ async function generateOwned(jobId: string, params: GenerateParams): Promise<voi
         if (!job.isCancelled()) pub({ type: 'gen:error', jobId, message: '未收到计划确认或等待超时', usage: getUsage(jobId) });
         return;
       }
-      pub({ type: 'gen:status', jobId, message: `大纲已确认（${confirmed.steps.length} 步参考），开始智能体生成…` });
+      pub({ type: 'gen:status', jobId, message: `大纲已确认（${confirmed.steps.length} 步参考），开始智能体生成…`, i18n: { key: 'genStatus.outlineConfirmedStart', params: { count: confirmed.steps.length } } });
       checkpoint.outline = confirmed.steps;
       checkpoint.intent = confirmed.intent;
       checkpoint.evidence = [];
@@ -375,7 +387,7 @@ async function continueGenerateOwned(jobId: string, params: ContinueParams): Pro
           pub({ type: 'gen:done', jobId, script, usage: getUsage(jobId) });
           return;
         }
-        pub({ type: 'gen:status', jobId, message: '无可续跑的循环状态，改为常规继续生成' });
+        pub({ type: 'gen:status', jobId, message: '无可续跑的循环状态，改为常规继续生成', i18n: { key: 'genStatus.noResumeState' } });
       }
 
       const doneSummary = params.baseSteps
@@ -398,7 +410,7 @@ async function continueGenerateOwned(jobId: string, params: ContinueParams): Pro
         if (!job.isCancelled()) pub({ type: 'gen:error', jobId, message: '未收到计划确认或等待超时', usage: getUsage(jobId) });
         return;
       }
-      pub({ type: 'gen:status', jobId, message: `大纲已确认（${confirmed.steps.length} 步参考），继续智能体生成…` });
+      pub({ type: 'gen:status', jobId, message: `大纲已确认（${confirmed.steps.length} 步参考），继续智能体生成…`, i18n: { key: 'genStatus.outlineConfirmedContinue', params: { count: confirmed.steps.length } } });
       checkpoint.goalText = `【追加目标】${params.nl}${attachmentText}`;
       checkpoint.outline = confirmed.steps;
       checkpoint.intent = confirmed.intent;
