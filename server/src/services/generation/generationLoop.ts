@@ -160,18 +160,18 @@ async function runScriptReview(o: {
       const probe = applyReviseOps(o.steps, ops);
       if (typeof probe === 'string') {
         // ops 本身非法（越界/缺字段等）：错误文案自解释，直接透出
-        pubToolWithUsage(jobId, 0, '脚本审查', `审查 ${o.steps.length} 步`, `审查产出不合规（${probe}），已跳过清理`, usage, reviewArgs);
+        pubToolWithUsage(jobId, 0, 'script_review', `审查 ${o.steps.length} 步`, `审查产出不合规（${probe}），已跳过清理`, usage, reviewArgs);
         return;
       }
       if (!probe.steps.length || probe.steps[probe.steps.length - 1].kind !== 'assert') {
-        pubToolWithUsage(jobId, 0, '脚本审查', `审查 ${o.steps.length} 步`, '审查产出不合规（应用后末步不再是断言），已跳过清理', usage, reviewArgs);
+        pubToolWithUsage(jobId, 0, 'script_review', `审查 ${o.steps.length} 步`, '审查产出不合规（应用后末步不再是断言），已跳过清理', usage, reviewArgs);
         return;
       }
       const n = o.steps.length;
       const summary = await o.revise(ops);
-      pubToolWithUsage(jobId, 0, '脚本审查', `审查 ${n} 步`, summary, usage, reviewArgs);
+      pubToolWithUsage(jobId, 0, 'script_review', `审查 ${n} 步`, summary, usage, reviewArgs);
     } else {
-      pubToolWithUsage(jobId, 0, '脚本审查', `审查 ${o.steps.length} 步`, '审查通过：无冗余步骤需要清理', usage, reviewArgs);
+      pubToolWithUsage(jobId, 0, 'script_review', `审查 ${o.steps.length} 步`, '审查通过：无冗余步骤需要清理', usage, reviewArgs);
     }
   } catch (e) {
     // 审查异常不阻塞 finish：模型也可在 finish 前自用 revise 清理。但要留痕——静默失败会让
@@ -578,15 +578,14 @@ export async function runGenerationLoop(o: {
     workingMemory: () => buildWorkingMemory(o.steps, o.goalText) + '\n【验收覆盖】' + JSON.stringify(compactCoverage()) + '\n用 read_coverage 读取完整验收预期；不允许弱化断言。',
     seeAssistAt: cfg.seeAssistAt,
     onStep: ({ index, name, args, result, usageDelta: ud }) => {
-      const label = ({ scroll: '滚动', upload: '上传文件', list_files: '测试文件', snapshot: '快照', page_tree: '结构树', goto: '导航', click: '点击', fill: '填写', press: '按键', check: '勾选', select: '选择', wait: '等待', readText: '读取文本', assert: '断言', act: 'AI 兜底', see: '视觉观察', api: '网络请求', component_action: '组件动作', batch_actions: '批量填写', read_goal: '读取目标', read_script: '读取脚本', read_coverage: '验收覆盖', ask_human: '人工求助', finish: '完成' } as any)[name] ?? name;
       let detail = '';
       try {
         detail = JSON.stringify(args ?? {}).slice(0, 160);
       } catch {
         detail = '';
       }
-      // see 的完整 question 落 args 列（detail 有 160 字截断）；模型回答由 onAssistantContent 滞后回填 assistant 列
-      pubToolWithUsage(jobId, index, label, detail, result, ud, name === 'see' ? args : undefined);
+      // tool 列落原始工具名，展示名由前端按语言翻译（genToolLabel）；see 的完整 question 落 args 列（detail 有 160 字截断），模型回答由 onAssistantContent 滞后回填 assistant 列
+      pubToolWithUsage(jobId, index, name, detail, result, ud, name === 'see' ? args : undefined);
     },
     // see 截图的「模型作答」在下一轮 completion 到达（toolLoop 回调），回填对应 GenerationStep.assistant
     onAssistantContent: (stepIndex, content) => updateToolAssistant(jobId, stepIndex, content),

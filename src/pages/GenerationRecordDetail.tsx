@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { http } from '../api/client';
 import { fmtToken, type TokenUsage } from '../utils/token';
+import { genToolLabel } from '../utils/genToolLabel';
 import CacheRatePie from '../components/CacheRatePie';
 
 const { Text, Paragraph } = Typography;
@@ -118,7 +119,7 @@ function StepBody({ step }: { step: GenStep }) {
       {step.tool && (
         <Paragraph className="mb-2">
           <Text strong>{t('genRecordDetail.tool')}</Text>
-          <Tag color="geekblue">{step.tool}</Tag>
+          <Tag color="geekblue">{genToolLabel(t, step.tool)}</Tag>
           {step.stepIndex != null && (
             <Text type="secondary" className="ml-2">
               {t('genRecordDetail.step', { index: step.stepIndex })}
@@ -261,7 +262,7 @@ export default function GenerationRecordDetail({
               ghost
               items={data.steps.map((s, idx) => {
                 const meta = typeMeta[s.type] ?? { color: 'default', label: s.type };
-                const tagLabel = s.type === 'tool' && s.tool ? s.tool : meta.label;
+                const tagLabel = s.type === 'tool' && s.tool ? genToolLabel(t, s.tool) : meta.label;
                 const u = s.usage;
                 const usageText = u ? t('genRecordDetail.usageText', { total: fmtToken(u.totalTokens), cached: fmtToken(u.cachedTokens) }) : '';
                 return {
@@ -274,7 +275,7 @@ export default function GenerationRecordDetail({
                       <Tag color={meta.color}>{tagLabel}</Tag>
                       {s.stepIndex != null && <Text type="secondary">{t('genRecordDetail.step', { index: s.stepIndex })}</Text>}
                       <Text className="max-w-[360px]" ellipsis>
-                        {s.message || s.tool || (s.user ? s.user.slice(0, 40) + (s.user.length > 40 ? '…' : '') : '—')}
+                        {s.message || genToolLabel(t, s.tool) || (s.user ? s.user.slice(0, 40) + (s.user.length > 40 ? '…' : '') : '—')}
                       </Text>
                       {u && usageText && (
                         <Text type="secondary">

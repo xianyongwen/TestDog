@@ -140,7 +140,7 @@ export function createManualCapture(deps: ManualCaptureDeps): (context: string) 
       step.value = deps.valueBinding?.onWrite(instruction, step.value, step.value) ?? step.value;
     }
     const oc = await emit(step);
-    pubToolWithUsage(jobId, 0, '手动捕获', `${evt.type} ${evt.selector}`, `手动捕获：${capturedEventLabel(evt)}（${evt.selector}）`, {
+    pubToolWithUsage(jobId, 0, 'manual_capture', `${evt.type} ${evt.selector}`, `手动捕获：${capturedEventLabel(evt)}（${evt.selector}）`, {
       inputTokens: 0,
       outputTokens: 0,
       totalTokens: 0,

@@ -18,6 +18,7 @@ import RunLog, { type LogItem } from '../components/RunLog';
 import TestFilePicker, { type TestFileInfo } from '../components/TestFilePicker';
 import AttachmentUpload, { AttachmentChips, type AttachmentItem, type AttachmentUploadHandle } from '../components/AttachmentUpload';
 import { fmtToken, type TokenUsage } from '../utils/token';
+import { genToolLabel } from '../utils/genToolLabel';
 import CacheRatePie from '../components/CacheRatePie';
 
 interface CaseInfo { id: string; title: string; project: { id: string; name: string; baseUrl?: string; envVars?: { key: string }[]; loginConfigs?: { id: string; name: string; isDefault: boolean }[] } }
@@ -212,7 +213,7 @@ export default function Generate() {
         const u = msg.usage as TokenUsage | undefined;
         const parts = [String(st.actionDetail ?? ''), String(st.result ?? '')].filter(Boolean);
         accLiveUsage(u);
-        setLogs((p) => [...p, { color: 'blue', title: <span>{t('generate.tool')} <Tag>{st.actionLabel ?? ''}</Tag></span>, desc: parts.length ? parts.join(' · ') : undefined, usage: u ? { total: u.totalTokens, cached: u.cachedTokens, input: u.inputTokens } : undefined }]);
+        setLogs((p) => [...p, { color: 'blue', title: <span>{t('generate.tool')} <Tag>{genToolLabel(t, st.actionLabel)}</Tag></span>, desc: parts.length ? parts.join(' · ') : undefined, usage: u ? { total: u.totalTokens, cached: u.cachedTokens, input: u.inputTokens } : undefined }]);
       } else if (msg.type === 'gen:coverage') {
         const covered = (msg.coverage ?? []) as { id: string; required: boolean; passed: boolean }[];
         setLogs(p => [...p, { color: 'blue', title: t('generate.intent.coverage'), desc: covered.map(c => `${c.id}: ${t(c.passed ? 'generate.intent.passed' : 'generate.intent.pending')}`).join(' · ') }]);
