@@ -8,6 +8,7 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use tauri::{Manager, RunEvent};
+use tauri_plugin_dialog::DialogExt;
 
 /// 后端子进程句柄，退出时取出 kill。
 struct ServerProcess {
@@ -73,6 +74,39 @@ async fn restart_app(app: tauri::AppHandle) -> Result<(), String> {
     app.restart();
 }
 
+/// The destination is selected natively; the frontend cannot supply a write path.
+#[tauri::command]
+async fn save_download(
+    window: tauri::WebviewWindow,
+    filename: String,
+    data: Vec<u8>,
+) -> Result<Option<String>, String> {
+    let (label, extension) = match filename.as_str() {
+        "generate-testcase.zip" | "tt-plugin-template.zip" | "tt-plugin-from-source.zip" => {
+            ("ZIP", "zip")
+        }
+        "test-friendly-code.md" => ("Markdown", "md"),
+        _ => return Err("Unsupported download".into()),
+    };
+    tauri::async_runtime::spawn_blocking(move || {
+        let selected = window
+            .dialog()
+            .file()
+            .set_parent(&window)
+            .set_file_name(&filename)
+            .add_filter(label, &[extension])
+            .blocking_save_file();
+        let Some(selected) = selected else {
+            return Ok(None);
+        };
+        let path = selected.into_path().map_err(|e| e.to_string())?;
+        fs::write(&path, data).map_err(|e| e.to_string())?;
+        Ok(Some(path.to_string_lossy().into_owned()))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 const BACKEND_PORT: u16 = 4123;
 
 /// 只打开固定的帮助地址，不接受前端传入的 URL 或命令。
@@ -125,8 +159,10 @@ fn ensure_executable(path: &std::path::Path) {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             open_help_docs,
+            save_download,
             updater_enabled,
             prepare_app_update,
             recover_app_update,

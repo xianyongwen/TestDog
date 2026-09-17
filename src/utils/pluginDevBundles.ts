@@ -8,6 +8,7 @@
 // 文件均经 Vite ?raw 内联进前端包，开发期与 Tauri 生产构建都能取到内容；
 // ZIP 用既有的 stored 格式写入器在前端生成。
 import { buildZip } from './zip';
+import { saveDownload } from './saveDownload';
 import tplReadme from '../../downloads/plugin-template/README.md?raw';
 import tplIndex from '../../downloads/plugin-template/index.js?raw';
 import tplManifest from '../../downloads/plugin-template/manifest.json?raw';
@@ -37,25 +38,14 @@ const SKILL_README = `tt-plugin-from-source 技能 — 让编程 agent 扫描被
 上传到测试工具「插件管理」页后，记得在「预设」Tab 加入预设并关联测试项目，插件才会生效。
 `;
 
-function triggerDownload(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
-
 function downloadZip(files: { name: string; data: Uint8Array }[], filename: string) {
   const blob = new Blob([buildZip(files)], { type: 'application/zip' });
-  triggerDownload(blob, filename);
+  return saveDownload(blob, filename);
 }
 
-/** 打包插件开发模板项目为 ZIP 并触发浏览器下载。 */
+/** 打包插件开发模板项目为 ZIP 并保存到用户选择的位置。 */
 export function downloadPluginTemplateZip() {
-  downloadZip([
+  return downloadZip([
     { name: 'tt-plugin-template/README.md', data: enc.encode(tplReadme) },
     { name: 'tt-plugin-template/index.js', data: enc.encode(tplIndex) },
     { name: 'tt-plugin-template/manifest.json', data: enc.encode(tplManifest) },
@@ -72,9 +62,9 @@ export function downloadPluginTemplateZip() {
   ], 'tt-plugin-template.zip');
 }
 
-/** 打包 tt-plugin-from-source 技能为 ZIP 并触发浏览器下载。 */
+/** 打包 tt-plugin-from-source 技能为 ZIP 并保存到用户选择的位置。 */
 export function downloadPluginSkillZip() {
-  downloadZip([
+  return downloadZip([
     { name: 'tt-plugin-from-source/SKILL.md', data: enc.encode(skillMd) },
     { name: 'tt-plugin-from-source/references/plugin-api.md', data: enc.encode(refApi) },
     { name: 'tt-plugin-from-source/references/red-lines.md', data: enc.encode(refLines) },

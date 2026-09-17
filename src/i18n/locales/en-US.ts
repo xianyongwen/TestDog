@@ -73,6 +73,10 @@ const enUS = {
     securityAlert: 'Plugin code runs in the browser environment of the app under test. Enable only after reviewing its content',
     securityAlertDesc: 'After uploading, add the plugin to a preset in the "Presets" tab and link that preset to a test project for it to take effect.',
     upload: 'Upload Plugin',
+    downloadSaved: 'Saved to: {{path}}',
+    downloadStarted: 'Download started. Check your browser downloads.',
+    downloadCancelled: 'Download cancelled',
+    downloadFailed: 'Download failed: {{err}}',
     downloadTemplate: 'Plugin Template',
     downloadTemplateTooltip: 'Download the plugin development template project (zip): includes a sample component, skeleton plugin and offline validation harness — follow the README after extracting to run through the full plugin development flow',
     downloadSkill: 'Plugin Skill',
@@ -212,6 +216,10 @@ const enUS = {
     downloadSkill: 'Testcase Skill',
     downloadSkillTooltip:
       'Download the generate-testcase skill bundle (zip) and place it under the target app\'s .claude/skills/ so coding agents can generate .testcase files',
+    downloadSaved: 'Saved to: {{path}}',
+    downloadStarted: 'Download started. Check your browser downloads.',
+    downloadCancelled: 'Download cancelled',
+    downloadFailed: 'Download failed: {{err}}',
     downloadRule: 'Test-Friendly Rule',
     downloadRuleTooltip:
       'Download the test-friendly coding rule (.md). Once developers merge it into CLAUDE.md / AGENTS.md, agent-generated code becomes easier to write E2E tests for',

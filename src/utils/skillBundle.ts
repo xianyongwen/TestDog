@@ -1,3 +1,4 @@
+import { saveDownload } from './saveDownload';
 // 把 generate-testcase 技能打包成 ZIP 供下载。
 // 技能源文件在仓库 downloads/skills/generate-testcase/（本仓库的本地安装副本
 // .claude/skills/generate-testcase 是指向它的符号链接），经 Vite ?raw 内联进前端包，
@@ -25,7 +26,7 @@ const README = `generate-testcase 技能 — 供编程 agent 生成可导入本�
 等诉求时会自动加载该技能，产出 .testcase 文件，在本工具「用例列表」页导入即可回放。
 `;
 
-/** 打包 generate-testcase 技能为 ZIP 并触发浏览器下载。 */
+/** 打包 generate-testcase 技能为 ZIP 并保存到用户选择的位置。 */
 export function downloadSkillZip() {
   const files = [
     { name: 'generate-testcase/SKILL.md', data: enc.encode(skillMd) },
@@ -39,12 +40,5 @@ export function downloadSkillZip() {
     { name: 'README.txt', data: enc.encode(README) },
   ];
   const blob = new Blob([buildZip(files)], { type: 'application/zip' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'generate-testcase.zip';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  return saveDownload(blob, 'generate-testcase.zip');
 }

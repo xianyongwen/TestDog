@@ -1,5 +1,5 @@
 /** 插件管理页：插件列表（上传/试运行/删除，内置保护）+ 预设 Tab（组合即开关）。 */
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Tabs, Button, Drawer, Form, Input, Upload, Tag, Popconfirm, Empty, Badge, App, Modal, Alert, Space, Tooltip } from 'antd';
 import { UploadOutlined, ApiOutlined, AppstoreOutlined, DeleteOutlined, ExperimentOutlined, DownloadOutlined, InfoCircleOutlined } from '@ant-design/icons';
@@ -7,6 +7,7 @@ import { pluginsApi } from '../api/client';
 import { downloadPluginSkillZip, downloadPluginTemplateZip } from '../utils/pluginDevBundles';
 import SortableTable from '../components/SortableTable';
 import PresetTab from './PresetTab';
+import type { DownloadResult } from '../utils/saveDownload';
 
 interface PluginRow {
   id: string;
@@ -34,6 +35,25 @@ export default function Plugins() {
   const [testUrl, setTestUrl] = useState('');
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<any>(null);
+
+  const downloadBusy = useRef(false);
+  const [downloading, setDownloading] = useState<'template' | 'skill' | null>(null);
+  const handleDownload = async (kind: 'template' | 'skill', download: () => Promise<DownloadResult>) => {
+    if (downloadBusy.current) return;
+    downloadBusy.current = true;
+    setDownloading(kind);
+    try {
+      const result = await download();
+      if (result.status === 'saved') message.success(t('plugins.downloadSaved', { path: result.path }));
+      else if (result.status === 'started') message.info(t('plugins.downloadStarted'));
+      else message.info(t('plugins.downloadCancelled'));
+    } catch (error) {
+      message.error(t('plugins.downloadFailed', { err: String(error) }));
+    } finally {
+      downloadBusy.current = false;
+      setDownloading(null);
+    }
+  };
 
   /** 展示上传/重传返回的动作 label 一致性警告（同名动作词表按预设优先级取先声明插件的元数据）。 */
   const showLabelWarnings = (warnings?: string[]) => {
@@ -180,10 +200,10 @@ export default function Plugins() {
           <UploadOutlined className="mr-1.5" />{t('plugins.upload')}
         </Button>
         <Tooltip title={t('plugins.downloadTemplateTooltip')}>
-          <Button type="primary" onClick={downloadPluginTemplateZip}><DownloadOutlined className="mr-1.5" />{t('plugins.downloadTemplate')}</Button>
+          <Button type="primary" loading={downloading === 'template'} disabled={downloading === 'skill'} onClick={() => void handleDownload('template', downloadPluginTemplateZip)}><DownloadOutlined className="mr-1.5" />{t('plugins.downloadTemplate')}</Button>
         </Tooltip>
         <Tooltip title={t('plugins.downloadSkillTooltip')}>
-          <Button type="primary" onClick={downloadPluginSkillZip}><DownloadOutlined className="mr-1.5" />{t('plugins.downloadSkill')}</Button>
+          <Button type="primary" loading={downloading === 'skill'} disabled={downloading === 'template'} onClick={() => void handleDownload('skill', downloadPluginSkillZip)}><DownloadOutlined className="mr-1.5" />{t('plugins.downloadSkill')}</Button>
         </Tooltip>
       </div>
       <Tabs className="flex-1 min-h-0 tabs-fill" activeKey={tab} onChange={setTab} items={[

@@ -73,6 +73,10 @@ const zhCN = {
     securityAlert: '插件代码将在被测网站的浏览器环境中执行，请仅在理解其内容后启用',
     securityAlertDesc: '上传后需在「预设」Tab 中加入某个预设，并让测试项目关联该预设，插件才会被注入生效。',
     upload: '上传插件',
+    downloadSaved: '已保存到：{{path}}',
+    downloadStarted: '已发起下载，请查看浏览器下载列表',
+    downloadCancelled: '已取消下载',
+    downloadFailed: '下载失败：{{err}}',
     downloadTemplate: '插件模板',
     downloadTemplateTooltip: '下载插件开发模板项目（zip）：内置示例组件、骨架插件与离线验收 harness，解压后按 README 开箱跑通插件开发全流程',
     downloadSkill: '插件技能',
@@ -209,6 +213,10 @@ const zhCN = {
     downloadSkill: '用例生成技能',
     downloadSkillTooltip:
       '下载 generate-testcase 技能包（zip），放到被测应用的 .claude/skills/ 即可供编程 agent 生成 .testcase 用例',
+    downloadSaved: '已保存到：{{path}}',
+    downloadStarted: '已发起下载，请查看浏览器下载列表',
+    downloadCancelled: '已取消下载',
+    downloadFailed: '下载失败：{{err}}',
     downloadRule: '测试友好rule',
     downloadRuleTooltip:
       '下载测试友好代码rule（.md），开发人员并入项目 CLAUDE.md / AGENTS.md 后，使得agent 编程生成的代码更易于编写 E2E 测试',

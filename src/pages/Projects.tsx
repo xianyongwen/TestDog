@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button, Form, Input, Modal, Popconfirm, Select, Space, Tooltip, App } from 'antd';
 import SortableTable from '../components/SortableTable';
 import { rowClickNav } from '../utils/rowNav';
@@ -13,6 +13,7 @@ import LoginConfigManager from '../components/LoginConfigManager';
 import ViewportConfigModal from '../components/ViewportConfigModal';
 import { downloadSkillZip } from '../utils/skillBundle';
 import { downloadRule } from '../utils/ruleDownload';
+import type { DownloadResult } from '../utils/saveDownload';
 
 interface Project {
   id: string;
@@ -41,6 +42,25 @@ export default function Projects() {
   const [viewportProject, setViewportProject] = useState<Project | null>(null);
   const nav = useNavigate();
   const { message } = App.useApp();
+
+  const downloadBusy = useRef(false);
+  const [downloading, setDownloading] = useState<'skill' | 'rule' | null>(null);
+  const handleDownload = async (kind: 'skill' | 'rule', download: () => Promise<DownloadResult>) => {
+    if (downloadBusy.current) return;
+    downloadBusy.current = true;
+    setDownloading(kind);
+    try {
+      const result = await download();
+      if (result.status === 'saved') message.success(t('projects.downloadSaved', { path: result.path }));
+      else if (result.status === 'started') message.info(t('projects.downloadStarted'));
+      else message.info(t('projects.downloadCancelled'));
+    } catch (error) {
+      message.error(t('projects.downloadFailed', { err: String(error) }));
+    } finally {
+      downloadBusy.current = false;
+      setDownloading(null);
+    }
+  };
 
   const load = async () => {
     setLoading(true);
@@ -180,10 +200,10 @@ export default function Projects() {
         <h2 className="m-0 text-xl">{t('projects.title')}</h2>
         <Button type="primary" onClick={() => setOpen(true)}><PlusOutlined className="mr-1.5" />{t('projects.newProject')}</Button>
         <Tooltip title={t('projects.downloadSkillTooltip')}>
-          <Button type="primary" onClick={downloadSkillZip}><DownloadOutlined className="mr-1.5" />{t('projects.downloadSkill')}</Button>
+          <Button type="primary" loading={downloading === 'skill'} disabled={downloading === 'rule'} onClick={() => void handleDownload('skill', downloadSkillZip)}><DownloadOutlined className="mr-1.5" />{t('projects.downloadSkill')}</Button>
         </Tooltip>
         <Tooltip title={t('projects.downloadRuleTooltip')}>
-          <Button type="primary" onClick={downloadRule}><DownloadOutlined className="mr-1.5" />{t('projects.downloadRule')}</Button>
+          <Button type="primary" loading={downloading === 'rule'} disabled={downloading === 'skill'} onClick={() => void handleDownload('rule', downloadRule)}><DownloadOutlined className="mr-1.5" />{t('projects.downloadRule')}</Button>
         </Tooltip>
       </div>
       <SortableTable
