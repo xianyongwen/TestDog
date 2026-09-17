@@ -621,6 +621,8 @@ const zhCN = {
       goto: '打开页面',
       click: '点击',
       fill: '填写',
+      upload: '上传文件',
+      scroll: '滚动',
       press: '按键',
       check: '勾选',
       select: '选择',
@@ -628,6 +630,7 @@ const zhCN = {
       wait: '等待',
       raw: '原始代码',
       plugin: '组件动作',
+      set_date: '设置日期',
     },
     testcase: {
       DRAFT: '草稿',

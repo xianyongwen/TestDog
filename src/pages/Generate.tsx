@@ -12,7 +12,6 @@ import type { TFunction } from 'i18next';
 import { http } from '../api/client';
 import { ws } from '../api/ws';
 import type { TestStep } from '@shared/testScript';
-import { STEP_ACTION_LABEL } from '@shared/constants';
 import StepsTable from '../components/StepsTable';
 import RunLog, { type LogItem } from '../components/RunLog';
 import TestFilePicker, { type TestFileInfo } from '../components/TestFilePicker';
@@ -1024,7 +1023,7 @@ export default function Generate() {
                 .join(' · ');
             } else if (p.action) {
               const parts = [
-                STEP_ACTION_LABEL[p.action] ?? p.action,
+                t(`status.action.${p.action}`, { defaultValue: p.action }),
                 p.url ? t('generate.urlValue', { value: p.url }) : undefined,
                 p.value !== undefined ? t('generate.value', { value: p.value }) : undefined,
                 p.key ? t('generate.key', { value: p.key }) : undefined,

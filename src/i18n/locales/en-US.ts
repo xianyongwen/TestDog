@@ -626,6 +626,8 @@ const enUS = {
       goto: 'Navigate',
       click: 'Click',
       fill: 'Fill',
+      upload: 'Upload',
+      scroll: 'Scroll',
       press: 'Press',
       check: 'Check',
       select: 'Select',
@@ -633,6 +635,7 @@ const enUS = {
       wait: 'Wait',
       raw: 'Raw Code',
       plugin: 'Component',
+      set_date: 'Set Date',
     },
     testcase: {
       DRAFT: 'Draft',

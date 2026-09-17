@@ -9,7 +9,6 @@ import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { locatorScopeSchema, type Locator, type TestStep } from '@shared/testScript';
 import { extractVars, KNOWN_SYSTEM_NAMES } from '@shared/envVars';
-import { STEP_ACTION_LABEL, stepActionDisplay } from '@shared/constants';
 import { http, pluginsApi } from '../api/client';
 import { arrayMove } from '@dnd-kit/sortable';
 import SortableTable from './SortableTable';
@@ -31,6 +30,8 @@ const STRATEGY_LABEL = (t: TFunction): Record<string, string> => ({
   title: t('stepsTable.strategyLabel.title'),
 });
 const NEEDS_LOCATOR = ['click', 'fill', 'press', 'check', 'select', 'upload', 'scroll', 'assert', 'plugin'];
+/** 动作展示名走 i18n（status.action.*）；插件声明 label 由调用方优先传入，未收录动作回退原名。 */
+const actionLabel = (t: TFunction, a: string): string => t(`status.action.${a}`, { defaultValue: a });
 
 interface Props {
   steps: TestStep[];
@@ -225,20 +226,20 @@ export default function StepsTable({ steps, onChange, extra, envVarKeys, pickSta
         const currentValue = r.action === 'plugin' ? `plugin:${r.pluginAction?.action ?? ''}` : r.action;
         const vocabNames = new Set(pluginVocab.map((v) => v.name));
         const options: any[] = ACTIONS.map((a) => {
-          if (!vocabNames.has(a)) return { value: a, label: STEP_ACTION_LABEL[a] };
+          if (!vocabNames.has(a)) return { value: a, label: actionLabel(t, a) };
           // 与语义动作同名的普通动作（如 select）：下拉只保留一个入口，值随当前行形态——
           // 原生步沿用原生值，语义步/新选行用语义值——避免出现两个相同文案的选项。
-          return { value: r.action === a ? a : `plugin:${a}`, label: STEP_ACTION_LABEL[a] };
+          return { value: r.action === a ? a : `plugin:${a}`, label: actionLabel(t, a) };
         });
         // 无普通动作对应的语义动作（如 set_date）直接并列在列表末尾；hover 提示展示插件动作说明
         for (const v of pluginVocab) {
           if ((ACTIONS as readonly string[]).includes(v.name)) continue;
-          options.push({ value: `plugin:${v.name}`, label: v.label ?? STEP_ACTION_LABEL[v.name] ?? v.name, title: v.doc || undefined });
+          options.push({ value: `plugin:${v.name}`, label: v.label ?? actionLabel(t, v.name), title: v.doc || undefined });
         }
         // 当前语义动作不在词表（插件已移除/无项目上下文）时补当前值选项保证回显
         if (r.action === 'plugin' && !options.some((o) => o.value === currentValue)) {
           const vocabLabel = pluginVocab.find((v) => v.name === r.pluginAction?.action)?.label;
-          options.unshift({ value: currentValue, label: vocabLabel ?? stepActionDisplay(r.action, r.pluginAction) });
+          options.unshift({ value: currentValue, label: vocabLabel ?? r.pluginAction?.label ?? (r.pluginAction?.action ? actionLabel(t, r.pluginAction.action) : t('status.action.plugin')) });
         }
         return (
           <Select

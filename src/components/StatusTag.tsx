@@ -1,6 +1,6 @@
 import { Tag } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { RUN_STATUS_COLOR, STEP_ACTION_LABEL } from '@shared/constants';
+import { RUN_STATUS_COLOR } from '@shared/constants';
 
 export function RunStatusTag({ status }: { status: string }) {
   const { t } = useTranslation();
@@ -31,8 +31,11 @@ export function StepStatusTag({ status }: { status: string }) {
 
 export function ActionTag({ action, pluginAction }: { action: string; pluginAction?: { action?: string; label?: string } | null }) {
   const { t } = useTranslation();
-  // 组件语义动作（plugin 步骤）优先显示插件声明展示名（pluginAction.label），其次平台内置标签表，回退动作名
-  const semantic = action === 'plugin' && pluginAction?.action ? pluginAction.label || STEP_ACTION_LABEL[pluginAction.action] || pluginAction.action : undefined;
+  // 组件语义动作（plugin 步骤）优先显示插件声明展示名（pluginAction.label），其次平台内置词条，回退动作名
+  const semantic =
+    action === 'plugin' && pluginAction?.action
+      ? pluginAction.label || t(`status.action.${pluginAction.action}`, { defaultValue: pluginAction.action })
+      : undefined;
   const label =
     semantic ??
     ({
