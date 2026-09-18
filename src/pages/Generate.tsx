@@ -952,7 +952,7 @@ export default function Generate() {
                   <SortablePlanRow key={p.id} id={p.id as string} index={i + 1}>
                     <Select
                       value={p.kind}
-                      className="!w-[76px]"
+                      className="!w-[100px]"
                       onChange={(v) => updatePlan(i, { kind: v })}
                       options={[{ value: 'action', label: t('generate.planKindAction') }, { value: 'assert', label: t('generate.planKindAssert') }]}
                     />
