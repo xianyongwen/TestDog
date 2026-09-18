@@ -2,6 +2,87 @@
 
 What's new in each TestDog release. Installers are available on the [Download page](/en/download); the latest release notes are also published on [GitHub Releases](https://github.com/xianyongwen/TestDog/releases).
 
+## v0.1.6 (2026-09-18): Native save dialog and bilingual generation logs
+
+This release focuses on everyday usability: exporting a file on desktop now opens the system's native "save as" dialog so you choose where it goes, and tool names and status text in the generation log are rendered in the interface language, so the log reads in your own language in both Chinese and English.
+
+### Exports use a native save dialog
+
+- Downloading skill bundles, rule files, and plugin templates on desktop now opens the system's native "save as" dialog, letting you choose the destination and file name.
+- Writing happens only at the path you select in the dialog, and file names are restricted to a whitelist, so the frontend cannot choose a write path.
+- The result is reported clearly: saved (with the path shown), download started (browser build), cancelled, or failed.
+
+### Generation logs render in the interface language
+
+- Generation steps now store the raw tool name; the display name is translated per interface language, so the same record reads in the corresponding language in both Chinese and English instead of being hardcoded to Chinese.
+- Fixed status text during generation (browser viewport, login-config loading, attachment loading, outline confirmation, pause and completion notices) is delivered as message keys with each event and rendered by the frontend per language.
+- Chinese tool names in older generation records are normalized and translated on display; existing records are unaffected.
+- Added Chinese and English display names for actions such as upload, scroll, and set_date, which previously fell back to English action names in the UI.
+
+### Fixes and improvements
+
+- Adjusted the plan-type select width on the generation page to 100px.
+- Upgraded the GitHub Actions used by CI to their current major versions.
+
+### Upgrade notes
+
+- **v0.1.3 and later can upgrade to v0.1.6 directly via in-app "Software Update"; v0.1.2 and earlier must manually install v0.1.3 (which includes the updater) first, then update in-app.**
+- Upgrades keep the existing app data directory — projects, scripts, and settings; new settings are auto-added at startup, no manual database changes needed.
+- Bilingual generation logs apply to both new and old records; existing scripts and replay are unaffected and stay compatible.
+- Acceptance completion still means the corresponding assertions actually passed during generation; run a regression replay as usual after generation.
+
+## v0.1.5 (2026-09-16): Project test files, locator scope and the scroll action
+
+This release extends AI generation and replay into more realistic business scenarios: test files can be managed centrally in a project and uploaded during generation/replay, locators can be scoped to a container to handle dialogs and duplicate controls, and a new scroll action lets snapshots perceive scroll state. It also lets you send corrections while generation is running, strengthens idle-loop protection, preserves login state after the browser closes, and syncs the native window theme on desktop.
+
+### Project test files and upload
+
+- New project test file management: upload project test files during generation; they are stored centrally and cleaned up by reference (24-hour grace period plus reference detection), so files no longer have to exist only locally.
+- New upload action: generation and replay upload with consistent semantics, supporting both direct injection into `input[type=file]` and the file-chooser path; disabled controls, multi-file limits, and file-chooser timeouts all produce clear errors.
+- New list_files generation tool: the model pages through project test files before choosing; the upload step's fileIds must come from that list; file resolution happens uniformly before the action runs, avoiding mid-action failures.
+
+### Scroll action and snapshot awareness
+
+- New scroll action: supports scrolling the page, a scroll container, or an element into view, on either axis, by distance, or to top/bottom; generation and replay use the same DOM scrolling implementation without synthesizing mouse-wheel events.
+- Snapshots now perceive the position and scrollability of the page and scroll containers, so the model can judge page changes before and after scrolling.
+
+### Locator scope
+
+- The steps table supports editing locator scope: configure a scope container per step (scope strategy, role, name, and locator value) to locate a unique container first, then find the target element inside it — handling duplicate controls in dialogs, attachment areas, and the like.
+- New "pick scope": select the container to use as the scope in the browser; confirming updates only the scope and keeps the target locator, with no need to re-pick the target.
+- Target picking validates against the configured scope: picked targets are validated for membership and generate a container-relative locator, avoiding cross-container confusion.
+
+### Testcase package v2: test files carried in the package
+
+- `.testcase` export upgraded to v2: upload steps that reference project test files are exported with the package (embedded file contents and hash verification); import verifies integrity and rebuilds files as needed; cases that reference no files stay in v1 format for backward compatibility.
+
+### Generation controllability
+
+- Send corrections while generation runs: enter a correction note on the generation page (1–8000 characters); it is injected into subsequent planning after the current action finishes, with no need to interrupt the whole generation.
+- Stronger idle-loop protection: new short-cycle loop detection triggers a help request when the same action returns to the same state 3 rounds in a row and aborts automatically after 9 repeats, avoiding pointless idle consumption; the progress/observation counter lifecycle was reworked to distinguish real progress from idling more accurately.
+
+### Login state and desktop theme
+
+- Browser login recording keeps the most recent successful snapshot, so the most recently captured login state is saved automatically after the browser closes.
+- Switching themes now syncs the Tauri native window title-bar theme and clears the override when following the system, preventing the WebView media query from being stuck on a forced theme.
+
+### Fixes and improvements
+
+- Deleting an assertion step from the plan now cleans up acceptance goals that are no longer referenced, avoiding leftover invalid goals affecting completion validation.
+- The test file list on the generation page keeps only files uploaded this session, no longer mixing in historical files.
+- The confirm/cancel buttons in the picking toolbar no longer overflow at narrow viewports.
+- Run-detail info columns are width-limited, with full errors shown via hover.
+- The script tab sidebar in case details was adjusted to 380px; plugin table column widths and long-text display were improved.
+- README demo assets were updated to the main-flow video.
+
+### Upgrade notes
+
+- **v0.1.3 and later can upgrade to v0.1.5 directly via in-app "Software Update"; v0.1.2 and earlier must manually install v0.1.3 (which includes the updater) first, then update in-app.**
+- Upgrades keep the existing app data directory — projects, scripts, and settings; new settings are auto-added at startup, no manual database changes needed.
+- Test files, scope, and the scroll action are used by newly generated scripts; existing scripts and generation records are unaffected and replay stays compatible.
+- Testcase v1 import continues to work; exported v2 packages require v0.1.5 or later to import.
+- Acceptance completion still means the corresponding assertions actually passed during generation; run a regression replay as usual after generation.
+
 ## v0.1.4 (2026-09-12): Test data binding, acceptance-goal amendment and assertion diagnostics
 
 This release focuses on controllable AI generation and trustworthy assertions: test data written by the generator is bound consistently with assertion expectations, acceptance goals can be amended directly while generation is suspended, and assertion failures come with actionable locator diagnostics. It also adds checkbox and radio-group component plugins, and fixes usage under-recording on cancelled generations and broken self-heal for recorded scripts.
